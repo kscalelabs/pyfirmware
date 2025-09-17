@@ -1,6 +1,6 @@
-from enum import Enum
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
+from enum import Enum
 from math import pi
 
 
@@ -10,6 +10,7 @@ class RobstrideActuatorType(Enum):
     Robstride02 = 2
     Robstride03 = 3
     Robstride04 = 4
+
 
 @dataclass
 class ActuatorConfig:
@@ -73,14 +74,14 @@ class ActuatorConfig:
     def physical_to_can_kd(self, physical_value: float) -> float:
         proportion = (physical_value - self.kd_can_min) / (self.kd_can_max - self.kd_can_min)
         return 0.0 + proportion * (65535.0 - 0.0)
-    
+
     def can_to_physical_temperature(self, can_value: float) -> float:
         return can_value / 10.0
-    
+
     @property
     def raw_kp(self):
         return self.physical_to_can_kp(self.kp)
-    
+
     @property
     def raw_kd(self):
         return self.physical_to_can_kd(self.kd)
@@ -89,68 +90,68 @@ class ActuatorConfig:
 def actuator_ranges(actuator_type: RobstrideActuatorType):
     if actuator_type == RobstrideActuatorType.Robstride00:
         return {
-            'angle_can_min': -4.0 * pi,
-            'angle_can_max': 4.0 * pi,
-            'velocity_can_min': -33.0,
-            'velocity_can_max': 33.0,
-            'torque_can_min': -14.0,
-            'torque_can_max': 14.0,
-            'kp_can_min': 0.0,
-            'kp_can_max': 500.0,
-            'kd_can_min': 0.0,
-            'kd_can_max': 5.0
+            "angle_can_min": -4.0 * pi,
+            "angle_can_max": 4.0 * pi,
+            "velocity_can_min": -33.0,
+            "velocity_can_max": 33.0,
+            "torque_can_min": -14.0,
+            "torque_can_max": 14.0,
+            "kp_can_min": 0.0,
+            "kp_can_max": 500.0,
+            "kd_can_min": 0.0,
+            "kd_can_max": 5.0,
         }
     elif actuator_type == RobstrideActuatorType.Robstride01:
         return {
-            'angle_can_min': -4.0 * pi,
-            'angle_can_max': 4.0 * pi,
-            'velocity_can_min': -44.0,
-            'velocity_can_max': 44.0,
-            'torque_can_min': -17.0,
-            'torque_can_max': 17.0,
-            'kp_can_min': 0.0,
-            'kp_can_max': 500.0,
-            'kd_can_min': 0.0,
-            'kd_can_max': 5.0
+            "angle_can_min": -4.0 * pi,
+            "angle_can_max": 4.0 * pi,
+            "velocity_can_min": -44.0,
+            "velocity_can_max": 44.0,
+            "torque_can_min": -17.0,
+            "torque_can_max": 17.0,
+            "kp_can_min": 0.0,
+            "kp_can_max": 500.0,
+            "kd_can_min": 0.0,
+            "kd_can_max": 5.0,
         }
     elif actuator_type == RobstrideActuatorType.Robstride02:
         return {
-            'angle_can_min': -4.0 * pi,
-            'angle_can_max': 4.0 * pi,
-            'velocity_can_min': -44.0,
-            'velocity_can_max': 44.0,
-            'torque_can_min': -17.0,
-            'torque_can_max': 17.0,
-            'kp_can_min': 0.0,
-            'kp_can_max': 500.0,
-            'kd_can_min': 0.0,
-            'kd_can_max': 5.0
+            "angle_can_min": -4.0 * pi,
+            "angle_can_max": 4.0 * pi,
+            "velocity_can_min": -44.0,
+            "velocity_can_max": 44.0,
+            "torque_can_min": -17.0,
+            "torque_can_max": 17.0,
+            "kp_can_min": 0.0,
+            "kp_can_max": 500.0,
+            "kd_can_min": 0.0,
+            "kd_can_max": 5.0,
         }
     elif actuator_type == RobstrideActuatorType.Robstride03:
         return {
-            'angle_can_min': -4.0 * pi,
-            'angle_can_max': 4.0 * pi,
-            'velocity_can_min': -20.0,
-            'velocity_can_max': 20.0,
-            'torque_can_min': -60.0,
-            'torque_can_max': 60.0,
-            'kp_can_min': 0.0,
-            'kp_can_max': 5000.0,
-            'kd_can_min': 0.0,
-            'kd_can_max': 100.0
+            "angle_can_min": -4.0 * pi,
+            "angle_can_max": 4.0 * pi,
+            "velocity_can_min": -20.0,
+            "velocity_can_max": 20.0,
+            "torque_can_min": -60.0,
+            "torque_can_max": 60.0,
+            "kp_can_min": 0.0,
+            "kp_can_max": 5000.0,
+            "kd_can_min": 0.0,
+            "kd_can_max": 100.0,
         }
     elif actuator_type == RobstrideActuatorType.Robstride04:
         return {
-            'angle_can_min': -4.0 * pi,
-            'angle_can_max': 4.0 * pi,
-            'velocity_can_min': -15.0,
-            'velocity_can_max': 15.0,
-            'torque_can_min': -120.0,
-            'torque_can_max': 120.0,
-            'kp_can_min': 0.0,
-            'kp_can_max': 5000.0,
-            'kd_can_min': 0.0,
-            'kd_can_max': 100.0
+            "angle_can_min": -4.0 * pi,
+            "angle_can_max": 4.0 * pi,
+            "velocity_can_min": -15.0,
+            "velocity_can_max": 15.0,
+            "torque_can_min": -120.0,
+            "torque_can_max": 120.0,
+            "kp_can_min": 0.0,
+            "kp_can_max": 5000.0,
+            "kd_can_min": 0.0,
+            "kd_can_max": 100.0,
         }
 
 
@@ -167,7 +168,6 @@ class RobotConfig:
             kd=8.284,
             joint_bias=0.0,
         ),
-
         12: ActuatorConfig(
             can_id=12,
             name="lsr",
@@ -178,7 +178,6 @@ class RobotConfig:
             kd=8.257,
             joint_bias=math.radians(10.0),
         ),
-
         13: ActuatorConfig(
             can_id=13,
             name="lsy",
@@ -189,7 +188,6 @@ class RobotConfig:
             kd=2.945,
             joint_bias=0.0,
         ),
-
         14: ActuatorConfig(
             can_id=14,
             name="lep",
@@ -200,7 +198,6 @@ class RobotConfig:
             kd=2.266,
             joint_bias=math.radians(-90.0),
         ),
-
         15: ActuatorConfig(
             can_id=15,
             name="lwr",
@@ -211,8 +208,6 @@ class RobotConfig:
             kd=0.295,
             joint_bias=0.0,
         ),
-        
-
         # Right arm
         21: ActuatorConfig(
             can_id=21,
@@ -224,7 +219,6 @@ class RobotConfig:
             kd=8.284,
             joint_bias=0.0,
         ),
-
         22: ActuatorConfig(
             can_id=22,
             name="rsr",
@@ -235,7 +229,6 @@ class RobotConfig:
             kd=8.257,
             joint_bias=math.radians(-10.0),
         ),
-
         23: ActuatorConfig(
             can_id=23,
             name="rsy",
@@ -246,7 +239,6 @@ class RobotConfig:
             kd=2.945,
             joint_bias=0.0,
         ),
-
         24: ActuatorConfig(
             can_id=24,
             name="rep",
@@ -257,7 +249,6 @@ class RobotConfig:
             kd=2.266,
             joint_bias=math.radians(90.0),
         ),
-
         25: ActuatorConfig(
             can_id=25,
             name="rwr",
@@ -268,8 +259,6 @@ class RobotConfig:
             kd=0.295,
             joint_bias=0.0,
         ),
-        
-
         # Left leg
         31: ActuatorConfig(
             can_id=31,
@@ -281,7 +270,6 @@ class RobotConfig:
             kd=24.722,
             joint_bias=math.radians(20.0),
         ),
-
         32: ActuatorConfig(
             can_id=32,
             name="lhr",
@@ -292,7 +280,6 @@ class RobotConfig:
             kd=26.387,
             joint_bias=0.0,
         ),
-
         33: ActuatorConfig(
             can_id=33,
             name="lhy",
@@ -303,7 +290,6 @@ class RobotConfig:
             kd=3.419,
             joint_bias=0.0,
         ),
-
         34: ActuatorConfig(
             can_id=34,
             name="lkp",
@@ -314,7 +300,6 @@ class RobotConfig:
             kd=8.654,
             joint_bias=math.radians(50.0),
         ),
-
         35: ActuatorConfig(
             can_id=35,
             name="lap",
@@ -325,7 +310,6 @@ class RobotConfig:
             kd=0.99,
             joint_bias=math.radians(-30.0),
         ),
-
         # Right leg
         41: ActuatorConfig(
             can_id=41,

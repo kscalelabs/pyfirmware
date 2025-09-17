@@ -1,13 +1,13 @@
-
-import tarfile
 import json
-import onnxruntime as ort
+import tarfile
+
 import numpy as np
+import onnxruntime as ort
 
 
 def get_onnx_sessions(kinfer_path):
     print("Loading kinfer model from", kinfer_path)
-    if not kinfer_path or not kinfer_path.endswith('.kinfer'): # .tar.gz really
+    if not kinfer_path or not kinfer_path.endswith(".kinfer"):  # .tar.gz really
         raise ValueError("Model path must be provided and end with .kinfer")
 
     with tarfile.open(kinfer_path, "r:gz") as tar:
@@ -27,7 +27,9 @@ def get_onnx_sessions(kinfer_path):
     step_inputs = step_session.get_inputs()
     step_outputs = step_session.get_outputs()
 
-    print(f"\nInit function - Inputs: {[inp.name for inp in init_inputs]}, Outputs: {[out.name for out in init_outputs]}")
+    print(
+        f"\nInit function - Inputs: {[inp.name for inp in init_inputs]}, Outputs: {[out.name for out in init_outputs]}"
+    )
     print(f"Step function - Inputs: {[inp.name for inp in step_inputs]}, Outputs: {[out.name for out in step_outputs]}")
 
     # warm up step function
@@ -38,4 +40,3 @@ def get_onnx_sessions(kinfer_path):
         step_session.run(None, step_dummy_inputs)
 
     return init_session, step_session, metadata
-
