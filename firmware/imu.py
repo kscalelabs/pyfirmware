@@ -71,27 +71,13 @@ def parse_quaternion(data):
 
 def update_shared_memory(shm, shm_lock, timestamp, gyro, quaternion):
     """Write a complete record to shared memory (timestamp, gyro, quaternion)."""
-    packed_data = struct.pack(
-        "<dfffffff",
-        timestamp,
-        gyro[0],
-        gyro[1],
-        gyro[2],
-        quaternion[0],
-        quaternion[1],
-        quaternion[2],
-        quaternion[3],
-    )
-    if shm_lock is not None:
-        shm_lock.acquire()
-        try:
-            shm.seek(0)
-            shm.write(packed_data)
-        finally:
-            shm_lock.release()
-    else:
+    packed_data = struct.pack("<dfffffff", timestamp, *gyro, *quaternion)
+    shm_lock.acquire()
+    try:
         shm.seek(0)
         shm.write(packed_data)
+    finally:
+        shm_lock.release()
 
 
 class IMUReader:
@@ -248,8 +234,6 @@ class IMUReader:
                 timestamp = unpacked_data[0]
                 gyro = unpacked_data[1:4]
                 quaternion = unpacked_data[4:8]
-
-                # Calculate projected gravity from quaternion
                 proj_grav = rotate_vector_by_quaternion(self.gravity, quaternion, inverse=True)
 
                 return proj_grav, gyro, timestamp
@@ -258,7 +242,6 @@ class IMUReader:
                 return (0.0, 0.0, -9.81), (0.0, 0.0, 0.0), 0.0
 
         except Exception as e:
-            # Handle any errors gracefully
             print(f"Error reading from shared memory: {e}")
             return (0.0, 0.0, -9.81), (0.0, 0.0, 0.0), 0.0
 
