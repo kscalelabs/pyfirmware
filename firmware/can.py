@@ -8,7 +8,7 @@ from robot import RobotConfig
 
 
 class CANInterface:
-    """Communication only"""
+    """Communication only."""
 
     def __init__(self):
         self.FRAME_FMT = "<IBBBB8s"  # <I = little-endian u32; 4B = len, pad, res0, len8_dlc; 8s = 8 data bytes
@@ -29,7 +29,7 @@ class CANInterface:
         self.actuators = {}
         self._scan()
 
-    def _scan(self):
+    def _scan(self) -> None:
         for canbus in self.canbus_range:
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
@@ -52,7 +52,7 @@ class CANInterface:
         for canbus, actuators in self.actuators.items():
             print(f"\033[1;34m{canbus}\033[0m: \033[1;35m{actuators}\033[0m")
 
-    def _ping_actuator(self, canbus: str, actuator_can_id: int):
+    def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
         try:
             frame = self._build_ping_frame(actuator_can_id)
             self.sockets[canbus].send(frame)
@@ -62,8 +62,6 @@ class CANInterface:
         except socket.timeout:
             return False
         except Exception:
-            # print(f"Error pinging actuator {actuator_can_id} on {canbus}: {e}")
-            # traceback.print_exc()
             return False
 
     def _build_ping_frame(self, actuator_can_id: int) -> bytes:
@@ -155,11 +153,7 @@ class CANInterface:
             int(robotcfg.actuators[actuator_can_id].raw_kd * scaling),
         )
         self.sockets[canbus].send(frame)
-        raw = self.sockets[canbus].recv(16)  # just drop response
-        # fb = self._parse_feedback_response_pd_command(raw)
-        # if fb["mux"] == self.MUX_CONTROL and fb["actuator_can_id"] == actuator_can_id:
-        #     phys = self.feedback_to_physical_pd_command(fb)
-        #     return raw, fb, phys
+        _ = self.sockets[canbus].recv(16)  # just drop response
 
     def _build_pd_command(
         self,
@@ -185,7 +179,7 @@ class CANInterface:
 
 
 class MotorDriver:
-    """Driver logic"""
+    """Driver logic."""
 
     def __init__(self):
         self.robot = RobotConfig()

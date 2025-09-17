@@ -79,15 +79,15 @@ class ActuatorConfig:
         return can_value / 10.0
 
     @property
-    def raw_kp(self):
+    def raw_kp(self) -> float:
         return self.physical_to_can_kp(self.kp)
 
     @property
-    def raw_kd(self):
+    def raw_kd(self) -> float:
         return self.physical_to_can_kd(self.kd)
 
 
-def actuator_ranges(actuator_type: RobstrideActuatorType):
+def actuator_ranges(actuator_type: RobstrideActuatorType) -> dict[str, float]:
     if actuator_type == RobstrideActuatorType.Robstride00:
         return {
             "angle_can_min": -4.0 * pi,
@@ -363,5 +363,5 @@ class RobotConfig:
         ),
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.full_name_to_actuator_id = {act.full_name: act.can_id for act in self.actuators.values()}

@@ -11,13 +11,13 @@ import serial
 
 
 def quaternion_conjugate(q):
-    """Compute quaternion conjugate"""
+    """Compute quaternion conjugate."""
     qw, qx, qy, qz = q
     return (qw, -qx, -qy, -qz)
 
 
 def quaternion_multiply(q1, q2):
-    """Multiply two quaternions"""
+    """Multiply two quaternions."""
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
 
@@ -30,7 +30,7 @@ def quaternion_multiply(q1, q2):
 
 
 def rotate_vector_by_quaternion(v, q, inverse=False):
-    """Rotate vector v by quaternion q"""
+    """Rotate vector v by quaternion q."""
     vx, vy, vz = v
 
     # Convert vector to quaternion (0, vx, vy, vz)
@@ -53,7 +53,7 @@ def rotate_vector_by_quaternion(v, q, inverse=False):
 
 
 def parse_gyro(data):
-    """Parse gyroscope data from IMU packet"""
+    """Parse gyroscope data from IMU packet."""
     gx = struct.unpack("<h", data[2:4])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
     gy = struct.unpack("<h", data[4:6])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
     gz = struct.unpack("<h", data[6:8])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
@@ -61,7 +61,7 @@ def parse_gyro(data):
 
 
 def parse_quaternion(data):
-    """Parse quaternion data from IMU packet"""
+    """Parse quaternion data from IMU packet."""
     qw = struct.unpack("<h", data[2:4])[0] / 32768.0
     qx = struct.unpack("<h", data[4:6])[0] / 32768.0
     qy = struct.unpack("<h", data[6:8])[0] / 32768.0
@@ -81,7 +81,7 @@ def update_shared_memory(shm, shm_lock, timestamp, gyro, quaternion):
 
 
 class IMUReader:
-    """Reads IMU data from a serial port in a separate process and shares via shared memory"""
+    """Reads IMU data from a serial port in a separate process and shares via shared memory."""
 
     def __init__(self, device="/dev/ttyUSB0", baudrate=230400, shm_path="/tmp/imu_shm"):
         # Serial configuration (child process will open the port)
@@ -146,7 +146,7 @@ class IMUReader:
 
     @staticmethod
     def _imu_reading_loop(device, baudrate, shm_path, shm_size, running_event, shm_lock):
-        """Standalone IMU reading loop that runs in a separate process"""
+        """Standalone IMU reading loop that runs in a separate process."""
         # Serial setup
         serial_conn = serial.Serial(device, baudrate, timeout=0)
 
@@ -185,7 +185,7 @@ class IMUReader:
         serial_conn.close()
 
     def start(self):
-        """Start the IMU reading process"""
+        """Start the IMU reading process."""
         if self.process is None or not self.process.is_alive():
             self.running.set()
             self.process = Process(
@@ -206,7 +206,7 @@ class IMUReader:
             self.process = None
 
     def test(self):
-        """Test function that runs the IMU reader and prints data"""
+        """Test function that runs the IMU reader and prints data."""
         self.start()
         start_time = time.time()
         while True:
@@ -216,12 +216,8 @@ class IMUReader:
                 f"projected_gravity: (\033[94m{projgrav[0]:.4f}\033[0m, \033[94m{projgrav[1]:.4f}\033[0m, \033[94m{projgrav[2]:.4f}\033[0m), gyro: (\033[92m{gyro[0]:.4f}\033[0m, \033[92m{gyro[1]:.4f}\033[0m, \033[92m{gyro[2]:.4f}\033[0m), timestamp: {timestamp - start_time:.3f}"
             )
 
-    def get_projected_gravity_and_gyroscope(self):
-        """Get the latest projected gravity and gyroscope data from shared memory
-
-        Returns:
-            tuple: (projected_gravity, gyro, timestamp) where projected_gravity and gyro are tuples of 3 floats, timestamp is float
-        """
+    def get_projected_gravity_and_gyroscope(self) -> tuple[tuple[float, ...], tuple[float, ...], float]:
+        """Get the latest projected gravity and gyroscope data from shared memory."""
         try:
             # Read from shared memory with lock
             with self.shm_lock:

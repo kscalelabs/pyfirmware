@@ -8,7 +8,7 @@ from lpf import apply_lowpass_filter
 from policy import get_onnx_sessions
 
 
-def runner(kinfer_path):
+def runner(kinfer_path: str) -> None:
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata["joint_names"]
     carry = init_session.run(None, {})[0]

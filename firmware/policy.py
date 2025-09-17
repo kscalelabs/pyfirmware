@@ -5,7 +5,7 @@ import numpy as np
 import onnxruntime as ort
 
 
-def get_onnx_sessions(kinfer_path):
+def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
     print("Loading kinfer model from", kinfer_path)
     if not kinfer_path or not kinfer_path.endswith(".kinfer"):  # .tar.gz really
         raise ValueError("Model path must be provided and end with .kinfer")
