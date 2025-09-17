@@ -33,9 +33,7 @@ def runner(kinfer_path):
             None,
             {
                 "joint_angles": np.array(joint_angles, dtype=np.float32),
-                "joint_angular_velocities": np.array(
-                    joint_angular_velocities, dtype=np.float32
-                ),  # TODO faster to already have as array?
+                "joint_angular_velocities": np.array(joint_angular_velocities, dtype=np.float32),
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
                 "command": command,
