@@ -18,8 +18,8 @@ fi
 
 for device in /sys/bus/usb/devices/*/power/control; do
     if [ "$(cat $device)" != "on" ]; then
-        if read -p "Set $device to on? (y/n) " -n 1 -r; then
-            if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+        if read -p "Set $device to on? (y/n) " -r; then
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
                 echo "on" > $device
             fi
         fi
