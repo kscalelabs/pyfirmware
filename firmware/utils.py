@@ -5,9 +5,8 @@ import time
 
 import numpy as np
 import onnxruntime as ort
-
-from imu.hiwonder import Hiwonder
 from imu.bno055 import BNO055
+from imu.hiwonder import Hiwonder
 
 
 def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
@@ -45,7 +44,6 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
     return init_session, step_session, metadata
 
 
-
 # TODO deprecate this and move to policy
 def apply_lowpass_filter(action: np.ndarray, lpf_carry: dict | None, cutoff_hz: float) -> tuple[np.ndarray, dict]:
     x = np.asarray(action, dtype=float)
@@ -65,10 +63,10 @@ def get_imu_reader():
     # try loading imus until one works
     try:
         return Hiwonder()
-    except Exception as e:
+    except Exception:
         pass
     try:
         return BNO055()
-    except Exception as e:
+    except Exception:
         pass
     raise ValueError("No IMU reader found")

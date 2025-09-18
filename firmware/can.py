@@ -40,7 +40,7 @@ class CANInterface:
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
                 print("\033[92mSuccess\033[0m")
-            except Exception as e:
+            except Exception:
                 print("\033[91mFailed\033[0m")
                 continue
 

@@ -150,7 +150,7 @@ class Hiwonder:
         """Standalone IMU reading loop that runs in a separate process."""
         try:
             serial_conn = serial.Serial(device, baudrate, timeout=0)
-        except Exception as e:
+        except Exception:
             return
 
         # Shared memory setup (child creates/opens and maps its own view)
@@ -198,10 +198,10 @@ class Hiwonder:
             # Ensure child exits if parent dies unexpectedly
             self.process.daemon = True
             self.process.start()
-            
+
             # Give the process a moment to try connecting
-            time.sleep(.1)
-            
+            time.sleep(0.1)
+
             # Check if process died due to connection error
             if not self.process.is_alive():
                 # Clean up the dead process

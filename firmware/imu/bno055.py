@@ -1,19 +1,21 @@
-import time
 import struct
+import time
+
 from periphery import I2C
 
+
 class BNO055:
-    NDOF_MODE = 0x0C  # for some reason this is faster than ACCGYRO_MODE    
+    NDOF_MODE = 0x0C  # for some reason this is faster than ACCGYRO_MODE
     MODE_REGISTER = 0x3D
-    BLOCK_START = 0x08   # Base address for sensor data
-    
+    BLOCK_START = 0x08  # Base address for sensor data
+
     # Data offsets from BLOCK_START
     GYRO_OFFSET = 12
     GRAVITY_OFFSET = 38
-    
+
     # Scale factors
     GYRO_SCALE = 0.001090830782496456
-    GRAVITY_SCALE = 1/100.0
+    GRAVITY_SCALE = 1 / 100.0
 
     def __init__(self, i2c_bus: str = "/dev/i2c-1", address: int = 0x28):
         self.i2c = I2C(i2c_bus)
@@ -22,7 +24,7 @@ class BNO055:
         time.sleep(0.01)
 
     def __del__(self):
-        if hasattr(self, 'i2c'):
+        if hasattr(self, "i2c"):
             self.i2c.close()
 
     def _write_register(self, register: int, data: bytes) -> None:
@@ -30,10 +32,7 @@ class BNO055:
         self.i2c.transfer(self.address, msgs)
 
     def _read_register(self, register: int, length: int) -> bytes:
-        msgs = [
-            I2C.Message(bytes([register])),
-            I2C.Message(bytearray(length), read=True)
-        ]
+        msgs = [I2C.Message(bytes([register])), I2C.Message(bytearray(length), read=True)]
         self.i2c.transfer(self.address, msgs)
         return bytes(msgs[1].data)
 
@@ -50,6 +49,7 @@ class BNO055:
         gravity = (g * self.GRAVITY_SCALE for g in gravity)
 
         return gyro, gravity, timestamp
+
 
 if __name__ == "__main__":
     sensor = BNO055()  # defaults to /dev/i2c-1

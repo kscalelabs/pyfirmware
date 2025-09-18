@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 from can import MotorDriver
-from utils import get_imu_reader, apply_lowpass_filter, get_onnx_sessions
+from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 
 def runner(kinfer_path: str) -> None:
