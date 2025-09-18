@@ -1,8 +1,13 @@
 import json
+import math
 import tarfile
+import time
 
 import numpy as np
 import onnxruntime as ort
+
+from imu.hiwonder import Hiwonder
+from imu.bno055 import BNO055
 
 
 def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
@@ -27,10 +32,8 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
     step_inputs = step_session.get_inputs()
     step_outputs = step_session.get_outputs()
 
-    print(
-        f"\nInit function - Inputs: {[inp.name for inp in init_inputs]}, Outputs: {[out.name for out in init_outputs]}"
-    )
-    print(f"Step function - Inputs: {[inp.name for inp in step_inputs]}, Outputs: {[out.name for out in step_outputs]}")
+    print(f"\nInit fn - Inputs: {[inp.name for inp in init_inputs]}, Outputs: {[out.name for out in init_outputs]}")
+    print(f"Step fn - Inputs: {[inp.name for inp in step_inputs]}, Outputs: {[out.name for out in step_outputs]}")
 
     # warm up step function
     step_dummy_inputs = {}
@@ -40,3 +43,32 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
         step_session.run(None, step_dummy_inputs)
 
     return init_session, step_session, metadata
+
+
+
+# TODO deprecate this and move to policy
+def apply_lowpass_filter(action: np.ndarray, lpf_carry: dict | None, cutoff_hz: float) -> tuple[np.ndarray, dict]:
+    x = np.asarray(action, dtype=float)
+    now = time.perf_counter()
+    if lpf_carry is None:
+        return x, {"prev": x.copy(), "t": now}
+
+    dt = max(now - lpf_carry.get("t", now), 0.0)
+    lpf_carry["t"] = now
+    alpha = 1.0 - math.exp(-2.0 * math.pi * cutoff_hz * dt)
+    y = lpf_carry["prev"] + alpha * (x - lpf_carry["prev"])
+    lpf_carry["prev"] = y
+    return y, lpf_carry
+
+
+def get_imu_reader():
+    # try loading imus until one works
+    try:
+        return Hiwonder()
+    except Exception as e:
+        pass
+    try:
+        return BNO055()
+    except Exception as e:
+        pass
+    raise ValueError("No IMU reader found")

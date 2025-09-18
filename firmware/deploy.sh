@@ -7,7 +7,7 @@ if ! [ $(which klog-deploy) ]; then
 fi
 
 # download kinfer model
-policy_dir="./policies"
+policy_dir="~/.policies"
 remote_policies="mu:~/kodachrome/policies/"
 
 mkdir -p "$policy_dir"

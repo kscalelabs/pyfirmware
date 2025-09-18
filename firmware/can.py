@@ -30,23 +30,24 @@ class CANInterface:
         self._scan()
 
     def _scan(self) -> None:
+        print("\033[1;36m🔍 Scanning CAN buses\033[0m")
         for canbus in self.canbus_range:
+            print(f"Scanning bus {canbus}: ", end="")
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
                 sock.settimeout(0.01)
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
+                print("\033[92mSuccess\033[0m")
             except Exception as e:
-                print(f"bus {canbus} not available: {e}")
+                print("\033[91mFailed\033[0m")
                 continue
 
-            print(f"Scanning bus {canbus}")
             for actuator_id in self.actuator_range:
                 if self._ping_actuator(canbus, actuator_id):
                     self.actuators[canbus].append(actuator_id)
 
-        print("\033[1;36m🔍 CAN scan complete\033[0m")
         total_actuators = sum(len(actuators) for actuators in self.actuators.values())
         print(f"\033[1;32mFound {total_actuators} actuators on {len(self.sockets)} sockets\033[0m")
         for canbus, actuators in self.actuators.items():

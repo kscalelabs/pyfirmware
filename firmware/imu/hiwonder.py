@@ -80,7 +80,7 @@ def update_shared_memory(shm, shm_lock, timestamp, gyro, quaternion):
         shm_lock.release()
 
 
-class IMUReader:
+class Hiwonder:
     """Reads IMU data from a serial port in a separate process and shares via shared memory."""
 
     def __init__(self, device="/dev/ttyUSB0", baudrate=230400, shm_path="/tmp/imu_shm"):
@@ -105,6 +105,7 @@ class IMUReader:
 
         # Register clean shutdown hooks only for the main process
         self._register_shutdown_handlers()
+        self.start()
 
     def _register_shutdown_handlers(self):
         def _safe_stop(*_args, **_kwargs):
@@ -147,8 +148,10 @@ class IMUReader:
     @staticmethod
     def _imu_reading_loop(device, baudrate, shm_path, shm_size, running_event, shm_lock):
         """Standalone IMU reading loop that runs in a separate process."""
-        # Serial setup
-        serial_conn = serial.Serial(device, baudrate, timeout=0)
+        try:
+            serial_conn = serial.Serial(device, baudrate, timeout=0)
+        except Exception as e:
+            return
 
         # Shared memory setup (child creates/opens and maps its own view)
         if not os.path.exists(shm_path):
@@ -195,6 +198,16 @@ class IMUReader:
             # Ensure child exits if parent dies unexpectedly
             self.process.daemon = True
             self.process.start()
+            
+            # Give the process a moment to try connecting
+            time.sleep(.1)
+            
+            # Check if process died due to connection error
+            if not self.process.is_alive():
+                # Clean up the dead process
+                self.process.join()
+                self.process = None
+                raise serial.SerialException(f"Failed to initialize IMU on {self.device}")
 
     def stop(self):
         """Stop the IMU reading process"""
@@ -244,5 +257,5 @@ class IMUReader:
 
 # for testing
 if __name__ == "__main__":
-    reader = IMUReader()
-    reader.test()
+    imu = Hiwonder()
+    imu.test()

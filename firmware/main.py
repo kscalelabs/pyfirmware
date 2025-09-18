@@ -3,9 +3,7 @@ import time
 
 import numpy as np
 from can import MotorDriver
-from imu import IMUReader
-from lpf import apply_lowpass_filter
-from policy import get_onnx_sessions
+from utils import get_imu_reader, apply_lowpass_filter, get_onnx_sessions
 
 
 def runner(kinfer_path: str) -> None:
@@ -13,8 +11,8 @@ def runner(kinfer_path: str) -> None:
     joint_order = metadata["joint_names"]
     carry = init_session.run(None, {})[0]
 
-    imu_reader = IMUReader()
-    imu_reader.start()
+    imu_reader = get_imu_reader()
+    print("IMU:", imu_reader.__class__.__name__)
 
     motor_driver = MotorDriver()
 
@@ -63,4 +61,4 @@ if __name__ == "__main__":
     runner(args.kinfer_path)
 
 
-# TODO move lpf to policy - no signals are modified in the firmware
+# TODO move lpf to policy - no signals should be modified by the firmware
