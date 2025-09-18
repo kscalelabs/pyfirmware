@@ -2,6 +2,12 @@
 
 set -e
 
+# Check for root privileges
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root"
+    exit 1
+fi
+
 # Function to confirm with user before taking an action
 confirm_action() {
     if [ "$@" -ne 2 ]; then
