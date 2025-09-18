@@ -23,5 +23,6 @@ for device in /sys/bus/usb/devices/*/power/control; do
                 echo "on" > $device
             fi
         fi
+        echo ""
     fi
 done
