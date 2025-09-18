@@ -45,16 +45,16 @@ class BNO055:
         gyro = struct.unpack_from("<hhh", gyro_bytes, 0)
         gravity = struct.unpack_from("<hhh", grav_bytes, 0)
 
-        gyro = (g * self.GYRO_SCALE for g in gyro)
-        gravity = (g * self.GRAVITY_SCALE for g in gravity)
+        gyro = tuple(g * self.GYRO_SCALE for g in gyro)
+        gravity = tuple(-g * self.GRAVITY_SCALE for g in gravity)
 
-        return gyro, gravity, timestamp
+        return gravity, gyro, timestamp
 
 
 if __name__ == "__main__":
     sensor = BNO055()  # defaults to /dev/i2c-1
 
     while True:
-        gyro, gravity, timestamp = sensor.get_projected_gravity_and_gyroscope()
+        gravity, gyro, timestamp = sensor.get_projected_gravity_and_gyroscope()
         print(f"\033[37mGyro:\t{[f'{x:.3f}' for x in gyro]}\tGravity:\t{[f'{x:.3f}' for x in gravity]}\033[0m")
         time.sleep(0.1)
