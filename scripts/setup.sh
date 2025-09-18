@@ -10,7 +10,7 @@ fi
 
 # Function to confirm with user before taking an action
 confirm_action() {
-    if [ "$@" -ne 2 ]; then
+    if [ "$#" -ne 2 ]; then
         echo "Usage: confirm_action <prompt> <action>"
         return 1
     fi
@@ -38,10 +38,6 @@ fi
 
 for device in /sys/bus/usb/devices/*/power/control; do
     if [ "$(cat $device)" != "on" ]; then
-        if read -p "Set $device to on? (y/n) " -n 1 -r; then
-            if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
-                echo "on" > $device
-            fi
-        fi
+        confirm_action "Set $device to on?" "echo 'on' > $device"
     fi
 done
