@@ -3,3 +3,4 @@
 numpy
 onnxruntime
 python-periphery
+pyserial

@@ -23,18 +23,7 @@ fi
 echo "Deploying policy: $policy"
 
 
-
-#  set can interfaces
-for i in {0..4}
-do
-    echo "Setting up can$i..."
-    sudo ip link set can$i down
-    sudo ip link set can$i type can bitrate 1000000
-    sudo ip link set can$i txqueuelen 1000
-    sudo ip link set can$i up
-done
-
-# set max torques
+# set setup can interfaces and set max torques
 bash ~/kbot_deployment/scripts/reset_max_torques.sh
 
 run_firmware() {
