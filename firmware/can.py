@@ -70,7 +70,7 @@ class CANInterface:
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
-                sock.settimeout(0.001)
+                sock.settimeout(0.002)
                 sock.send(self._build_can_frame(0, self.MUX_PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
@@ -121,15 +121,15 @@ class CANInterface:
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
                     resp_frame = sock.recv(self.FRAME_SIZE)  # TODO handle timeouts and other shit
-                    result = self._parse_feedback_response(resp_frame)
+
+                    parsed_frame = self._parse_can_frame(resp_frame)
+                    if parsed_frame["mux"] != self.MUX_FEEDBACK:
+                        raise ValueError(f"unexpected mux 0x{parsed_frame['mux']:02X} in feedback response")
+                    result = self._parse_feedback_response(parsed_frame)
                     results[actuator_id] = result
         return results
 
-    def _parse_feedback_response(self, frame: bytes) -> Dict[str, int]:
-        result = self._parse_can_frame(frame)
-        if result["mux"] != self.MUX_FEEDBACK:  # TODO deal with this
-            raise ValueError(f"unexpected mux 0x{result['mux']:02X} in feedback response")
-
+    def _parse_feedback_response(self, result: bytes) -> Dict[str, int]:
         angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", result["payload"])
         return {
             "host_id": result["host_id"],
@@ -141,46 +141,28 @@ class CANInterface:
             "temperature_raw": temp_be,
         }
 
-    def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float = 1.0):
+    def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float):
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                self._set_pd_target(canbus, actuator_id, actions[actuator_id], robotcfg, scaling)
+                frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
+                self.sockets[canbus].send(frame)
+        for canbus in self.sockets.keys():
+            for actuator_id in self.actuators[canbus]:
+                try:
+                    _ = self.sockets[canbus].recv(self.FRAME_SIZE) # drop responses
+                except:
+                    print("lost response on pd target send") # NOTE might cause async issues
 
-    def _set_pd_target(
-        self, canbus: int, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float = 1.0
-    ):
+    def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float):
         assert 0.0 <= scaling <= 1.0
-        frame = self._build_pd_command_frame(
-            actuator_can_id,
-            int(robotcfg.actuators[actuator_can_id].physical_to_can_torque(0)),
-            int(robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle)),
-            int(robotcfg.actuators[actuator_can_id].physical_to_can_velocity(0)),
-            int(robotcfg.actuators[actuator_can_id].raw_kp * scaling),
-            int(robotcfg.actuators[actuator_can_id].raw_kd * scaling),
-        )
-        self.sockets[canbus].send(frame)
-        self.sockets[canbus].settimeout(0.01)
-        _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # just drop response TODO parallel + response handling
-        self.sockets[canbus].settimeout(0.0)
+        raw_torque = int(robotcfg.actuators[actuator_can_id].physical_to_can_torque(0))
+        raw_angle = int(robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle))
+        raw_ang_vel = int(robotcfg.actuators[actuator_can_id].physical_to_can_velocity(0))
+        raw_kp = int(robotcfg.actuators[actuator_can_id].raw_kp * scaling)
+        raw_kd = int(robotcfg.actuators[actuator_can_id].raw_kd * scaling)
 
-    def _build_pd_command_frame(
-        self,
-        actuator_can_id: int,
-        raw_torque: int,
-        raw_angle: int,
-        raw_angular_vel: int,
-        raw_kp: int,
-        raw_kd: int,
-    ) -> bytes:
-        assert (
-            isinstance(raw_torque, int)
-            and isinstance(raw_angle, int)
-            and isinstance(raw_angular_vel, int)
-            and isinstance(raw_kp, int)
-            and isinstance(raw_kd, int)
-        )
         can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((self.MUX_CONTROL & 0x1F) << 24)) | self.EFF
-        payload = struct.pack(">HHHH", raw_angle, raw_angular_vel, raw_kp, raw_kd)
+        payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
 
