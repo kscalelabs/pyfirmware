@@ -30,7 +30,7 @@ class CANInterface:
         self._scan()
 
     def _scan(self) -> None:
-        print("\033[1;36m🔍 Scanning CAN buses\033[0m")
+        print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
         for canbus in self.canbus_range:
             print(f"Scanning bus {canbus}: ", end="")
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
@@ -80,7 +80,7 @@ class CANInterface:
     def _enable_motor(self, canbus: int, actuator_can_id: int):
         frame = self._build_motor_enable_frame(actuator_can_id)
         self.sockets[canbus].send(frame)
-        raw = self.sockets[canbus].recv(16)  # receive response to keep can buffer clear
+        raw = self.sockets[canbus].recv(self.FRAME_SIZE)  # receive response to keep can buffer clear
 
     def _build_motor_enable_frame(self, actuator_can_id: int) -> bytes:
         can_id = (actuator_can_id & 0xFF) | (self.host_id << 8) | ((self.MUX_MOTOR_ENABLE & 0x1F) << 24)
@@ -154,7 +154,7 @@ class CANInterface:
             int(robotcfg.actuators[actuator_can_id].raw_kd * scaling),
         )
         self.sockets[canbus].send(frame)
-        _ = self.sockets[canbus].recv(16)  # just drop response
+        _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # just drop response
 
     def _build_pd_command(
         self,
@@ -209,7 +209,7 @@ class MotorDriver:
             print("\033[1;31m❌ Actuator faults detected\033[0m")
             # exit(1) # TODO for some reason we get 128 uncalibrated faults
 
-        input("Press Enter to proceed to enable motors...")
+        input("Press Enter to enable motors...")
         self.ci.enable_motors()
         print("✅ Motors enabled")
 
