@@ -3,10 +3,11 @@ import time
 
 import numpy as np
 from can import MotorDriver
+from logger import Logger
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 
-def runner(kinfer_path: str) -> None:
+def runner(kinfer_path: str, log_dir: str) -> None:
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata["joint_names"]
     carry = init_session.run(None, {})[0]
@@ -16,9 +17,12 @@ def runner(kinfer_path: str) -> None:
 
     motor_driver = MotorDriver()
 
+    logger = Logger(log_dir)
+
     lpf_carry = None
     lpf_cutoff_hz = 10.0
 
+    t0 = time.perf_counter()
     while True:
         t = time.perf_counter()
         joint_angles, joint_angular_velocities = motor_driver.get_joint_angles_and_velocities(joint_order)
@@ -47,6 +51,15 @@ def runner(kinfer_path: str) -> None:
         t5 = time.perf_counter()
 
         dt = time.perf_counter() - t
+        logger.log(t - t0, {
+            "dt_ms": dt * 1000,
+            "joint_angles": joint_angles,
+            "joint_angular_velocities": joint_angular_velocities,
+            "projected_gravity": projected_gravity,
+            "gyroscope": gyroscope,
+            "command": command.tolist(),
+            "action": action.tolist(),
+        })
         print(
             f"dt={dt * 1000:.2f} ms, get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
         )
@@ -57,8 +70,8 @@ def runner(kinfer_path: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
+    parser.add_argument("log_dir", type=str, help="Path to log directory")
     args = parser.parse_args()
-    runner(args.kinfer_path)
-
+    runner(args.kinfer_path, args.log_dir)
 
 # TODO move lpf to policy - no signals should be modified by the firmware
