@@ -69,4 +69,4 @@ def get_imu_reader():
         return BNO055()
     except Exception:
         pass
-    raise ValueError("No IMU reader found")
+    raise ValueError("No IMU device found")

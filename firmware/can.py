@@ -28,6 +28,10 @@ class CANInterface:
         self.sockets = {}
         self.actuators = {}
         self._scan()
+    
+    def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
+        can_id = ((actuator_can_id & 0xFF) | ((self.host_id) << 8) | ((mux & 0x1F) << 24)) | self.EFF
+        return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
     def _scan(self) -> None:
         print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
@@ -55,7 +59,7 @@ class CANInterface:
 
     def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
         try:
-            frame = self._build_ping_frame(actuator_can_id)
+            frame = self._build_can_frame(actuator_can_id, self.MUX_PING)
             self.sockets[canbus].send(frame)
             resp_frame = self.sockets[canbus].recv(self.FRAME_SIZE)
             _ = struct.unpack(self.FRAME_FMT, resp_frame)
@@ -65,50 +69,29 @@ class CANInterface:
         except Exception:
             return False
 
-    def _build_ping_frame(self, actuator_can_id: int) -> bytes:
-        can_id = (actuator_can_id & 0xFF) | ((self.host_id & 0xFFFF) << 8) | ((self.MUX_PING & 0x1F) << 24)
-        can_id |= 0x8000_0000  # set EFF flag
-        length = 8
-        payload = b"\x00" * length  # empty payload
-        return struct.pack(self.FRAME_FMT, can_id, length & 0xFF, 0, 0, 0, payload)
-
     def enable_motors(self):
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 self._enable_motor(canbus, actuator_id)
 
     def _enable_motor(self, canbus: int, actuator_can_id: int):
-        frame = self._build_motor_enable_frame(actuator_can_id)
+        frame = self._build_can_frame(actuator_can_id, self.MUX_MOTOR_ENABLE)
         self.sockets[canbus].send(frame)
-        raw = self.sockets[canbus].recv(self.FRAME_SIZE)  # receive response to keep can buffer clear
-
-    def _build_motor_enable_frame(self, actuator_can_id: int) -> bytes:
-        can_id = (actuator_can_id & 0xFF) | (self.host_id << 8) | ((self.MUX_MOTOR_ENABLE & 0x1F) << 24)
-        can_id |= self.EFF
-        length = 8
-        payload = b"\x00" * length  # empty payload
-        return struct.pack(self.FRAME_FMT, can_id, length & 0xFF, 0, 0, 0, payload)
+        _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # receive response to keep can buffer clear
 
     def get_actuator_feedback(self) -> Dict[str, int]:
         results = {}
         for can, sock in self.sockets.items():
             for actuator_id in self.actuators[can]:
-                frame = self._build_feedback_request(actuator_id)
+                frame = self._build_can_frame(actuator_id, self.MUX_FEEDBACK)
                 sock.send(frame)
                 resp_frame = sock.recv(self.FRAME_SIZE)
                 result = self._parse_feedback_response(resp_frame)
                 assert result["actuator_can_id"] == actuator_id, (
-                    f"mismatch in actuator id -- probably missed a response earlier: {result}"
+                    f"mismatch in actuator id -- expected {actuator_id} but got {result['actuator_can_id']}: response: {result}"
                 )
                 results[actuator_id] = result
         return results
-
-    def _build_feedback_request(self, actuator_can_id: int) -> bytes:
-        can_id = (actuator_can_id & 0xFF) | (self.host_id << 8) | ((self.MUX_FEEDBACK & 0x1F) << 24)
-        can_id |= self.EFF
-        length = 8
-        payload = b"\x00" * length  # empty payload
-        return struct.pack(self.FRAME_FMT, can_id, length & 0xFF, 0, 0, 0, payload)
 
     def _parse_feedback_response(self, frame: bytes) -> Dict[str, int]:
         if len(frame) != 16:
@@ -145,7 +128,7 @@ class CANInterface:
         self, canbus: int, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float = 1.0
     ):
         assert 0.0 <= scaling <= 1.0
-        frame = self._build_pd_command(
+        frame = self._build_pd_command_frame(
             actuator_can_id,
             int(robotcfg.actuators[actuator_can_id].physical_to_can_torque(0)),
             int(robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle)),
@@ -156,7 +139,7 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # just drop response
 
-    def _build_pd_command(
+    def _build_pd_command_frame(
         self,
         actuator_can_id: int,
         raw_torque: int,
@@ -172,11 +155,9 @@ class CANInterface:
             and isinstance(raw_kp, int)
             and isinstance(raw_kd, int)
         )
-        can_id = (actuator_can_id & 0xFF) | (raw_torque << 8) | ((self.MUX_CONTROL & 0x1F) << 24)
-        can_id |= self.EFF
+        can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((self.MUX_CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_angular_vel, raw_kp, raw_kd)
-        length = 8
-        return struct.pack(self.FRAME_FMT, can_id, length & 0xFF, 0, 0, 0, payload)
+        return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
 
 class MotorDriver:
