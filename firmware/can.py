@@ -251,10 +251,7 @@ class MotorDriver:
         return joint_angles_ordered, joint_velocities_ordered
 
     def take_action(self, action: list[float], joint_order: list[str]):
-        action = {
-            self.robot.actuators[self.robot.full_name_to_actuator_id[name]].can_id: action
-            for name, action in zip(joint_order, action)
-        }
+        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
         self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
 
 
