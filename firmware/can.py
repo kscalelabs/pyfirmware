@@ -182,10 +182,13 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self):
+    def __init__(self, max_scaling: float = 1.0):
+        self.max_scaling = max_scaling
         self.robot = RobotConfig()
         self.ci = CANInterface()
+        self.startup_sequence()
 
+    def startup_sequence(self):
         states = self.ci.get_actuator_feedback()
 
         print("\033[1;36mActuator states:\033[0m")
@@ -210,25 +213,22 @@ class MotorDriver:
         self.ci.enable_motors()
         print("✅ Motors enabled")
 
-        home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         print("\nHoming...")
-        for scale in [
-            math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(30)
-        ]:  # Logarithmic interpolation from 0.001 to 1.0 in 30 steps
+        home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+        for scale in [math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(30)]:
+            if scale > self.max_scaling:
+                break
             print(f"PD ramp: {scale:.3f}")
             self.ci.set_pd_targets(home_targets, robotcfg=self.robot, scaling=scale)
             time.sleep(0.1)
         print("✅ Homing complete")
-
-        input("Press Enter to start policy...")
-        print("🤖 Running policy...")
 
     def sine_wave(self):
         t0 = time.perf_counter()
         while True:
             angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (time.perf_counter() - t0))
             action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
-            self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=0.1)
+            self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             time.sleep(0.1)
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
@@ -250,11 +250,11 @@ class MotorDriver:
             self.robot.actuators[self.robot.full_name_to_actuator_id[name]].can_id: action
             for name, action in zip(joint_order, action)
         }
-        self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=1.0)
+        self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
 
 
 def main():
-    driver = MotorDriver()
+    driver = MotorDriver(max_scaling=0.1)
     driver.sine_wave()
 
 

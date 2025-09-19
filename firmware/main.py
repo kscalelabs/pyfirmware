@@ -8,6 +8,8 @@ from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 
 def runner(kinfer_path: str, log_dir: str) -> None:
+    logger = Logger(log_dir)
+
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata["joint_names"]
     carry = init_session.run(None, {})[0]
@@ -16,8 +18,8 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     print("IMU:", imu_reader.__class__.__name__)
 
     motor_driver = MotorDriver()
-
-    logger = Logger(log_dir)
+    input("Press Enter to start policy...")
+    print("🤖 Running policy...")
 
     lpf_carry = None
     lpf_cutoff_hz = 10.0
