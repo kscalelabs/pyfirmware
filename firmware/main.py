@@ -53,15 +53,18 @@ def runner(kinfer_path: str, log_dir: str) -> None:
         t5 = time.perf_counter()
 
         dt = time.perf_counter() - t
-        logger.log(t - t0, {
-            "dt_ms": dt * 1000,
-            "joint_angles": joint_angles,
-            "joint_angular_velocities": joint_angular_velocities,
-            "projected_gravity": projected_gravity,
-            "gyroscope": gyroscope,
-            "command": command.tolist(),
-            "action": action.tolist(),
-        })
+        logger.log(
+            t - t0,
+            {
+                "dt_ms": dt * 1000,
+                "joint_angles": joint_angles,
+                "joint_angular_velocities": joint_angular_velocities,
+                "projected_gravity": projected_gravity,
+                "gyroscope": gyroscope,
+                "command": command.tolist(),
+                "action": action.tolist(),
+            },
+        )
         print(
             f"dt={dt * 1000:.2f} ms, get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
         )

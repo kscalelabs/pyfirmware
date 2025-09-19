@@ -1,13 +1,11 @@
-
-
-import queue
-import threading
-import signal
 import atexit
-from pathlib import Path
-from typing import Dict, Any
 import json
+import queue
+import signal
+import threading
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
 
 
 class Logger:
@@ -27,6 +25,7 @@ class Logger:
 
     def _register_shutdown_handlers(self):
         """Register handlers for graceful shutdown on process termination."""
+
         def _safe_shutdown(*_args, **_kwargs):
             try:
                 self._shutdown()
@@ -40,7 +39,7 @@ class Logger:
     def _log_worker(self, q: queue.Queue, filepath: Path):
         """Background worker that processes logs from the queue in batches."""
         print("Logging worker started")
-        with open(filepath, 'a') as f:
+        with open(filepath, "a") as f:
             batch = []
             while self.running or not q.empty():
                 try:
@@ -49,7 +48,7 @@ class Logger:
                         q.task_done()
                 except queue.Empty:
                     if batch:
-                        f.write(''.join(json.dumps(entry) + '\n' for entry in batch))
+                        f.write("".join(json.dumps(entry) + "\n" for entry in batch))
                         f.flush()
                         batch = []
                     threading.Event().wait(1.0)
@@ -60,11 +59,12 @@ class Logger:
         self.thread.join()
 
     def log(self, timestamp: float, data: Dict[str, Any]):
-        self.queue.put({'timestamp': timestamp, **data})
+        self.queue.put({"timestamp": timestamp, **data})
 
 
 if __name__ == "__main__":
     import time
+
     logger = Logger("logger_test")
     logger.log(time.time(), {"test": "1"})
     time.sleep(1)
