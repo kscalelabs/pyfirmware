@@ -1,2 +1,6 @@
 # requirements.txt
 
+numpy
+onnxruntime
+python-periphery
+pyserial
