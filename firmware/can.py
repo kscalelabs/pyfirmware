@@ -11,7 +11,7 @@ class CANInterface:
     """Communication only."""
 
     def __init__(self):
-        self.FRAME_FMT = "<IBBBB8s"  # <I = little-endian u32; 4B = len, pad, res0, len8_dlc; 8s = 8 data bytes
+        self.FRAME_FMT = "<IBBBB8s" # <I = little-endian u32; 4B = len, pad, res0, len8_dlc; 8s = 8 data bytes
         self.FRAME_SIZE = struct.calcsize(self.FRAME_FMT)
         self.host_id = 0xFD
         self.canbus_range = range(0, 7)
@@ -28,10 +28,40 @@ class CANInterface:
         self.sockets = {}
         self.actuators = {}
         self._scan()
-    
+
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | ((self.host_id) << 8) | ((mux & 0x1F) << 24)) | self.EFF
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
+
+    def _parse_can_frame(self, frame: bytes) -> Dict[str, int]:
+        if len(frame) != 16:
+            raise ValueError("frame must be exactly 16 bytes")
+        can_id, _length, _pad, _res0, _len8, payload = struct.unpack(self.FRAME_FMT, frame)
+        b0 = (can_id >> 0) & 0xFF # host_id (u8)
+        b1 = (can_id >> 8) & 0xFF # actuator_can_id (u8)
+        b2 = (can_id >> 16) & 0xFF # fault_flags (u8)
+        b3 = (can_id >> 24) & 0xFF # mux + EFF-in-byte
+        mux = b3 & 0x1F
+        return {
+            "host_id": b0,
+            "actuator_can_id": b1,
+            "fault_flags": b2,
+            "mux": mux,
+            "payload": payload,
+        }
+
+    def _receive_all_can_frames(self, canbus: int) -> list[bytes]:
+        frames = []
+        t0 = time.perf_counter()
+        while True:
+            try:
+                frame = self.sockets[canbus].recv(self.FRAME_SIZE)
+                frames.append(frame)
+            except:
+                break
+        if len(frames) > 0:
+            print(f"received {len(frames)} frames in {(time.perf_counter() - t0)*1e6:.2f}us")
+        return frames
 
     def _scan(self) -> None:
         print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
@@ -40,7 +70,8 @@ class CANInterface:
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
-                sock.settimeout(0.01)
+                sock.settimeout(0.001)
+                sock.send(self._build_can_frame(0, self.MUX_PING)) # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
                 print("\033[92mSuccess\033[0m")
@@ -58,16 +89,13 @@ class CANInterface:
             print(f"\033[1;34m{canbus}\033[0m: \033[1;35m{actuators}\033[0m")
 
     def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
-        try:
-            frame = self._build_can_frame(actuator_can_id, self.MUX_PING)
-            self.sockets[canbus].send(frame)
-            resp_frame = self.sockets[canbus].recv(self.FRAME_SIZE)
-            _ = struct.unpack(self.FRAME_FMT, resp_frame)
-            return True
-        except socket.timeout:
-            return False
-        except Exception:
-            return False
+        frame = self._build_can_frame(actuator_can_id, self.MUX_PING)
+        self.sockets[canbus].send(frame)
+        frames = self._receive_all_can_frames(canbus)
+        for i, frame in enumerate(frames):
+            result = self._parse_can_frame(frame)
+            print(f"\tFrame {i}: {result['actuator_can_id']}::{result['mux']}")
+        return len(frames) > 0  
 
     def enable_motors(self):
         for canbus in self.sockets.keys():
@@ -77,42 +105,36 @@ class CANInterface:
     def _enable_motor(self, canbus: int, actuator_can_id: int):
         frame = self._build_can_frame(actuator_can_id, self.MUX_MOTOR_ENABLE)
         self.sockets[canbus].send(frame)
-        _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # receive response to keep can buffer clear
-
+        _ = self.sockets[canbus].recv(self.FRAME_SIZE) # receive response to keep can buffer clear
+    
     def get_actuator_feedback(self) -> Dict[str, int]:
+        """ Send 1 message on each bus, and wait for all of them at once. - 3ms vs 10ms for sequential """
         results = {}
-        for can, sock in self.sockets.items():
-            for actuator_id in self.actuators[can]:
-                frame = self._build_can_frame(actuator_id, self.MUX_FEEDBACK)
-                sock.send(frame)
-                resp_frame = sock.recv(self.FRAME_SIZE)
-                result = self._parse_feedback_response(resp_frame)
-                assert result["actuator_can_id"] == actuator_id, (
-                    f"mismatch in actuator id -- expected {actuator_id} but got {result['actuator_can_id']}: response: {result}"
-                )
-                results[actuator_id] = result
+        max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
+        for tranche in range(max_tranches):
+            for can, sock in self.sockets.items():
+                if tranche < len(self.actuators[can]):
+                    actuator_id = self.actuators[can][tranche]
+                    frame = self._build_can_frame(actuator_id, self.MUX_FEEDBACK)
+                    sock.send(frame)
+            for can, sock in self.sockets.items():
+                if tranche < len(self.actuators[can]):
+                    actuator_id = self.actuators[can][tranche]
+                    resp_frame = sock.recv(self.FRAME_SIZE) # TODO handle timeouts and other shit
+                    result = self._parse_feedback_response(resp_frame)
+                    results[actuator_id] = result
         return results
 
     def _parse_feedback_response(self, frame: bytes) -> Dict[str, int]:
-        if len(frame) != 16:
-            raise ValueError("frame must be exactly 16 bytes")
+        result = self._parse_can_frame(frame)
+        if result["mux"] != self.MUX_FEEDBACK: # TODO deal with this
+            raise ValueError(f"unexpected mux 0x{result['mux']:02X} in feedback response")
 
-        can_id, _length, _pad, _res0, _len8, payload = struct.unpack("<IBBBB8s", frame)
-        b0 = (can_id >> 0) & 0xFF  # host_id (u8)
-        b1 = (can_id >> 8) & 0xFF  # actuator_can_id (u8)
-        b2 = (can_id >> 16) & 0xFF  # fault_flags (u8)
-        b3 = (can_id >> 24) & 0xFF  # mux + EFF-in-byte
-        mux = b3 & 0x1F
-
-        if mux != self.MUX_FEEDBACK:
-            raise ValueError(f"unexpected mux 0x{mux:02X} in feedback response")
-
-        angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", payload)
-
+        angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", result["payload"])
         return {
-            "host_id": b0,
-            "actuator_can_id": b1,
-            "fault_flags": b2,
+            "host_id": result["host_id"],
+            "actuator_can_id": result["actuator_can_id"],
+            "fault_flags": result["fault_flags"],
             "angle_raw": angle_be,
             "angular_velocity_raw": ang_vel_be,
             "torque_raw": torque_be,
@@ -137,7 +159,9 @@ class CANInterface:
             int(robotcfg.actuators[actuator_can_id].raw_kd * scaling),
         )
         self.sockets[canbus].send(frame)
-        _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # just drop response
+        self.sockets[canbus].settimeout(0.01)
+        _ = self.sockets[canbus].recv(self.FRAME_SIZE) # just drop response TODO parallel + response handling
+        self.sockets[canbus].settimeout(0.0)
 
     def _build_pd_command_frame(
         self,
@@ -236,8 +260,12 @@ class MotorDriver:
 
 def main():
     driver = MotorDriver(max_scaling=0.1)
+    input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 
 
 if __name__ == "__main__":
     exit(0 if main() else 1)
+
+
+# .recv takes 10-30us if messages are available.
