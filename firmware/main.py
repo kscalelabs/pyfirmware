@@ -95,7 +95,7 @@ if __name__ == "__main__":
     if args.log_dir is None: # coming through klog-robot
         log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
     else:
-        log_path = os.path.join(os.environ.get("HOME"), "kinfer-logs", "kinfer-log_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
+        log_path = os.path.join(os.environ.get("HOME"), "kinfer-logs", "kinfer-log_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".ndjson")
 
     runner(args.kinfer_path, log_path)
 
