@@ -10,10 +10,18 @@ from multiprocessing import Process
 import serial
 
 
-def quaternion_conjugate(q):
-    """Compute quaternion conjugate."""
-    qw, qx, qy, qz = q
-    return (qw, -qx, -qy, -qz)
+# record layout: timestamp (double) + gyro (3 floats) + quaternion (4 floats)
+RECORD_STRUCT = struct.Struct("<dfffffff")
+
+
+def open_or_create_mmap(path: str, size: int) -> mmap.mmap:
+    """Create the file if missing and return an mmap of given size."""
+    if not os.path.exists(path):
+        with open(path, "wb") as f:
+            f.write(b"\x00" * size)
+
+    with open(path, "r+b") as f:
+        return mmap.mmap(f.fileno(), size)
 
 
 def quaternion_multiply(q1, q2):
@@ -29,26 +37,13 @@ def quaternion_multiply(q1, q2):
     return (w, x, y, z)
 
 
-def rotate_vector_by_quaternion(v, q, inverse=False):
-    """Rotate vector v by quaternion q."""
-    vx, vy, vz = v
-
-    # Convert vector to quaternion (0, vx, vy, vz)
+def quaternion_to_projected_gravity(gravity, quaternion):
+    """Rotate quaternion to projected gravity."""
+    vx, vy, vz = gravity
     v_quat = (0.0, vx, vy, vz)
-
-    if inverse:
-        # For inverse rotation, use conjugate of q
-        q_conj = quaternion_conjugate(q)
-        # Rotate: v' = q_conj * v_quat * q
-        temp = quaternion_multiply(q_conj, v_quat)
-        result_quat = quaternion_multiply(temp, q)
-    else:
-        # Rotate: v' = q * v_quat * q_conj
-        q_conj = quaternion_conjugate(q)
-        temp = quaternion_multiply(q, v_quat)
-        result_quat = quaternion_multiply(temp, q_conj)
-
-    # Extract vector part from result quaternion
+    q_conj = (quaternion[0], -quaternion[1], -quaternion[2], -quaternion[3])
+    temp = quaternion_multiply(quaternion, v_quat)
+    result_quat = quaternion_multiply(temp, q_conj)
     return (result_quat[1], result_quat[2], result_quat[3])
 
 
@@ -69,17 +64,6 @@ def parse_quaternion(data):
     return (qw, qx, qy, qz)
 
 
-def update_shared_memory(shm, shm_lock, timestamp, gyro, quaternion):
-    """Write a complete record to shared memory (timestamp, gyro, quaternion)."""
-    packed_data = struct.pack("<dfffffff", timestamp, *gyro, *quaternion)
-    shm_lock.acquire()
-    try:
-        shm.seek(0)
-        shm.write(packed_data)
-    finally:
-        shm_lock.release()
-
-
 class Hiwonder:
     """Reads IMU data from a serial port in a separate process and shares via shared memory."""
 
@@ -88,17 +72,15 @@ class Hiwonder:
         self.device = device
         self.baudrate = baudrate
 
-        # Shared memory setup (36 bytes: timestamp + 3 gyro + 4 quaternion floats)
+        # Shared memory setup
         self.shm_path = shm_path
-        self.shm_size = 36
-        self.shm = self.create_shared_memory()
+        self.shm_size = RECORD_STRUCT.size
+        self.shm = open_or_create_mmap(self.shm_path, self.shm_size)
+        self.shm_lock = multiprocessing.Lock()
 
         # Process management
         self.process = None
         self.running = multiprocessing.Event()
-
-        # Shared memory synchronization
-        self.shm_lock = multiprocessing.Lock()
 
         # standard gravity
         self.gravity = (0.0, 0.0, -9.81)
@@ -108,42 +90,23 @@ class Hiwonder:
         self.start()
 
     def _register_shutdown_handlers(self):
-        def _safe_stop(*_args, **_kwargs):
-            # Ensure handlers only run in the main process
-            if multiprocessing.current_process().name != "MainProcess":
-                return
+        """Register handlers for graceful shutdown on process termination."""
+
+        def _safe_shutdown(*_args, **_kwargs):
             try:
-                self.stop()
+                self.shm.close()
+                if self.process is not None and self.process.is_alive():
+                    self.running.clear()
+                    self.process.join(timeout=1.0)
+                    if self.process.is_alive():
+                        self.process.terminate()
+                    self.process = None
             except Exception:
                 pass
 
-        try:
-            atexit.register(_safe_stop)
-        except Exception:
-            pass
-
-        try:
-            signal.signal(signal.SIGINT, lambda s, f: _safe_stop())
-            signal.signal(signal.SIGTERM, lambda s, f: _safe_stop())
-        except Exception:
-            # Signal setup may fail in some contexts (e.g., not main thread)
-            pass
-
-    def create_shared_memory(self):
-        if not os.path.exists(self.shm_path):
-            with open(self.shm_path, "wb") as f:
-                f.write(b"\x00" * self.shm_size)
-
-        # Map shared memory
-        with open(self.shm_path, "r+b") as f:
-            shm = mmap.mmap(f.fileno(), self.shm_size)
-        return shm
-
-    def __del__(self):
-        """Destructor to clean up resources"""
-        self.stop()
-        if hasattr(self, "shm"):
-            self.shm.close()
+        atexit.register(_safe_shutdown)
+        signal.signal(signal.SIGTERM, _safe_shutdown)
+        signal.signal(signal.SIGINT, _safe_shutdown)
 
     @staticmethod
     def _imu_reading_loop(device, baudrate, shm_path, shm_size, running_event, shm_lock):
@@ -154,11 +117,7 @@ class Hiwonder:
             return
 
         # Shared memory setup (child creates/opens and maps its own view)
-        if not os.path.exists(shm_path):
-            with open(shm_path, "wb") as f:
-                f.write(b"\x00" * shm_size)
-        with open(shm_path, "r+b") as f:
-            shm = mmap.mmap(f.fileno(), shm_size)
+        shm = open_or_create_mmap(shm_path, shm_size)
 
         last_gyro = (0.0, 0.0, 0.0)
         last_quaternion = (0.0, 0.0, 0.0, 0.0)
@@ -172,19 +131,18 @@ class Hiwonder:
                 data = b"\x55" + serial_conn.read(10)
 
                 if len(data) == 11 and (sum(data[:10]) & 0xFF) == data[10]:
-                    now = time.time()
+                    timestamp = time.time()
                     if data[1] == 0x52:  # Gyro
                         last_gyro = parse_gyro(data)
                     elif data[1] == 0x59:  # Quaternion
                         last_quaternion = parse_quaternion(data)
 
-                    update_shared_memory(shm, shm_lock, now, last_gyro, last_quaternion)
+                    packed_data = RECORD_STRUCT.pack(timestamp, *last_gyro, *last_quaternion)
+                    with shm_lock:
+                        shm.seek(0)
+                        shm.write(packed_data)
 
         # Cleanup
-        try:
-            shm.close()
-        except Exception:
-            pass
         serial_conn.close()
 
     def start(self):
@@ -209,15 +167,6 @@ class Hiwonder:
                 self.process = None
                 raise serial.SerialException(f"Failed to initialize IMU on {self.device}")
 
-    def stop(self):
-        """Stop the IMU reading process"""
-        if self.process is not None and self.process.is_alive():
-            self.running.clear()
-            self.process.join(timeout=1.0)
-            if self.process.is_alive():
-                self.process.terminate()
-            self.process = None
-
     def test(self):
         """Test function that runs the IMU reader and prints data."""
         self.start()
@@ -239,11 +188,11 @@ class Hiwonder:
 
             if len(packed_data) == self.shm_size:
                 # Unpack data: timestamp + gyro (3 floats) + quaternion (4 floats)
-                unpacked_data = struct.unpack("<dfffffff", packed_data)
+                unpacked_data = RECORD_STRUCT.unpack(packed_data)
                 timestamp = unpacked_data[0]
                 gyro = unpacked_data[1:4]
                 quaternion = unpacked_data[4:8]
-                proj_grav = rotate_vector_by_quaternion(self.gravity, quaternion, inverse=True)
+                proj_grav = quaternion_to_projected_gravity(self.gravity, quaternion)
 
                 return proj_grav, gyro, timestamp
             else:
@@ -259,3 +208,6 @@ class Hiwonder:
 if __name__ == "__main__":
     imu = Hiwonder()
     imu.test()
+
+
+# TODO sometimes get imu takes 20ms or 35ms instead of 0.02ms
