@@ -208,6 +208,3 @@ class Hiwonder:
 if __name__ == "__main__":
     imu = Hiwonder()
     imu.test()
-
-
-# TODO sometimes get imu takes 20ms or 35ms instead of 0.02ms
