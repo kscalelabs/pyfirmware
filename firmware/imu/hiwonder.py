@@ -67,7 +67,7 @@ def parse_quaternion(data):
 class Hiwonder:
     """Reads IMU data from a serial port in a separate process and shares via shared memory."""
 
-    def __init__(self, device="/dev/ttyUSB0", baudrate=230400, shm_path="/tmp/imu_shm"):
+    def __init__(self, device="/dev/ttyUSB0", baudrate=230400, shm_path="/dev/shm/imu_shm"):
         # Serial configuration (child process will open the port)
         self.device = device
         self.baudrate = baudrate
