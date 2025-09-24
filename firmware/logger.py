@@ -14,7 +14,7 @@ class Logger:
         self.log_dir.mkdir(exist_ok=True, parents=True)
         # TODO get klog log dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.file = self.log_dir / f"data_{timestamp}.jsonl"
+        self.file = self.log_dir / f"kinfer_log_{timestamp}.ndjson"
 
         # Start background threads for processing logs
         self._register_shutdown_handlers()

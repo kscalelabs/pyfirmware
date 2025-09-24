@@ -25,8 +25,9 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     lpf_cutoff_hz = 10.0
 
     t0 = time.perf_counter()
+    step_id = 0
     while True:
-        t = time.perf_counter()
+        t, t_us = time.perf_counter(), time.time() * 1e6
         joint_angles, joint_angular_velocities = motor_driver.get_joint_angles_and_velocities(joint_order)
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
@@ -56,11 +57,16 @@ def runner(kinfer_path: str, log_dir: str) -> None:
         logger.log(
             t - t0,
             {
+                "step_id": step_id,
+                "timestamp_us": t_us,
                 "dt_ms": dt * 1000,
                 "joint_angles": joint_angles,
-                "joint_angular_velocities": joint_angular_velocities,
+                "joint_vels": joint_angular_velocities,
+                "joint_amps": [], # TODO add
+                "joint_torques": [], # TODO add
+                "joint_temps": [], # TODO add
                 "projected_gravity": projected_gravity,
-                "gyroscope": gyroscope,
+                "gyro": gyroscope,
                 "command": command.tolist(),
                 "action": action.tolist(),
             },
@@ -68,8 +74,9 @@ def runner(kinfer_path: str, log_dir: str) -> None:
         print(
             f"dt={dt * 1000:.2f} ms, get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
         )
+        step_id += 1
         while time.perf_counter() - t < 0.020:  # wait for 50 hz
-            time.sleep(0.001)
+            time.sleep(0.0001)
 
 
 if __name__ == "__main__":
