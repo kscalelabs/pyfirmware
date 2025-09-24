@@ -1,7 +1,10 @@
 import argparse
+from datetime import datetime
+import os
 import time
 
 import numpy as np
+
 from can import MotorDriver
 from logger import Logger
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
@@ -60,6 +63,10 @@ def runner(kinfer_path: str, log_dir: str) -> None:
                 "step_id": step_id,
                 "timestamp_us": t_us,
                 "dt_ms": dt * 1000,
+                "dt_joints_ms": (t1 - t) * 1000,
+                "dt_imu_ms": (t2 - t1) * 1000,
+                "dt_step_ms": (t3 - t2) * 1000,
+                "dt_action_ms": (t5 - t4) * 1000,
                 "joint_angles": joint_angles,
                 "joint_vels": joint_angular_velocities,
                 "joint_amps": [], # TODO add
@@ -69,21 +76,27 @@ def runner(kinfer_path: str, log_dir: str) -> None:
                 "gyro": gyroscope,
                 "command": command.tolist(),
                 "action": action.tolist(),
+                "joint_order": joint_order,
             },
         )
         print(
-            f"dt={dt * 1000:.2f} ms, get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
         )
         step_id += 1
-        while time.perf_counter() - t < 0.020:  # wait for 50 hz
-            time.sleep(0.0001)
+        time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
-    parser.add_argument("log_dir", type=str, help="Path to log directory")
+    parser.add_argument("log_dir", type=str, help="Path to log directory", nargs='?', default=None)
     args = parser.parse_args()
-    runner(args.kinfer_path, args.log_dir)
+
+    if args.log_dir is None: # coming through klog-robot
+        log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
+    else:
+        log_path = os.path.join(os.environ.get("HOME"), "kinfer-logs", "kinfer-log_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
+
+    runner(args.kinfer_path, log_path)
 
 # TODO move lpf to policy - no signals should be modified by the firmware
