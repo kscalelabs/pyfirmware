@@ -48,12 +48,12 @@ class CANInterface:
             FaultCode(0x01, False, "Motor overtemperature warning (default 135°C)"),
         ]
         self.CAN_ID_FAULT_CODES = [
-            FaultCode(0x200000, False, "Uncalibrated"),
-            FaultCode(0x100000, False, "Gridlock overload fault"),
-            FaultCode(0x080000, False, "Magnetic coding fault"),
-            FaultCode(0x040000, True, "Overtemperature"),
-            FaultCode(0x020000, True, "Overcurrent"),
-            FaultCode(0x010000, False, "Undervoltage"),
+            FaultCode(0x20, False, "Uncalibrated"),
+            FaultCode(0x10, False, "Gridlock overload fault"),
+            FaultCode(0x08, False, "Magnetic coding fault"),
+            FaultCode(0x04, True, "Overtemperature"),
+            FaultCode(0x02, True, "Overcurrent"),
+            FaultCode(0x01, False, "Undervoltage"),
         ]
 
         self.sockets = {}
@@ -68,15 +68,16 @@ class CANInterface:
         if len(frame) != 16:
             raise ValueError("frame must be exactly 16 bytes")
         can_id, _length, _pad, _res0, _len8, payload = struct.unpack(self.FRAME_FMT, frame)
-        b0 = (can_id >> 0) & 0xFF  # host_id (u8)
-        b1 = (can_id >> 8) & 0xFF  # actuator_can_id (u8)
-        b2 = (can_id >> 16) & 0xFF  # fault_flags (u8)
-        b3 = (can_id >> 24) & 0xFF  # mux + EFF-in-byte
-        mux = b3 & 0x1F
+        host_id = (can_id >> 0) & 0xFF
+        actuator_can_id = (can_id >> 8) & 0xFF
+        mode_status = (can_id >> 22) & 0x03
+        fault_flags = (can_id >> 16) & 0x3F
+        mux = (can_id >> 24) & 0x1F
         return {
-            "host_id": b0,
-            "actuator_can_id": b1,
-            "fault_flags": b2,
+            "host_id": host_id,
+            "actuator_can_id": actuator_can_id,
+            "fault_flags": fault_flags,
+            "mode_status": mode_status,
             "mux": mux,
             "payload": payload,
         }
@@ -270,7 +271,7 @@ class MotorDriver:
             angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (time.perf_counter() - t0))
             action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
-            time.sleep(0.1)
+            time.sleep(0.02)
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.ci.get_actuator_feedback()
