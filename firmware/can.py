@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 import socket
 import struct
@@ -6,6 +7,15 @@ from typing import Dict
 
 from robot import RobotConfig
 
+class CriticalFault(Exception): pass
+
+
+@dataclass
+class FaultCode:
+    code: int
+    critical: bool
+    description: str
+
 
 class CANInterface:
     """Communication only."""
@@ -13,21 +23,42 @@ class CANInterface:
     def __init__(self):
         self.FRAME_FMT = "<IBBBB8s"  # <I = little-endian u32; 4B = len, pad, res0, len8_dlc; 8s = 8 data bytes
         self.FRAME_SIZE = struct.calcsize(self.FRAME_FMT)
+        self.EFF = 0x8000_0000
         self.host_id = 0xFD
         self.canbus_range = range(0, 7)
         self.actuator_range = range(10, 50)
 
+        # mux codes
         self.MUX_PING = 0x00
         self.MUX_CONTROL = 0x01
         self.MUX_FEEDBACK = 0x02
         self.MUX_MOTOR_ENABLE = 0x03
-        self.MUX_READ_PARAM = 0x11
+        self.MUX_FAULT_RESPONSE = 0x15
 
-        self.EFF = 0x8000_0000
+        # fault codes
+        self.MUX_0x15_FAULT_CODES = [
+            FaultCode(0x01, True, "Motor Over-temperature (>145°C)"),
+            FaultCode(0x02, True, "Driver Fault (DRV status)"),
+            FaultCode(0x04, False, "Undervoltage (VBUS < 12V)"),
+            FaultCode(0x08, False, "Overvoltage (VBUS > 60V)"),
+            FaultCode(0x80, False, "Encoder Uncalibrated"),
+            FaultCode(0x4000, True, "Stall/I²t Overload"),
+        ]
+        self.MUX_0x15_WARNING_CODES = [
+            FaultCode(0x01, False, "Motor overtemperature warning (default 135°C)"),
+        ]
+        self.CAN_ID_FAULT_CODES = [
+            FaultCode(0x200000, False, "Uncalibrated"),
+            FaultCode(0x100000, False, "Gridlock overload fault"),
+            FaultCode(0x080000, False, "Magnetic coding fault"),
+            FaultCode(0x040000, True, "Overtemperature"),
+            FaultCode(0x020000, True, "Overcurrent"),
+            FaultCode(0x010000, False, "Undervoltage"),
+        ]
 
         self.sockets = {}
         self.actuators = {}
-        self._scan()
+        self._find_actuators()
 
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | ((self.host_id) << 8) | ((mux & 0x1F) << 24)) | self.EFF
@@ -50,6 +81,33 @@ class CANInterface:
             "payload": payload,
         }
 
+    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
+        """ Recursively receive can frames until the mux is the expected value. """
+        frame = sock.recv(self.FRAME_SIZE)
+        parsed_frame = self._parse_can_frame(frame)
+        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame['fault_flags'], parsed_frame['actuator_can_id'])
+    
+        if parsed_frame["mux"] != mux:
+            print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
+            if parsed_frame["mux"] == self.MUX_FAULT_RESPONSE:
+                self._process_fault_response(parsed_frame['payload'], parsed_frame['actuator_can_id'])
+                return self._receive_can_frame(sock, mux) # call again recursively
+        else:
+            return parsed_frame
+
+    def _check_for_faults(self, faults: list[FaultCode], fault_flags: int, actuator_can_id: int) -> None:
+        for fault_code in faults:
+            if fault_flags == fault_code.code:
+                if fault_code.critical:
+                    raise CriticalFault(f"\033[1;31mCRITICAL FAULT: actuator {actuator_can_id} has {fault_code.description}\033[0m")
+                else:
+                    print(f"\033[1;33mWARNING: actuator {actuator_can_id} has {fault_code.description}\033[0m")
+
+    def _process_fault_response(self, payload: bytes, actuator_can_id: int) -> None:
+        fault_value, warning_value = struct.unpack("<II", payload)  # Little-endian uint32
+        self._check_for_faults(self.MUX_0x15_FAULT_CODES, fault_value, actuator_can_id)
+        self._check_for_faults(self.MUX_0x15_WARNING_CODES, warning_value, actuator_can_id)
+
     def _receive_all_can_frames(self, canbus: int) -> list[bytes]:
         frames = []
         t0 = time.perf_counter()
@@ -63,7 +121,7 @@ class CANInterface:
             print(f"received {len(frames)} frames in {(time.perf_counter() - t0) * 1e6:.2f}us")
         return frames
 
-    def _scan(self) -> None:
+    def _find_actuators(self) -> None:
         print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
         for canbus in self.canbus_range:
             print(f"Scanning bus {canbus}: ", end="")
@@ -79,7 +137,7 @@ class CANInterface:
                 print("\033[91mFailed\033[0m")
                 continue
 
-            for actuator_id in self.actuator_range:
+            for actuator_id in self.actuator_range: # TODO move inside try above, instaed of test message. 
                 if self._ping_actuator(canbus, actuator_id):
                     self.actuators[canbus].append(actuator_id)
 
@@ -120,11 +178,7 @@ class CANInterface:
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
-                    resp_frame = sock.recv(self.FRAME_SIZE)  # TODO handle timeouts and other shit
-
-                    parsed_frame = self._parse_can_frame(resp_frame)
-                    if parsed_frame["mux"] != self.MUX_FEEDBACK:
-                        raise ValueError(f"unexpected mux 0x{parsed_frame['mux']:02X} in feedback response")
+                    parsed_frame = self._receive_can_frame(sock, self.MUX_FEEDBACK)
                     result = self._parse_feedback_response(parsed_frame)
                     results[actuator_id] = result
         return results
