@@ -142,7 +142,7 @@ class CANInterface:
         frame = self._build_can_frame(actuator_can_id, self.MUX_PING)
         self.sockets[canbus].send(frame)
         try:
-            _ = self._receive_can_frame(self.sockets[canbus], self.MUX_PING, timeout_protection=False)
+            _ = self._receive_can_frame(self.sockets[canbus], self.MUX_PING)
         except Exception:
             return False
         return True
