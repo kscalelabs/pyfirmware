@@ -311,3 +311,4 @@ if __name__ == "__main__":
 # TODO deal with feedback request timeouts
 # TODO dont die on critical faults
 # TODO Flush bus when timeing out on set pd target messages to prevent async issues.
+# TODO message not printing
