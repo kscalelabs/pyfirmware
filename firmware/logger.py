@@ -1,7 +1,6 @@
 import atexit
 import json
 import queue
-import signal
 import threading
 from typing import Any, Dict
 
@@ -18,17 +17,12 @@ class Logger:
         self.thread.start()
 
     def _register_shutdown_handlers(self):
-        """Register handlers for graceful shutdown on process termination."""
-
         def _safe_shutdown(*_args, **_kwargs):
             try:
                 self._shutdown()
             except Exception:
                 pass
-
         atexit.register(_safe_shutdown)
-        signal.signal(signal.SIGTERM, _safe_shutdown)
-        signal.signal(signal.SIGINT, _safe_shutdown)
 
     def _log_worker(self, q: queue.Queue, filepath: str):
         """Background worker that processes logs from the queue in batches."""

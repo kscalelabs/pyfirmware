@@ -2,7 +2,6 @@ import atexit
 import mmap
 import multiprocessing
 import os
-import signal
 import struct
 import time
 from multiprocessing import Process
@@ -90,8 +89,6 @@ class Hiwonder:
         self.start()
 
     def _register_shutdown_handlers(self):
-        """Register handlers for graceful shutdown on process termination."""
-
         def _safe_shutdown(*_args, **_kwargs):
             try:
                 self.shm.close()
@@ -103,10 +100,7 @@ class Hiwonder:
                     self.process = None
             except Exception:
                 pass
-
         atexit.register(_safe_shutdown)
-        signal.signal(signal.SIGTERM, _safe_shutdown)
-        signal.signal(signal.SIGINT, _safe_shutdown)
 
     @staticmethod
     def _imu_reading_loop(device, baudrate, shm_path, shm_size, running_event, shm_lock):
