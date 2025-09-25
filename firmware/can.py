@@ -109,19 +109,6 @@ class CANInterface:
         self._check_for_faults(self.MUX_0x15_FAULT_CODES, fault_value, actuator_can_id)
         self._check_for_faults(self.MUX_0x15_WARNING_CODES, warning_value, actuator_can_id)
 
-    def _receive_all_can_frames(self, canbus: int) -> list[bytes]:
-        frames = []
-        t0 = time.perf_counter()
-        while True:
-            try:
-                frame = self.sockets[canbus].recv(self.FRAME_SIZE)
-                frames.append(frame)
-            except:
-                break
-        if len(frames) > 0:
-            print(f"received {len(frames)} frames in {(time.perf_counter() - t0) * 1e6:.2f}us")
-        return frames
-
     def _find_actuators(self) -> None:
         print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
         for canbus in self.canbus_range:
@@ -129,7 +116,7 @@ class CANInterface:
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
-                sock.settimeout(0.002)
+                sock.settimeout(0.005)
                 sock.send(self._build_can_frame(0, self.MUX_PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
@@ -138,7 +125,7 @@ class CANInterface:
                 print("\033[91mFailed\033[0m")
                 continue
 
-            for actuator_id in self.actuator_range: # TODO move inside try above, instaed of test message. 
+            for actuator_id in self.actuator_range:
                 if self._ping_actuator(canbus, actuator_id):
                     self.actuators[canbus].append(actuator_id)
 
@@ -150,11 +137,11 @@ class CANInterface:
     def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
         frame = self._build_can_frame(actuator_can_id, self.MUX_PING)
         self.sockets[canbus].send(frame)
-        frames = self._receive_all_can_frames(canbus)
-        for i, frame in enumerate(frames):
-            result = self._parse_can_frame(frame)
-            print(f"\tFrame {i}: {result['actuator_can_id']}::{result['mux']}")
-        return len(frames) > 0
+        try:
+            _ = self._receive_can_frame(self.sockets[canbus], self.MUX_PING, timeout_protection=False)
+        except Exception:
+            return False
+        return True
 
     def enable_motors(self):
         for canbus in self.sockets.keys():
@@ -164,7 +151,7 @@ class CANInterface:
     def _enable_motor(self, canbus: int, actuator_can_id: int):
         frame = self._build_can_frame(actuator_can_id, self.MUX_MOTOR_ENABLE)
         self.sockets[canbus].send(frame)
-        _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # receive response to keep can buffer clear
+        _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK) # motor enable response is a feedback response
 
     def get_actuator_feedback(self) -> Dict[str, int]:
         """Send 1 message on each bus, and wait for all of them at once. - 3ms vs 10ms for sequential"""
@@ -181,6 +168,9 @@ class CANInterface:
                     actuator_id = self.actuators[can][tranche]
                     parsed_frame = self._receive_can_frame(sock, self.MUX_FEEDBACK)
                     result = self._parse_feedback_response(parsed_frame)
+                    if actuator_id != result["actuator_can_id"]: # TODO enforce and flush
+                        print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
+                        actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
 
@@ -204,9 +194,9 @@ class CANInterface:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 try:
-                    _ = self.sockets[canbus].recv(self.FRAME_SIZE) # drop responses
+                    _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
                 except:
-                    print("lost response on pd target send") # NOTE might cause async issues
+                    print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
     def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float):
         assert 0.0 <= scaling <= 1.0
@@ -247,14 +237,17 @@ class MotorDriver:
                 f"{act_id:3d} | {name:3s} | \033[1;34m{angle:5.2f}\033[0m | \033[1;35m{velocity:8.2f}\033[0m | \033[1;33m{torque:6.2f}\033[0m | \033[1;36m{temp:5.1f}\033[0m | {fault_color}{state['fault_flags']:3d}\033[0m"
             )
 
+        if not states:
+            print("\033[1;31m❌ No actuators detected\033[0m")
+            exit(1)
+
         if any(state["fault_flags"] > 0 for state in states.values()):
             print("\033[1;31m❌ Actuator faults detected\033[0m")
-            # exit(1) # TODO for some reason we get 128 uncalibrated faults
 
-        input("Press Enter to enable motors...")
+        print("Press Enter to enable motors...")
+        input() # wait for user to enable motors
         self.ci.enable_motors()
         print("✅ Motors enabled")
-
         print("\nHoming...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for scale in [math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(30)]:
@@ -268,10 +261,16 @@ class MotorDriver:
     def sine_wave(self):
         t0 = time.perf_counter()
         while True:
-            angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (time.perf_counter() - t0))
+            t = time.perf_counter()
+            _ = self.ci.get_actuator_feedback()
+            t1 = time.perf_counter()
+            angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (t - t0))
             action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            t2 = time.perf_counter()
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
-            time.sleep(0.02)
+            t3 = time.perf_counter()
+            print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us")
+            time.sleep(0.02 - (time.perf_counter() - t))
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.ci.get_actuator_feedback()
@@ -303,3 +302,6 @@ if __name__ == "__main__":
 
 
 # .recv takes 10-30us if messages are available.
+# TODO deal with feedback request timeouts
+# TODO dont die on critical faults
+# Flush bus when timeing out on set pd target messages to prevent async issues.
