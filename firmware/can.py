@@ -5,7 +5,7 @@ import struct
 import time
 from typing import Dict
 
-from robot import RobotConfig
+from actuators import RobotConfig
 
 class CriticalFault(Exception): pass
 
@@ -304,4 +304,4 @@ if __name__ == "__main__":
 # .recv takes 10-30us if messages are available.
 # TODO deal with feedback request timeouts
 # TODO dont die on critical faults
-# Flush bus when timeing out on set pd target messages to prevent async issues.
+# TODO Flush bus when timeing out on set pd target messages to prevent async issues.
