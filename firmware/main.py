@@ -5,6 +5,7 @@ import time
 import numpy as np
 from can import MotorDriver
 from logger import Logger
+from keyboard import Keyboard
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 
@@ -23,6 +24,9 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     input()  # wait for user to start policy
     print("🤖 Running policy...")
 
+    # keyboard absorbs stdin
+    keyboard = Keyboard()
+
     lpf_carry = None
     lpf_cutoff_hz = 10.0
 
@@ -34,7 +38,8 @@ def runner(kinfer_path: str, log_dir: str) -> None:
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = np.zeros(16, dtype=np.float32)
+        command = np.array(keyboard.get_cmd(), dtype=np.float32)
+        t3 = time.perf_counter()
 
         action, carry = step_session.run(
             None,
@@ -47,13 +52,13 @@ def runner(kinfer_path: str, log_dir: str) -> None:
                 "carry": carry,
             },
         )
-        t3 = time.perf_counter()
+        t4 = time.perf_counter()
 
         # Apply low-pass filter to the action before sending PD targets # TODO phase out move to policy
         action, lpf_carry = apply_lowpass_filter(action, lpf_carry, cutoff_hz=lpf_cutoff_hz)
-        t4 = time.perf_counter()
-        motor_driver.take_action(action, joint_order)
         t5 = time.perf_counter()
+        motor_driver.take_action(action, joint_order)
+        t6 = time.perf_counter()
 
         dt = time.perf_counter() - t
         logger.log(
@@ -64,8 +69,10 @@ def runner(kinfer_path: str, log_dir: str) -> None:
                 "dt_ms": dt * 1000,
                 "dt_joints_ms": (t1 - t) * 1000,
                 "dt_imu_ms": (t2 - t1) * 1000,
-                "dt_step_ms": (t3 - t2) * 1000,
-                "dt_action_ms": (t5 - t4) * 1000,
+                "dt_keyboard_ms": (t3 - t2) * 1000,
+                "dt_step_ms": (t4 - t3) * 1000,
+                "dt_lpf_ms": (t5 - t4) * 1000,
+                "dt_action_ms": (t6 - t5) * 1000,
                 "joint_angles": joint_angles,
                 "joint_vels": joint_angular_velocities,
                 "joint_amps": [],  # TODO add
