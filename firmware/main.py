@@ -21,7 +21,8 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     print("IMU:", imu_reader.__class__.__name__)
 
     motor_driver = MotorDriver()
-    input("Press Enter to start policy...")
+    print("Press Enter to start policy...")
+    input() # wait for user to start policy
     print("🤖 Running policy...")
 
     lpf_carry = None
@@ -89,14 +90,9 @@ def runner(kinfer_path: str, log_dir: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
-    parser.add_argument("log_dir", type=str, help="Path to log directory", nargs='?', default=None)
     args = parser.parse_args()
 
-    if args.log_dir is None: # coming through klog-robot
-        log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
-    else:
-        log_path = os.path.join(os.environ.get("HOME"), "kinfer-logs", "kinfer-log_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".ndjson")
-
+    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
     runner(args.kinfer_path, log_path)
 
 # TODO move lpf to policy - no signals should be modified by the firmware
