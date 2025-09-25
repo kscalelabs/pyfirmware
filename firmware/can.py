@@ -1,13 +1,15 @@
-from dataclasses import dataclass
 import math
 import socket
 import struct
 import time
+from dataclasses import dataclass
 from typing import Dict
 
 from actuators import RobotConfig
 
-class CriticalFault(Exception): pass
+
+class CriticalFault(Exception):
+    pass
 
 
 @dataclass
@@ -83,16 +85,16 @@ class CANInterface:
         }
 
     def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
-        """ Recursively receive can frames until the mux is the expected value. """
+        """Recursively receive can frames until the mux is the expected value."""
         frame = sock.recv(self.FRAME_SIZE)
         parsed_frame = self._parse_can_frame(frame)
-        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame['fault_flags'], parsed_frame['actuator_can_id'])
-    
+        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
+
         if parsed_frame["mux"] != mux:
             print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
             if parsed_frame["mux"] == self.MUX_FAULT_RESPONSE:
-                self._process_fault_response(parsed_frame['payload'], parsed_frame['actuator_can_id'])
-                return self._receive_can_frame(sock, mux) # call again recursively
+                self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
+                return self._receive_can_frame(sock, mux)  # call again recursively
         else:
             return parsed_frame
 
@@ -100,7 +102,9 @@ class CANInterface:
         for fault_code in faults:
             if fault_flags == fault_code.code:
                 if fault_code.critical:
-                    raise CriticalFault(f"\033[1;31mCRITICAL FAULT: actuator {actuator_can_id} has {fault_code.description}\033[0m")
+                    raise CriticalFault(
+                        f"\033[1;31mCRITICAL FAULT: actuator {actuator_can_id} has {fault_code.description}\033[0m"
+                    )
                 else:
                     print(f"\033[1;33mWARNING: actuator {actuator_can_id} has {fault_code.description}\033[0m")
 
@@ -151,7 +155,9 @@ class CANInterface:
     def _enable_motor(self, canbus: int, actuator_can_id: int):
         frame = self._build_can_frame(actuator_can_id, self.MUX_MOTOR_ENABLE)
         self.sockets[canbus].send(frame)
-        _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK) # motor enable response is a feedback response
+        _ = self._receive_can_frame(
+            self.sockets[canbus], self.MUX_FEEDBACK
+        )  # motor enable response is a feedback response
 
     def get_actuator_feedback(self) -> Dict[str, int]:
         """Send 1 message on each bus, and wait for all of them at once. - 3ms vs 10ms for sequential"""
@@ -168,7 +174,7 @@ class CANInterface:
                     actuator_id = self.actuators[can][tranche]
                     parsed_frame = self._receive_can_frame(sock, self.MUX_FEEDBACK)
                     result = self._parse_feedback_response(parsed_frame)
-                    if actuator_id != result["actuator_can_id"]: # TODO enforce and flush
+                    if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
                         print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
@@ -245,7 +251,7 @@ class MotorDriver:
             print("\033[1;31m❌ Actuator faults detected\033[0m")
 
         print("Press Enter to enable motors...")
-        input() # wait for user to enable motors
+        input()  # wait for user to enable motors
         self.ci.enable_motors()
         print("✅ Motors enabled")
         print("\nHoming...")

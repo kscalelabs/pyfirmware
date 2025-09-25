@@ -1,10 +1,8 @@
 import argparse
-from datetime import datetime
 import os
 import time
 
 import numpy as np
-
 from can import MotorDriver
 from logger import Logger
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
@@ -22,7 +20,7 @@ def runner(kinfer_path: str, log_dir: str) -> None:
 
     motor_driver = MotorDriver()
     print("Press Enter to start policy...")
-    input() # wait for user to start policy
+    input()  # wait for user to start policy
     print("🤖 Running policy...")
 
     lpf_carry = None
@@ -70,9 +68,9 @@ def runner(kinfer_path: str, log_dir: str) -> None:
                 "dt_action_ms": (t5 - t4) * 1000,
                 "joint_angles": joint_angles,
                 "joint_vels": joint_angular_velocities,
-                "joint_amps": [], # TODO add
-                "joint_torques": [], # TODO add
-                "joint_temps": [], # TODO add
+                "joint_amps": [],  # TODO add
+                "joint_torques": [],  # TODO add
+                "joint_temps": [],  # TODO add
                 "projected_gravity": projected_gravity,
                 "gyro": gyroscope,
                 "command": command.tolist(),

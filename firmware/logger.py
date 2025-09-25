@@ -22,6 +22,7 @@ class Logger:
                 self._shutdown()
             except Exception:
                 pass
+
         atexit.register(_safe_shutdown)
 
     def _log_worker(self, q: queue.Queue, filepath: str):

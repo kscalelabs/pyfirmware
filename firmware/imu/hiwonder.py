@@ -8,7 +8,6 @@ from multiprocessing import Process
 
 import serial
 
-
 # record layout: timestamp (double) + gyro (3 floats) + quaternion (4 floats)
 RECORD_STRUCT = struct.Struct("<dfffffff")
 
@@ -100,6 +99,7 @@ class Hiwonder:
                     self.process = None
             except Exception:
                 pass
+
         atexit.register(_safe_shutdown)
 
     @staticmethod
