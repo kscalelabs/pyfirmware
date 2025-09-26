@@ -5,11 +5,12 @@ import time
 import numpy as np
 from can import MotorDriver
 from logger import Logger
-from keyboard import Keyboard
+from command_handling.keyboard import Keyboard
+from command_handling.udp_listener import UDPListener
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 
-def runner(kinfer_path: str, log_dir: str) -> None:
+def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     logger = Logger(log_dir)
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -23,9 +24,16 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
-
-    # keyboard absorbs stdin
-    keyboard = Keyboard()
+    command_interface = None
+    # Initialize command interface based on source
+    if command_source == "keyboard":
+        command_interface = Keyboard()
+        print("Using keyboard input (WASD for movement, 0 to reset)")
+    elif command_source == "udp":
+        command_interface = UDPListener(port=8888)
+        print("Using UDP input on port 8888")
+    else:
+        raise ValueError(f"Unknown command source: {command_source}")
 
     lpf_carry = None
     lpf_cutoff_hz = 10.0
@@ -38,7 +46,7 @@ def runner(kinfer_path: str, log_dir: str) -> None:
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = np.array(keyboard.get_cmd(), dtype=np.float32)
+        command = np.array(command_interface.get_cmd(), dtype=np.float32)
         t3 = time.perf_counter()
 
         action, carry = step_session.run(
