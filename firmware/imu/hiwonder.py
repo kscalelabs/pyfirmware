@@ -40,8 +40,8 @@ def quaternion_to_projected_gravity(gravity, quaternion):
     vx, vy, vz = gravity
     v_quat = (0.0, vx, vy, vz)
     q_conj = (quaternion[0], -quaternion[1], -quaternion[2], -quaternion[3])
-    temp = quaternion_multiply(quaternion, v_quat)
-    result_quat = quaternion_multiply(temp, q_conj)
+    temp = quaternion_multiply(q_conj, v_quat)
+    result_quat = quaternion_multiply(temp, quaternion)
     return (result_quat[1], result_quat[2], result_quat[3])
 
 
