@@ -22,17 +22,6 @@ fi
 
 echo "Deploying policy: $policy"
 
-
-# set setup can interfaces and set max torques
-bash ~/kbot_deployment/scripts/reset_max_torques.sh
-
-run_firmware() {
-    sudo -E chrt 80 /home/dpsh/miniconda3/envs/klog/bin/python main.py $policy "${HOME}/kinfer-logs"
-}
-
-
-# run
-# klog-deploy --no-wait run_firmware "$policy"
-
-run_firmware "$policy"
+# run with klog
+klog-deploy --no-wait "$(dirname "$(realpath "$0")")/_run.sh" "$policy"
 

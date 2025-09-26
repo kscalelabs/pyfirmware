@@ -1,9 +1,11 @@
 import argparse
+import os
 import time
 
 import numpy as np
 from can import MotorDriver
 from logger import Logger
+from keyboard import Keyboard
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 
@@ -18,20 +20,26 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     print("IMU:", imu_reader.__class__.__name__)
 
     motor_driver = MotorDriver()
-    input("Press Enter to start policy...")
+    print("Press Enter to start policy...")
+    input()  # wait for user to start policy
     print("🤖 Running policy...")
+
+    # keyboard absorbs stdin
+    keyboard = Keyboard()
 
     lpf_carry = None
     lpf_cutoff_hz = 10.0
 
     t0 = time.perf_counter()
+    step_id = 0
     while True:
-        t = time.perf_counter()
+        t, t_us = time.perf_counter(), time.time() * 1e6
         joint_angles, joint_angular_velocities = motor_driver.get_joint_angles_and_velocities(joint_order)
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = np.zeros(16, dtype=np.float32)
+        command = np.array(keyboard.get_cmd(), dtype=np.float32)
+        t3 = time.perf_counter()
 
         action, carry = step_session.run(
             None,
@@ -44,39 +52,52 @@ def runner(kinfer_path: str, log_dir: str) -> None:
                 "carry": carry,
             },
         )
-        t3 = time.perf_counter()
+        t4 = time.perf_counter()
 
         # Apply low-pass filter to the action before sending PD targets # TODO phase out move to policy
         action, lpf_carry = apply_lowpass_filter(action, lpf_carry, cutoff_hz=lpf_cutoff_hz)
-        t4 = time.perf_counter()
-        motor_driver.take_action(action, joint_order)
         t5 = time.perf_counter()
+        motor_driver.take_action(action, joint_order)
+        t6 = time.perf_counter()
 
         dt = time.perf_counter() - t
         logger.log(
             t - t0,
             {
+                "step_id": step_id,
+                "timestamp_us": t_us,
                 "dt_ms": dt * 1000,
+                "dt_joints_ms": (t1 - t) * 1000,
+                "dt_imu_ms": (t2 - t1) * 1000,
+                "dt_keyboard_ms": (t3 - t2) * 1000,
+                "dt_step_ms": (t4 - t3) * 1000,
+                "dt_lpf_ms": (t5 - t4) * 1000,
+                "dt_action_ms": (t6 - t5) * 1000,
                 "joint_angles": joint_angles,
-                "joint_angular_velocities": joint_angular_velocities,
+                "joint_vels": joint_angular_velocities,
+                "joint_amps": [],  # TODO add
+                "joint_torques": [],  # TODO add
+                "joint_temps": [],  # TODO add
                 "projected_gravity": projected_gravity,
-                "gyroscope": gyroscope,
+                "gyro": gyroscope,
                 "command": command.tolist(),
                 "action": action.tolist(),
+                "joint_order": joint_order,
             },
         )
         print(
-            f"dt={dt * 1000:.2f} ms, get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
         )
-        while time.perf_counter() - t < 0.020:  # wait for 50 hz
-            time.sleep(0.001)
+        step_id += 1
+        time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
-    parser.add_argument("log_dir", type=str, help="Path to log directory")
     args = parser.parse_args()
-    runner(args.kinfer_path, args.log_dir)
+
+    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
+    runner(args.kinfer_path, log_path)
 
 # TODO move lpf to policy - no signals should be modified by the firmware

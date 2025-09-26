@@ -2,9 +2,21 @@ import math
 import socket
 import struct
 import time
+from dataclasses import dataclass
 from typing import Dict
 
-from robot import RobotConfig
+from actuators import RobotConfig
+
+
+class CriticalFault(Exception):
+    pass
+
+
+@dataclass
+class FaultCode:
+    code: int
+    critical: bool
+    description: str
 
 
 class CANInterface:
@@ -13,21 +25,42 @@ class CANInterface:
     def __init__(self):
         self.FRAME_FMT = "<IBBBB8s"  # <I = little-endian u32; 4B = len, pad, res0, len8_dlc; 8s = 8 data bytes
         self.FRAME_SIZE = struct.calcsize(self.FRAME_FMT)
+        self.EFF = 0x8000_0000
         self.host_id = 0xFD
         self.canbus_range = range(0, 7)
         self.actuator_range = range(10, 50)
 
+        # mux codes
         self.MUX_PING = 0x00
         self.MUX_CONTROL = 0x01
         self.MUX_FEEDBACK = 0x02
         self.MUX_MOTOR_ENABLE = 0x03
-        self.MUX_READ_PARAM = 0x11
+        self.MUX_FAULT_RESPONSE = 0x15
 
-        self.EFF = 0x8000_0000
+        # fault codes
+        self.MUX_0x15_FAULT_CODES = [
+            FaultCode(0x01, True, "Motor Over-temperature (>145°C)"),
+            FaultCode(0x02, True, "Driver Fault (DRV status)"),
+            FaultCode(0x04, False, "Undervoltage (VBUS < 12V)"),
+            FaultCode(0x08, False, "Overvoltage (VBUS > 60V)"),
+            FaultCode(0x80, False, "Encoder Uncalibrated"),
+            FaultCode(0x4000, True, "Stall/I²t Overload"),
+        ]
+        self.MUX_0x15_WARNING_CODES = [
+            FaultCode(0x01, False, "Motor overtemperature warning (default 135°C)"),
+        ]
+        self.CAN_ID_FAULT_CODES = [
+            FaultCode(0x20, False, "Uncalibrated"),
+            FaultCode(0x10, False, "Gridlock overload fault"),
+            FaultCode(0x08, False, "Magnetic coding fault"),
+            FaultCode(0x04, True, "Overtemperature"),
+            FaultCode(0x02, True, "Overcurrent"),
+            FaultCode(0x01, False, "Undervoltage"),
+        ]
 
         self.sockets = {}
         self.actuators = {}
-        self._scan()
+        self._find_actuators()
 
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | ((self.host_id) << 8) | ((mux & 0x1F) << 24)) | self.EFF
@@ -37,40 +70,57 @@ class CANInterface:
         if len(frame) != 16:
             raise ValueError("frame must be exactly 16 bytes")
         can_id, _length, _pad, _res0, _len8, payload = struct.unpack(self.FRAME_FMT, frame)
-        b0 = (can_id >> 0) & 0xFF  # host_id (u8)
-        b1 = (can_id >> 8) & 0xFF  # actuator_can_id (u8)
-        b2 = (can_id >> 16) & 0xFF  # fault_flags (u8)
-        b3 = (can_id >> 24) & 0xFF  # mux + EFF-in-byte
-        mux = b3 & 0x1F
+        host_id = (can_id >> 0) & 0xFF
+        actuator_can_id = (can_id >> 8) & 0xFF
+        mode_status = (can_id >> 22) & 0x03
+        fault_flags = (can_id >> 16) & 0x3F
+        mux = (can_id >> 24) & 0x1F
         return {
-            "host_id": b0,
-            "actuator_can_id": b1,
-            "fault_flags": b2,
+            "host_id": host_id,
+            "actuator_can_id": actuator_can_id,
+            "fault_flags": fault_flags,
+            "mode_status": mode_status,
             "mux": mux,
             "payload": payload,
         }
 
-    def _receive_all_can_frames(self, canbus: int) -> list[bytes]:
-        frames = []
-        t0 = time.perf_counter()
-        while True:
-            try:
-                frame = self.sockets[canbus].recv(self.FRAME_SIZE)
-                frames.append(frame)
-            except:
-                break
-        if len(frames) > 0:
-            print(f"received {len(frames)} frames in {(time.perf_counter() - t0) * 1e6:.2f}us")
-        return frames
+    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
+        """Recursively receive can frames until the mux is the expected value."""
+        frame = sock.recv(self.FRAME_SIZE)
+        parsed_frame = self._parse_can_frame(frame)
+        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
 
-    def _scan(self) -> None:
+        if parsed_frame["mux"] != mux:
+            print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
+            if parsed_frame["mux"] == self.MUX_FAULT_RESPONSE:
+                self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
+                return self._receive_can_frame(sock, mux)  # call again recursively
+        else:
+            return parsed_frame
+
+    def _check_for_faults(self, faults: list[FaultCode], fault_flags: int, actuator_can_id: int) -> None:
+        for fault_code in faults:
+            if fault_flags == fault_code.code:
+                if fault_code.critical:
+                    raise CriticalFault(
+                        f"\033[1;31mCRITICAL FAULT: actuator {actuator_can_id} has {fault_code.description}\033[0m"
+                    )
+                else:
+                    print(f"\033[1;33mWARNING: actuator {actuator_can_id} has {fault_code.description}\033[0m")
+
+    def _process_fault_response(self, payload: bytes, actuator_can_id: int) -> None:
+        fault_value, warning_value = struct.unpack("<II", payload)  # Little-endian uint32
+        self._check_for_faults(self.MUX_0x15_FAULT_CODES, fault_value, actuator_can_id)
+        self._check_for_faults(self.MUX_0x15_WARNING_CODES, warning_value, actuator_can_id)
+
+    def _find_actuators(self) -> None:
         print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
         for canbus in self.canbus_range:
             print(f"Scanning bus {canbus}: ", end="")
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
-                sock.settimeout(0.002)
+                sock.settimeout(0.005)
                 sock.send(self._build_can_frame(0, self.MUX_PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
@@ -91,11 +141,11 @@ class CANInterface:
     def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
         frame = self._build_can_frame(actuator_can_id, self.MUX_PING)
         self.sockets[canbus].send(frame)
-        frames = self._receive_all_can_frames(canbus)
-        for i, frame in enumerate(frames):
-            result = self._parse_can_frame(frame)
-            print(f"\tFrame {i}: {result['actuator_can_id']}::{result['mux']}")
-        return len(frames) > 0
+        try:
+            _ = self._receive_can_frame(self.sockets[canbus], self.MUX_PING)
+        except Exception:
+            return False
+        return True
 
     def enable_motors(self):
         for canbus in self.sockets.keys():
@@ -105,7 +155,9 @@ class CANInterface:
     def _enable_motor(self, canbus: int, actuator_can_id: int):
         frame = self._build_can_frame(actuator_can_id, self.MUX_MOTOR_ENABLE)
         self.sockets[canbus].send(frame)
-        _ = self.sockets[canbus].recv(self.FRAME_SIZE)  # receive response to keep can buffer clear
+        _ = self._receive_can_frame(
+            self.sockets[canbus], self.MUX_FEEDBACK
+        )  # motor enable response is a feedback response
 
     def get_actuator_feedback(self) -> Dict[str, int]:
         """Send 1 message on each bus, and wait for all of them at once. - 3ms vs 10ms for sequential"""
@@ -120,12 +172,11 @@ class CANInterface:
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
-                    resp_frame = sock.recv(self.FRAME_SIZE)  # TODO handle timeouts and other shit
-
-                    parsed_frame = self._parse_can_frame(resp_frame)
-                    if parsed_frame["mux"] != self.MUX_FEEDBACK:
-                        raise ValueError(f"unexpected mux 0x{parsed_frame['mux']:02X} in feedback response")
+                    parsed_frame = self._receive_can_frame(sock, self.MUX_FEEDBACK)
                     result = self._parse_feedback_response(parsed_frame)
+                    if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
+                        print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
+                        actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
 
@@ -149,9 +200,9 @@ class CANInterface:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 try:
-                    _ = self.sockets[canbus].recv(self.FRAME_SIZE) # drop responses
+                    _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
                 except:
-                    print("lost response on pd target send") # NOTE might cause async issues
+                    print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
     def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float):
         assert 0.0 <= scaling <= 1.0
@@ -192,14 +243,17 @@ class MotorDriver:
                 f"{act_id:3d} | {name:3s} | \033[1;34m{angle:5.2f}\033[0m | \033[1;35m{velocity:8.2f}\033[0m | \033[1;33m{torque:6.2f}\033[0m | \033[1;36m{temp:5.1f}\033[0m | {fault_color}{state['fault_flags']:3d}\033[0m"
             )
 
+        if not states:
+            print("\033[1;31m❌ No actuators detected\033[0m")
+            exit(1)
+
         if any(state["fault_flags"] > 0 for state in states.values()):
             print("\033[1;31m❌ Actuator faults detected\033[0m")
-            # exit(1) # TODO for some reason we get 128 uncalibrated faults
 
-        input("Press Enter to enable motors...")
+        print("Press Enter to enable motors...")
+        input()  # wait for user to enable motors
         self.ci.enable_motors()
         print("✅ Motors enabled")
-
         print("\nHoming...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for scale in [math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(30)]:
@@ -213,10 +267,16 @@ class MotorDriver:
     def sine_wave(self):
         t0 = time.perf_counter()
         while True:
-            angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (time.perf_counter() - t0))
+            t = time.perf_counter()
+            _ = self.ci.get_actuator_feedback()
+            t1 = time.perf_counter()
+            angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (t - t0))
             action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            t2 = time.perf_counter()
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
-            time.sleep(0.1)
+            t3 = time.perf_counter()
+            print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us")
+            time.sleep(0.02 - (time.perf_counter() - t))
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.ci.get_actuator_feedback()
@@ -248,3 +308,7 @@ if __name__ == "__main__":
 
 
 # .recv takes 10-30us if messages are available.
+# TODO deal with feedback request timeouts
+# TODO dont die on critical faults
+# TODO Flush bus when timeing out on set pd target messages to prevent async issues.
+# TODO message not printing

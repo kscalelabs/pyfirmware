@@ -5,5 +5,5 @@ From scratch barebones python firmware rewrite. Intent is to keep it small, arou
 
 ### Entrypoint:
 ```
-./deploy.sh
+scripts/deploy.sh
 ```
