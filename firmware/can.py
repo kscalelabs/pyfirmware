@@ -220,7 +220,7 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, max_scaling: float = 0.1):
+    def __init__(self, max_scaling: float = 1.0):
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
         self.ci = CANInterface()

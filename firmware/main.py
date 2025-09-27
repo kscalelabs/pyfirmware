@@ -11,11 +11,6 @@ from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     logger = Logger(log_dir)
-    
-    # Open commands.txt for logging ONNX commands
-    commands_file = open("commands.txt", "w")
-    commands_file.write("# ONNX Gripper Command Log\n")
-    commands_file.write("# Format: step_id, timestamp, right_gripper(11), left_gripper(17)\n")
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata["joint_names"]
