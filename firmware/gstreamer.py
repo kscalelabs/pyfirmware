@@ -108,7 +108,7 @@ class WebRTCServer:
             src = Gst.ElementFactory.make("libcamerasrc", f"libcamerasrc{i}")
             src.set_property("camera-name", cam_name)
 
-            caps = Gst.Caps.from_string("video/x-raw,format=YUY2,width=1280,height=720,framerate=30/1")
+            caps = Gst.Caps.from_string("video/x-raw,format=YUY2,width=640,height=480,framerate=30/1")
             capsfilter = Gst.ElementFactory.make("capsfilter", f"caps{i}")
             capsfilter.set_property("caps", caps)
 

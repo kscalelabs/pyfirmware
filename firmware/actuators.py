@@ -158,14 +158,14 @@ def actuator_ranges(actuator_type: RobstrideActuatorType) -> dict[str, float]:
         return {
             "angle_can_min": -4.0 * pi,
             "angle_can_max": 4.0 * pi,
-            "velocity_can_min": -10.0,
-            "velocity_can_max": 10.0,
-            "torque_can_min": -30.0,
-            "torque_can_max": 30.0,
+            "velocity_can_min": -33.0,
+            "velocity_can_max": 33.0,
+            "torque_can_min": -14.0,
+            "torque_can_max": 14.0,
             "kp_can_min": 0.0,
-            "kp_can_max": 1000.0,
+            "kp_can_max": 500.0,
             "kd_can_min": 0.0,
-            "kd_can_max": 50.0,
+            "kd_can_max": 5.0,
         }
 
 
@@ -228,8 +228,8 @@ class RobotConfig:
             full_name="dof_left_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride05,
             **actuator_ranges(RobstrideActuatorType.Robstride05),
-            kp=50.0,
-            kd=2.0,
+            kp=20.0,
+            kd=0.295,
             joint_bias=0.0,
         ),
         # Right arm
@@ -289,8 +289,8 @@ class RobotConfig:
             full_name="dof_right_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride05,
             **actuator_ranges(RobstrideActuatorType.Robstride05),
-            kp=50.0,
-            kd=2.0,
+            kp=20.0,
+            kd=0.295,
             joint_bias=0.0,
         ),
         # Left leg

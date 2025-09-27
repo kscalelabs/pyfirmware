@@ -9,42 +9,19 @@ from command_handling.keyboard import Keyboard
 from command_handling.udp_listener import UDPListener
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
-
-class DummyIMU:
-    """Dummy IMU that returns zeros when no real IMU is available."""
-    
-    def __init__(self):
-        self.name = "DummyIMU"
-    
-    def get_projected_gravity_and_gyroscope(self):
-        """Return zero values for gravity projection and gyroscope."""
-        # Return zeros with the expected shape (3D vectors)
-        projected_gravity = np.zeros(3, dtype=np.float32)
-        gyroscope = np.zeros(3, dtype=np.float32)
-        timestamp = time.time()
-        return projected_gravity, gyroscope, timestamp
-
-
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     logger = Logger(log_dir)
+    
+    # Open commands.txt for logging ONNX commands
+    commands_file = open("commands.txt", "w")
+    commands_file.write("# ONNX Gripper Command Log\n")
+    commands_file.write("# Format: step_id, timestamp, right_gripper(11), left_gripper(17)\n")
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata["joint_names"]
     carry = init_session.run(None, {})[0]
 
-    try:
-        imu_reader = get_imu_reader()
-        print("IMU:", imu_reader.__class__.__name__)
-    except ValueError as e:
-        print(f"⚠️  WARNING: {e}")
-        print("No IMU found! The robot will run with zero IMU values.")
-        print("This may cause unstable behavior. Continue anyway? (y/n): ", end="")
-        response = input().strip().lower()
-        if response != 'y':
-            print("Exiting...")
-            return
-        imu_reader = DummyIMU()
-        print("Using dummy IMU (all values will be zero)")
+    imu_reader = get_imu_reader()
 
     motor_driver = MotorDriver()
     print("Press Enter to start policy...")
@@ -89,7 +66,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         t4 = time.perf_counter()
 
         # Apply low-pass filter to the action before sending PD targets # TODO phase out move to policy
-        action, lpf_carry = apply_lowpass_filter(action, lpf_carry, cutoff_hz=lpf_cutoff_hz)
+        # action, lpf_carry = apply_lowpass_filter(action, lpf_carry, cutoff_hz=lpf_cutoff_hz)
         t5 = time.perf_counter()
         motor_driver.take_action(action, joint_order)
         t6 = time.perf_counter()
@@ -119,9 +96,10 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "joint_order": joint_order,
             },
         )
-        print(
-            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
-        )
+        # Timing debug output (commented out)
+        # print(
+        #     f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+        # )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 

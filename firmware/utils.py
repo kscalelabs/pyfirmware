@@ -58,15 +58,29 @@ def apply_lowpass_filter(action: np.ndarray, lpf_carry: dict | None, cutoff_hz: 
     lpf_carry["prev"] = y
     return y, lpf_carry
 
-
 def get_imu_reader():
+    """Get an IMU reader, falling back to dummy IMU if none found."""
     # try loading imus until one works
     try:
         return Hiwonder()
     except Exception:
         pass
+    
     try:
         return BNO055()
     except Exception:
         pass
-    raise ValueError("No IMU device found")
+    
+    # If no real IMU found, ask user if they want to continue with dummy
+    print("⚠️  WARNING: No IMU device found")
+    print("No IMU found! The robot will run with zero IMU values.")
+    print("This may cause unstable behavior. Continue anyway? (y/n): ", end="")
+    response = input().strip().lower()
+    if response != 'y':
+        print("Exiting...")
+        raise SystemExit("User chose to exit due to missing IMU")
+    
+    # Import and return dummy IMU
+    from imu.dummyImu import DummyIMU
+    print("Using dummy IMU (all values will be zero)")
+    return DummyIMU()
