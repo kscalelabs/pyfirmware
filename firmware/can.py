@@ -195,14 +195,18 @@ class CANInterface:
     def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float):
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
-                self.sockets[canbus].send(frame)
+                # Only send commands to actuators that are in the actions dictionary
+                if actuator_id in actions:
+                    frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
+                    self.sockets[canbus].send(frame)
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                try:
-                    _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
-                except:
-                    print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
+                # Only expect feedback from actuators that we sent commands to
+                if actuator_id in actions:
+                    try:
+                        _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
+                    except:
+                        print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
     def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float):
         assert 0.0 <= scaling <= 1.0
@@ -220,7 +224,7 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, max_scaling: float = 1.0):
+    def __init__(self, max_scaling: float = 0.1):
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
         self.ci = CANInterface()
@@ -264,14 +268,33 @@ class MotorDriver:
             time.sleep(0.1)
         print("✅ Homing complete")
 
-    def sine_wave(self):
+    def sine_wave(self, actuator_ids=None):
         t0 = time.perf_counter()
+        
+        # If no specific IDs provided, use all actuators
+        if actuator_ids is None:
+            target_actuators = list(self.robot.actuators.keys())
+        else:
+            # Validate that all provided IDs exist
+            target_actuators = []
+            for id in actuator_ids:
+                if id in self.robot.actuators:
+                    target_actuators.append(id)
+                else:
+                    print(f"Warning: Actuator ID {id} not found in robot configuration")
+            
+            if not target_actuators:
+                print("Error: No valid actuator IDs provided")
+                return
+        
+        print(f"Running sine wave on actuators: {target_actuators}")
+        
         while True:
             t = time.perf_counter()
             _ = self.ci.get_actuator_feedback()
             t1 = time.perf_counter()
             angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (t - t0))
-            action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            action = {id: angle + self.robot.actuators[id].joint_bias for id in target_actuators}
             t2 = time.perf_counter()
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             t3 = time.perf_counter()
@@ -298,9 +321,22 @@ class MotorDriver:
 
 
 def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Run sine wave on actuators')
+    parser.add_argument('--ids', nargs='+', type=int, help='Specific actuator IDs to run sine wave on (e.g., --ids 11 12 13)')
+    args = parser.parse_args()
+    
     driver = MotorDriver(max_scaling=0.1)
-    input("Press Enter to run sine wave on all actuators...")
-    driver.sine_wave()
+    
+    if args.ids:
+        print(f"Running sine wave on actuators: {args.ids}")
+        input("Press Enter to start...")
+        driver.sine_wave(actuator_ids=args.ids)
+    else:
+        print("Running sine wave on all actuators")
+        input("Press Enter to start...")
+        driver.sine_wave()
 
 
 if __name__ == "__main__":

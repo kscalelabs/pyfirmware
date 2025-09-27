@@ -6,8 +6,9 @@ from typing import List
 class CommandInterface(ABC):
     """Abstract base class for command input interfaces."""
     
-    def __init__(self):
-        self.cmd = [0.0] * 16
+    def __init__(self, length: int = 16):
+        self.cmd = [0.0] * length
+        self.length = length
         self._running = True
         self._thread = None
     
@@ -31,7 +32,7 @@ class CommandInterface(ABC):
     
     def reset_cmd(self) -> None:
         """Reset all commands to zero."""
-        self.cmd = [0.0] * 16
+        self.cmd = [0.0] * self.length
     
     def get_cmd(self) -> List[float]:
         """Get current command vector."""

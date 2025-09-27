@@ -225,7 +225,7 @@ class RobotConfig:
         16: ActuatorConfig(
             can_id=16,
             name="lgp",
-            full_name="dof_left_gripper_05",
+            full_name="dof_left_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride05,
             **actuator_ranges(RobstrideActuatorType.Robstride05),
             kp=50.0,
@@ -286,7 +286,7 @@ class RobotConfig:
         26: ActuatorConfig(
             can_id=26,
             name="rgp",
-            full_name="dof_right_gripper_05",
+            full_name="dof_right_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride05,
             **actuator_ranges(RobstrideActuatorType.Robstride05),
             kp=50.0,

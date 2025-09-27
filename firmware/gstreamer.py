@@ -2,10 +2,6 @@ import asyncio
 import json
 import ssl
 import websockets
-import socket
-import time
-import logging
-import argparse
 
 import gi
 import numpy as np
@@ -23,34 +19,6 @@ gi.require_version('GstSdp', '1.0')
 from gi.repository import Gst, GstWebRTC, GstSdp, GLib
 
 Gst.init(None)
-
-logger = logging.getLogger(__name__)
-
-def get_host_ip():
-    print("Waiting for host to connect")
-    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_sock.setblocking(False)
-    udp_sock.bind(('0.0.0.0', 10002))
-
-    while True:
-        try:
-            data, _ = udp_sock.recvfrom(1024)  # Buffer size 1024 bytes
-            payload = json.loads(data.decode('utf-8'))
-
-            if 'ip' in payload:
-                print(payload)
-                time.sleep(1)
-                udp_sock.close()
-                return payload['ip']
-
-        except socket.error:
-            pass
-        except json.JSONDecodeError:
-            logger.error("Invalid JSON in UDP packet")
-        except Exception as e:
-            logger.error(f"Error processing UDP packet: {e}")
-        time.sleep(0.5)
-
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
 PIPELINE_DESC = '''
 webrtcbin name=sendrecv
@@ -83,7 +51,7 @@ class WebRTCServer:
         self.added_data_channel = False
         self.added_streams = 0
         self.flip_video = flip_video
-        
+
     def connect_audio(self, webrtc):
         audio_src = Gst.ElementFactory.make("alsasrc", "audio_src")
         audio_conv = Gst.ElementFactory.make("audioconvert", "audio_conv")
@@ -140,7 +108,7 @@ class WebRTCServer:
             src = Gst.ElementFactory.make("libcamerasrc", f"libcamerasrc{i}")
             src.set_property("camera-name", cam_name)
 
-            caps = Gst.Caps.from_string("video/x-raw, width=640, height=480, format=YUY2, framerate=30/1")
+            caps = Gst.Caps.from_string("video/x-raw,format=YUY2,width=1280,height=720,framerate=30/1")
             capsfilter = Gst.ElementFactory.make("capsfilter", f"caps{i}")
             capsfilter.set_property("caps", caps)
 
@@ -198,8 +166,8 @@ class WebRTCServer:
                 ret = src_pad.link(sink_pad)
                 print("Pad link result", ret)
 
-        if audio:
-            self.connect_audio(webrtc)
+        # if audio:
+        #     self.connect_audio(webrtc)
         self.webrtc.connect("on-negotiation-needed", self.on_negotiation_needed)
         self.pipe.set_state(Gst.State.PLAYING)
         Gst.debug_bin_to_dot_file(self.pipe, Gst.DebugGraphDetails.ALL, "pipeline_graph")
@@ -412,35 +380,14 @@ class WebRTCServer:
         print("Client connected")
         self.ws = ws
         async for msg in ws:
+            print("Received message:", msg)
             self.handle_client_message(msg)
         print("Client disconnected")
         self.close_pipeline()
 
-    async def connect_to_host(self, host_ip):
-        """Connect to the discovered host WebSocket server"""
-        host_url = f"ws://{host_ip}:8013"
-        try:
-            print(f"Connecting to {host_url}...")
-            async with websockets.connect(host_url) as websocket:
-                print("Connected to host WebSocket server")
-                self.ws = websocket
-                
-                # Send initial message to identify as robot
-                await websocket.send(json.dumps({"role": "robot", "robot_id": "box"}))
-                
-                async for message in websocket:
-                    self.handle_client_message(message)
-                    
-        except websockets.exceptions.ConnectionClosed:
-            print("WebSocket connection to host closed")
-        except Exception as e:
-            print(f"WebSocket error: {e}")
-        finally:
-            if self.pipe:
-                self.close_pipeline()
-
 async def main():
     # Parse command line arguments
+    import argparse
     parser = argparse.ArgumentParser(description='WebRTC Video Streaming Server')
     parser.add_argument('--flip', action='store_true', 
                        help='Vertically flip the video stream')
@@ -448,16 +395,12 @@ async def main():
     
     loop = asyncio.get_running_loop()
     server = WebRTCServer(loop, flip_video=args.flip)
-    
-    # Start the GLib main loop iteration task
+    async def handler(websocket):
+        await server.websocket_handler(websocket)
     asyncio.create_task(glib_main_loop_iteration())
-    
-    # Get host IP via UDP discovery
-    host_ip = await asyncio.get_running_loop().run_in_executor(None, get_host_ip)
-    print(f"Discovered host IP: {host_ip}")
-    
-    # Connect to the host
-    await server.connect_to_host(host_ip)
+    async with websockets.serve(handler, "0.0.0.0", 8765):
+        print("WebSocket server running on ws://0.0.0.0:8765")
+        await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
     asyncio.run(main())

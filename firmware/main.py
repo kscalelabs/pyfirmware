@@ -10,6 +10,21 @@ from command_handling.udp_listener import UDPListener
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 
+class DummyIMU:
+    """Dummy IMU that returns zeros when no real IMU is available."""
+    
+    def __init__(self):
+        self.name = "DummyIMU"
+    
+    def get_projected_gravity_and_gyroscope(self):
+        """Return zero values for gravity projection and gyroscope."""
+        # Return zeros with the expected shape (3D vectors)
+        projected_gravity = np.zeros(3, dtype=np.float32)
+        gyroscope = np.zeros(3, dtype=np.float32)
+        timestamp = time.time()
+        return projected_gravity, gyroscope, timestamp
+
+
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     logger = Logger(log_dir)
 
@@ -17,8 +32,19 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     joint_order = metadata["joint_names"]
     carry = init_session.run(None, {})[0]
 
-    imu_reader = get_imu_reader()
-    print("IMU:", imu_reader.__class__.__name__)
+    try:
+        imu_reader = get_imu_reader()
+        print("IMU:", imu_reader.__class__.__name__)
+    except ValueError as e:
+        print(f"⚠️  WARNING: {e}")
+        print("No IMU found! The robot will run with zero IMU values.")
+        print("This may cause unstable behavior. Continue anyway? (y/n): ", end="")
+        response = input().strip().lower()
+        if response != 'y':
+            print("Exiting...")
+            return
+        imu_reader = DummyIMU()
+        print("Using dummy IMU (all values will be zero)")
 
     motor_driver = MotorDriver()
     print("Press Enter to start policy...")
@@ -30,8 +56,8 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         command_interface = Keyboard()
         print("Using keyboard input (WASD for movement, 0 to reset)")
     elif command_source == "udp":
-        command_interface = UDPListener(port=8888)
-        print("Using UDP input on port 8888")
+        command_interface = UDPListener(length=18)
+        print("Using UDP input on port 10000 (18-element commands)")
     else:
         raise ValueError(f"Unknown command source: {command_source}")
 
@@ -103,9 +129,11 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
+    parser.add_argument("--command-source", type=str, default="udp", 
+                       choices=["keyboard", "udp"], help="Command input source")
     args = parser.parse_args()
 
-    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
-    runner(args.kinfer_path, log_path)
+    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH", "/tmp"), "kinfer_log.ndjson")
+    runner(args.kinfer_path, log_path, args.command_source)
 
 # TODO move lpf to policy - no signals should be modified by the firmware
