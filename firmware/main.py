@@ -19,7 +19,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 
     imu_reader = get_imu_reader()
 
-    motor_driver = MotorDriver(max_scaling=0.1)
+    motor_driver = MotorDriver()
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
