@@ -270,7 +270,7 @@ class MotorDriver:
             t = time.perf_counter()
             _ = self.ci.get_actuator_feedback()
             t1 = time.perf_counter()
-            angle = 3.14158 / 10 * math.sin(2 * math.pi * 0.5 * (t - t0))
+            angle = 0.3 * math.sin(2 * math.pi * 0.5 * (t - t0))
             action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
             t2 = time.perf_counter()
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
