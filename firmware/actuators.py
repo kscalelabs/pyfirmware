@@ -10,8 +10,6 @@ class RobstrideActuatorType(Enum):
     Robstride02 = 2
     Robstride03 = 3
     Robstride04 = 4
-    Robstride05 = 5
-
 
 @dataclass
 class ActuatorConfig:
@@ -154,20 +152,6 @@ def actuator_ranges(actuator_type: RobstrideActuatorType) -> dict[str, float]:
             "kd_can_min": 0.0,
             "kd_can_max": 100.0,
         }
-    elif actuator_type == RobstrideActuatorType.Robstride05:
-        return {
-            "angle_can_min": -4.0 * pi,
-            "angle_can_max": 4.0 * pi,
-            "velocity_can_min": -33.0,
-            "velocity_can_max": 33.0,
-            "torque_can_min": -14.0,
-            "torque_can_max": 14.0,
-            "kp_can_min": 0.0,
-            "kp_can_max": 500.0,
-            "kd_can_min": 0.0,
-            "kd_can_max": 5.0,
-        }
-
 
 class RobotConfig:
     actuators: dict[int, ActuatorConfig] = {
@@ -226,11 +210,11 @@ class RobotConfig:
             can_id=16,
             name="lgp",
             full_name="dof_left_wrist_gripper_05",
-            actuator_type=RobstrideActuatorType.Robstride05,
-            **actuator_ranges(RobstrideActuatorType.Robstride05),
+            actuator_type=RobstrideActuatorType.Robstride00,
+            **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=20.0,
             kd=0.295,
-            joint_bias=0.0,
+            joint_bias=math.radians(8),
         ),
         # Right arm
         21: ActuatorConfig(
@@ -287,11 +271,11 @@ class RobotConfig:
             can_id=26,
             name="rgp",
             full_name="dof_right_wrist_gripper_05",
-            actuator_type=RobstrideActuatorType.Robstride05,
-            **actuator_ranges(RobstrideActuatorType.Robstride05),
+            actuator_type=RobstrideActuatorType.Robstride00,
+            **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=20.0,
             kd=0.295,
-            joint_bias=0.0,
+            joint_bias=math.radians(-25),
         ),
         # Left leg
         31: ActuatorConfig(

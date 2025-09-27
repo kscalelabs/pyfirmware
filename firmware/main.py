@@ -7,6 +7,7 @@ from can import MotorDriver
 from logger import Logger
 from command_handling.keyboard import Keyboard
 from command_handling.udp_listener import UDPListener
+from command_handling.gripper_listener import GripperListener
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
 
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
@@ -18,7 +19,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 
     imu_reader = get_imu_reader()
 
-    motor_driver = MotorDriver()
+    motor_driver = MotorDriver(max_scaling=0.1)
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
@@ -28,7 +29,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         command_interface = Keyboard()
         print("Using keyboard input (WASD for movement, 0 to reset)")
     elif command_source == "udp":
-        command_interface = UDPListener(length=18)
+        command_interface = GripperListener(length=18)
         print("Using UDP input on port 10000 (18-element commands)")
     else:
         raise ValueError(f"Unknown command source: {command_source}")

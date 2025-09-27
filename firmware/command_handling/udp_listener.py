@@ -35,9 +35,7 @@ class UDPListener(CommandInterface):
             "LWristGripper": 17,
         }
         
-        # Set home position defaults for 18-element commands
         if length == 18:
-            import math
             self.cmd = [
                 0.0,  # XVel
                 0.0,  # YVel
@@ -50,13 +48,13 @@ class UDPListener(CommandInterface):
                 0.0,  # RElbowPitch (24)
                 math.radians(90.0),   # RElbowRoll (23)
                 0.0,  # RWristRoll (25)
-                math.radians(-18.0),  # RWristGripper (26)
+                math.radians(-8.0),  # RWristGripper (26)
                 0.0,  # LShoulderPitch (11)
                 math.radians(10.0),   # LShoulderRoll (12)
                 0.0,  # LElbowPitch (14)
                 math.radians(-90.0),  # LElbowRoll (13)
                 0.0,  # LWristRoll (15)
-                math.radians(-50.0),  # LWristGripper (16)
+                math.radians(-25.0),  # LWristGripper (16)
             ]
         
         self.start()
