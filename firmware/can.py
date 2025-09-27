@@ -195,19 +195,15 @@ class CANInterface:
     def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float):
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                # Only send commands to actuators that are in the actions dictionary
-                if actuator_id in actions:
-                    frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
-                    self.sockets[canbus].send(frame)
+                frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
+                self.sockets[canbus].send(frame)
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                # Only expect feedback from actuators that we sent commands to
-                if actuator_id in actions:
-                    try:
-                        _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
-                    except:
-                        print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
-
+                try:
+                    _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
+                except:
+                    print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
+    
     def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float):
         assert 0.0 <= scaling <= 1.0
         raw_torque = int(robotcfg.actuators[actuator_can_id].physical_to_can_torque(0))
