@@ -3,7 +3,7 @@
 policy="$(realpath $1)"
 
 # bring up can and set max torques per actuator
-bash ~/kbot_deployment/scripts/reset_max_torques.sh
+bash "$(dirname "$(realpath "$0")")/_set_can_and_max_torques.sh"
 
 # run firmware with policy
-sudo -E chrt 80 /home/dpsh/miniconda3/envs/klog/bin/python ../firmware/main.py $policy
+sudo -E chrt 80 /home/dpsh/miniconda3/envs/klog/bin/python "$(dirname "$(realpath "$0")")/../firmware/main.py" $policy
