@@ -7,8 +7,9 @@ from can import MotorDriver
 from logger import Logger
 from command_handling.keyboard import Keyboard
 from command_handling.udp_listener import UDPListener
-from command_handling.gripper_listener import GripperListener
+
 from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
+
 
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     logger = Logger(log_dir)
@@ -29,7 +30,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         command_interface = Keyboard()
         print("Using keyboard input (WASD for movement, 0 to reset)")
     elif command_source == "udp":
-        command_interface = GripperListener(length=18)
+        command_interface = UDPListener(length=18)
         print("Using UDP input on port 10000 (18-element commands)")
     else:
         raise ValueError(f"Unknown command source: {command_source}")
@@ -61,11 +62,8 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         )
         t4 = time.perf_counter()
 
-        # Apply low-pass filter to the action before sending PD targets # TODO phase out move to policy
-        # action, lpf_carry = apply_lowpass_filter(action, lpf_carry, cutoff_hz=lpf_cutoff_hz)
-        t5 = time.perf_counter()
         motor_driver.take_action(action, joint_order)
-        t6 = time.perf_counter()
+        t5 = time.perf_counter()
 
         dt = time.perf_counter() - t
         logger.log(
@@ -78,8 +76,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "dt_imu_ms": (t2 - t1) * 1000,
                 "dt_keyboard_ms": (t3 - t2) * 1000,
                 "dt_step_ms": (t4 - t3) * 1000,
-                "dt_lpf_ms": (t5 - t4) * 1000,
-                "dt_action_ms": (t6 - t5) * 1000,
+                "dt_action_ms": (t5 - t4) * 1000,
                 "joint_angles": joint_angles,
                 "joint_vels": joint_angular_velocities,
                 "joint_amps": [],  # TODO add
@@ -92,10 +89,9 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "joint_order": joint_order,
             },
         )
-        # Timing debug output (commented out)
-        # print(
-        #     f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
-        # )
+        print(
+            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+        )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
@@ -107,7 +103,5 @@ if __name__ == "__main__":
                        choices=["keyboard", "udp"], help="Command input source")
     args = parser.parse_args()
 
-    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH", "/tmp"), "kinfer_log.ndjson")
-    runner(args.kinfer_path, log_path, args.command_source)
-
-# TODO move lpf to policy - no signals should be modified by the firmware
+    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
+    runner(args.kinfer_path, log_path)
