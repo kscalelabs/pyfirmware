@@ -7,8 +7,4 @@ command_source="${2:-keyboard}"
 bash "$(dirname "$(realpath "$0")")/_set_can_and_max_torques.sh"
 
 # run firmware with policy
-<<<<<<< HEAD
-sudo -E chrt 80 /home/dpsh/miniconda3/envs/klog/bin/python ../firmware/main.py $policy --command-source $command_source
-=======
-sudo -E chrt 80 /home/dpsh/miniconda3/envs/klog/bin/python "$(dirname "$(realpath "$0")")/../firmware/main.py" $policy
->>>>>>> 2b33085d4950385a0552dc1cf1bfb52365db01d0
+sudo -E chrt 80 /home/dpsh/miniconda3/envs/klog/bin/python "$(dirname "$(realpath "$0")")/../firmware/main.py" $policy  --command-source $command_source
