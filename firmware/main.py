@@ -27,9 +27,6 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     # keyboard absorbs stdin
     keyboard = Keyboard()
 
-    lpf_carry = None
-    lpf_cutoff_hz = 10.0
-
     t0 = time.perf_counter()
     step_id = 0
     while True:
