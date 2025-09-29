@@ -5,6 +5,7 @@ import numpy as np
 import onnxruntime as ort
 from imu.bno055 import BNO055
 from imu.hiwonder import Hiwonder
+from imu.dummy import DummyIMU
 
 
 def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
@@ -44,27 +45,15 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
 
 def get_imu_reader():
     """Get an IMU reader, falling back to dummy IMU if none found."""
-    # try loading imus until one works
     try:
         return Hiwonder()
     except Exception:
         pass
-    
     try:
         return BNO055()
     except Exception:
         pass
-    
-    # If no real IMU found, ask user if they want to continue with dummy
-    print("⚠️  WARNING: No IMU device found")
-    print("No IMU found! The robot will run with zero IMU values.")
-    print("This may cause unstable behavior. Continue anyway? (y/n): ", end="")
-    response = input().strip().lower()
-    if response != 'y':
-        print("Exiting...")
-        raise SystemExit("User chose to exit due to missing IMU")
-    
-    # Import and return dummy IMU
-    from imu.dummyImu import DummyIMU
-    print("Using dummy IMU (all values will be zero)")
-    return DummyIMU()
+    try:
+        return DummyIMU()
+    except Exception:
+        pass
