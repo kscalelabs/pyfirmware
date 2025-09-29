@@ -35,9 +35,6 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     else:
         raise ValueError(f"Unknown command source: {command_source}")
 
-    lpf_carry = None
-    lpf_cutoff_hz = 10.0
-
     t0 = time.perf_counter()
     step_id = 0
     while True:
