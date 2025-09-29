@@ -14,7 +14,7 @@ class CommandInterface(ABC):
     
     @abstractmethod
     def _read_input(self) -> None:
-        """Read input from the specific interface and update command vector."""
+        """Read input from the specific interface and update command vector in a separate thread."""
         pass
     
     def start(self) -> None:

@@ -5,8 +5,8 @@ import time
 import numpy as np
 from can import MotorDriver
 from logger import Logger
-from command_handling.keyboard import Keyboard
-from command_handling.udp_listener import UDPListener
+from commands.keyboard import Keyboard
+from commands.udp_listener import UDPListener
 
 from utils import get_imu_reader, get_onnx_sessions
 

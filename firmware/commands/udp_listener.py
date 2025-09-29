@@ -2,7 +2,7 @@ import json
 import math
 import socket
 
-from command_handling.command_interface import CommandInterface
+from commands.command_interface import CommandInterface
 
 
 class UDPListener(CommandInterface):
