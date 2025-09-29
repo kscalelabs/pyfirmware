@@ -8,7 +8,7 @@ from logger import Logger
 from command_handling.keyboard import Keyboard
 from command_handling.udp_listener import UDPListener
 
-from utils import apply_lowpass_filter, get_imu_reader, get_onnx_sessions
+from utils import get_imu_reader, get_onnx_sessions
 
 
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
