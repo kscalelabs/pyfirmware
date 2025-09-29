@@ -4,10 +4,9 @@ import time
 
 import numpy as np
 from can import MotorDriver
-from logger import Logger
 from commands.keyboard import Keyboard
 from commands.udp_listener import UDPListener
-
+from logger import Logger
 from utils import get_imu_reader, get_onnx_sessions
 
 
@@ -88,8 +87,9 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
-    parser.add_argument("--command-source", type=str, default="keyboard", 
-                       choices=["keyboard", "udp"], help="Command input source")
+    parser.add_argument(
+        "--command-source", type=str, default="keyboard", choices=["keyboard", "udp"], help="Command input source"
+    )
     args = parser.parse_args()
 
     log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")

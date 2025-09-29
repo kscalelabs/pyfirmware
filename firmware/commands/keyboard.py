@@ -4,7 +4,7 @@ import sys
 import termios
 import tty
 
-from command_handling.command_interface import CommandInterface
+from commands.command_interface import CommandInterface
 
 
 class Keyboard(CommandInterface):
@@ -12,7 +12,7 @@ class Keyboard(CommandInterface):
 
     def __init__(self) -> None:
         super().__init__()
-        
+
         # Set up stdin for raw input
         self._fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(self._fd)
@@ -34,33 +34,33 @@ class Keyboard(CommandInterface):
                 ch = sys.stdin.read(1).lower()
 
                 # base controls
-                if ch == '0':
+                if ch == "0":
                     self.reset_cmd()
-                elif ch == 'w':
+                elif ch == "w":
                     self.cmd[0] += 0.1
-                elif ch == 's':
+                elif ch == "s":
                     self.cmd[0] -= 0.1
-                elif ch == 'a':
+                elif ch == "a":
                     self.cmd[1] += 0.1
-                elif ch == 'd':
+                elif ch == "d":
                     self.cmd[1] -= 0.1
-                elif ch == 'q':
+                elif ch == "q":
                     self.cmd[2] += 0.1
-                elif ch == 'e':
+                elif ch == "e":
                     self.cmd[2] -= 0.1
 
                 # base pose
-                elif ch == '=':
+                elif ch == "=":
                     self.cmd[3] += 0.05
-                elif ch == '-':
+                elif ch == "-":
                     self.cmd[3] -= 0.05
-                elif ch == 'r':
+                elif ch == "r":
                     self.cmd[4] += 0.1
-                elif ch == 'f':
+                elif ch == "f":
                     self.cmd[4] -= 0.1
-                elif ch == 't':
+                elif ch == "t":
                     self.cmd[5] += 0.1
-                elif ch == 'g':
+                elif ch == "g":
                     self.cmd[5] -= 0.1
 
                 # clamp
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     kb = Keyboard()
 
     import time
+
     while True:
         print(kb.get_cmd())
         time.sleep(0.1)
-

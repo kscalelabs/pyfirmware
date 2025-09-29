@@ -11,6 +11,7 @@ class RobstrideActuatorType(Enum):
     Robstride03 = 3
     Robstride04 = 4
 
+
 @dataclass
 class ActuatorConfig:
     can_id: int
@@ -152,6 +153,7 @@ def actuator_ranges(actuator_type: RobstrideActuatorType) -> dict[str, float]:
             "kd_can_min": 0.0,
             "kd_can_max": 100.0,
         }
+
 
 class RobotConfig:
     actuators: dict[int, ActuatorConfig] = {

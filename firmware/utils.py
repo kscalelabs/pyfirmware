@@ -4,8 +4,8 @@ import tarfile
 import numpy as np
 import onnxruntime as ort
 from imu.bno055 import BNO055
-from imu.hiwonder import Hiwonder
 from imu.dummy import DummyIMU
+from imu.hiwonder import Hiwonder
 
 
 def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
