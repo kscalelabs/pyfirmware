@@ -1,4 +1,5 @@
 import json
+import math
 import socket
 
 from command_handling.command_interface import CommandInterface
@@ -8,6 +9,7 @@ class UDPListener(CommandInterface):
     """Listens for UDP commands and updates the command vector."""
 
     def __init__(self, length: int = 16, port: int = 10000, host: str = "0.0.0.0"):
+        print(f"Using UDP input on port {port} ({length}-element commands)")
         super().__init__(length)    
         self.port = port
         self.host = host

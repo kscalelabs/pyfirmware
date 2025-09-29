@@ -24,16 +24,8 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
-    command_interface = None
-    # Initialize command interface based on source
-    if command_source == "keyboard":
-        command_interface = Keyboard()
-        print("Using keyboard input (WASD for movement, 0 to reset)")
-    elif command_source == "udp":
-        command_interface = UDPListener(length=18)
-        print("Using UDP input on port 10000 (18-element commands)")
-    else:
-        raise ValueError(f"Unknown command source: {command_source}")
+
+    command_interface = Keyboard() if command_source == "keyboard" else UDPListener(length=18)
 
     t0 = time.perf_counter()
     step_id = 0
@@ -96,7 +88,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
-    parser.add_argument("--command-source", type=str, default="udp", 
+    parser.add_argument("--command-source", type=str, default="keyboard", 
                        choices=["keyboard", "udp"], help="Command input source")
     args = parser.parse_args()
 
