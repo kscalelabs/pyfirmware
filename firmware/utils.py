@@ -1,11 +1,10 @@
 import json
-import math
 import tarfile
-import time
 
 import numpy as np
 import onnxruntime as ort
 from imu.bno055 import BNO055
+from imu.dummy import DummyIMU
 from imu.hiwonder import Hiwonder
 
 
@@ -45,7 +44,7 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
 
 
 def get_imu_reader():
-    # try loading imus until one works
+    """Get an IMU reader, falling back to dummy IMU if none found."""
     try:
         return Hiwonder()
     except Exception:
@@ -54,4 +53,7 @@ def get_imu_reader():
         return BNO055()
     except Exception:
         pass
-    raise ValueError("No IMU device found")
+    try:
+        return DummyIMU()
+    except Exception:
+        pass

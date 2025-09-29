@@ -4,12 +4,13 @@ import time
 
 import numpy as np
 from can import MotorDriver
+from commands.keyboard import Keyboard
+from commands.udp_listener import UDPListener
 from logger import Logger
-from keyboard import Keyboard
 from utils import get_imu_reader, get_onnx_sessions
 
 
-def runner(kinfer_path: str, log_dir: str) -> None:
+def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     logger = Logger(log_dir)
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -17,15 +18,13 @@ def runner(kinfer_path: str, log_dir: str) -> None:
     carry = init_session.run(None, {})[0]
 
     imu_reader = get_imu_reader()
-    print("IMU:", imu_reader.__class__.__name__)
 
     motor_driver = MotorDriver()
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
 
-    # keyboard absorbs stdin
-    keyboard = Keyboard()
+    command_interface = Keyboard() if command_source == "keyboard" else UDPListener(length=18)
 
     t0 = time.perf_counter()
     step_id = 0
@@ -35,7 +34,7 @@ def runner(kinfer_path: str, log_dir: str) -> None:
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = np.array(keyboard.get_cmd(), dtype=np.float32)
+        command = np.array(command_interface.get_cmd(), dtype=np.float32)
         t3 = time.perf_counter()
 
         action, carry = step_session.run(
@@ -88,6 +87,9 @@ def runner(kinfer_path: str, log_dir: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
+    parser.add_argument(
+        "--command-source", type=str, default="keyboard", choices=["keyboard", "udp"], help="Command input source"
+    )
     args = parser.parse_args()
 
     log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")

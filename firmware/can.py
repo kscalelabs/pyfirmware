@@ -195,14 +195,16 @@ class CANInterface:
     def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float):
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
-                self.sockets[canbus].send(frame)
+                if actuator_id in actions:  # Only send commands to actuators in the actions dict
+                    frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
+                    self.sockets[canbus].send(frame)
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                try:
-                    _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
-                except:
-                    print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
+                if actuator_id in actions:  # Only wait for responses from actuators we commanded
+                    try:
+                        _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
+                    except:
+                        print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
     def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float):
         assert 0.0 <= scaling <= 1.0
@@ -311,4 +313,3 @@ if __name__ == "__main__":
 # TODO deal with feedback request timeouts
 # TODO dont die on critical faults
 # TODO Flush bus when timeing out on set pd target messages to prevent async issues.
-# TODO message not printing
