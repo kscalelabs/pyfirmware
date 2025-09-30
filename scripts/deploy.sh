@@ -47,17 +47,17 @@ echo "Deploying policy: $policy"
 if [ "$gstreamer" = "true" ]; then
     # start gstreamer in background first
     echo "Starting GStreamer with --flip using webrtc-env"
-    sudo -E chrt 80 /home/dpsh/webrtc-pi-env/bin/python "$(dirname "$(realpath "$0")")/../firmware/gstreamer.py" --flip > /dev/null 2>&1 &
+    sudo -E chrt 80 /home/dpsh/kbot/bin/python "$(dirname "$(realpath "$0")")/../firmware/gstreamer.py" --flip > /dev/null 2>&1 &
     gstreamer_pid=$!
     
     # run main firmware
-    klog-deploy --no-wait "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
     
     # kill gstreamer when done
     echo "Stopping GStreamer (PID: $gstreamer_pid)"
     kill $gstreamer_pid 2>/dev/null
 else
     # run main firmware only
-    klog-deploy --no-wait "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
 fi
 

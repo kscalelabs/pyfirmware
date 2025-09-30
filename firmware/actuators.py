@@ -214,8 +214,8 @@ class RobotConfig:
             full_name="dof_left_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride00,
             **actuator_ranges(RobstrideActuatorType.Robstride00),
-            kp=20.0,
-            kd=0.295,
+            kp=4,
+            kd=0.06,
             joint_bias=math.radians(8),
         ),
         # Right arm
@@ -275,8 +275,8 @@ class RobotConfig:
             full_name="dof_right_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride00,
             **actuator_ranges(RobstrideActuatorType.Robstride00),
-            kp=20.0,
-            kd=0.295,
+            kp=4,
+            kd=0.06,
             joint_bias=math.radians(-25),
         ),
         # Left leg

@@ -9,7 +9,6 @@ from commands.udp_listener import UDPListener
 from logger import Logger
 from utils import get_imu_reader, get_onnx_sessions
 
-
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     logger = Logger(log_dir)
 
@@ -23,8 +22,19 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
+    command_interface = None
+    # Initialize command interface based on source
+    if command_source == "keyboard":
+        command_interface = Keyboard()
+        print("Using keyboard input (WASD for movement, 0 to reset)")
+    elif command_source == "udp":
+        command_interface = UDPListener(length=18)
+        print("Using UDP input on port 10000 (18-element commands)")
+    else:
+        raise ValueError(f"Unknown command source: {command_source}")
 
-    command_interface = Keyboard() if command_source == "keyboard" else UDPListener(length=18)
+    lpf_carry = None
+    lpf_cutoff_hz = 10.0
 
     t0 = time.perf_counter()
     step_id = 0
@@ -50,8 +60,11 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         )
         t4 = time.perf_counter()
 
-        motor_driver.take_action(action, joint_order)
+        # Apply low-pass filter to the action before sending PD targets # TODO phase out move to policy
+        # action, lpf_carry = apply_lowpass_filter(action, lpf_carry, cutoff_hz=lpf_cutoff_hz)
         t5 = time.perf_counter()
+        motor_driver.take_action(action, joint_order)
+        t6 = time.perf_counter()
 
         dt = time.perf_counter() - t
         logger.log(
@@ -64,22 +77,24 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "dt_imu_ms": (t2 - t1) * 1000,
                 "dt_keyboard_ms": (t3 - t2) * 1000,
                 "dt_step_ms": (t4 - t3) * 1000,
-                "dt_action_ms": (t5 - t4) * 1000,
-                "joint_angles": joint_angles,
-                "joint_vels": joint_angular_velocities,
+                "dt_lpf_ms": (t5 - t4) * 1000,
+                "dt_action_ms": (t6 - t5) * 1000,
+                "joint_angles": joint_angles.tolist() if hasattr(joint_angles, 'tolist') else joint_angles,
+                "joint_vels": joint_angular_velocities.tolist() if hasattr(joint_angular_velocities, 'tolist') else joint_angular_velocities,
                 "joint_amps": [],  # TODO add
                 "joint_torques": [],  # TODO add
                 "joint_temps": [],  # TODO add
-                "projected_gravity": projected_gravity,
-                "gyro": gyroscope,
+                "projected_gravity": projected_gravity.tolist() if hasattr(projected_gravity, 'tolist') else projected_gravity,
+                "gyro": gyroscope.tolist() if hasattr(gyroscope, 'tolist') else gyroscope,
                 "command": command.tolist(),
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },
         )
-        print(
-            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
-        )
+        # Timing debug output (commented out)
+        # print(
+        #     f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, .step()={(t3 - t2) * 1000:.2f} ms, lpf={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+        # )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
@@ -87,10 +102,11 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
-    parser.add_argument(
-        "--command-source", type=str, default="keyboard", choices=["keyboard", "udp"], help="Command input source"
-    )
+    parser.add_argument("--command-source", type=str, default="udp", 
+                       choices=["keyboard", "udp"], help="Command input source")
     args = parser.parse_args()
 
-    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
-    runner(args.kinfer_path, log_path)
+    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH", "/tmp"), "kinfer_log.ndjson")
+    runner(args.kinfer_path, log_path, args.command_source)
+
+# TODO move lpf to policy - no signals should be modified by the firmware
