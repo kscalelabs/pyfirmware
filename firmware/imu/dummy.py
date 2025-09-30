@@ -15,6 +15,6 @@ class DummyIMU:
             print("Exiting...")
             raise SystemExit("User chose to exit due to missing IMU")
 
-    def get_projected_gravity_and_gyroscope(self):
+    def get_projected_gravity_and_gyroscope(self) -> tuple[tuple[float, ...], tuple[float, ...], float]:
         """Return dummy values for projected gravity and gyroscope."""
-        return np.array([0, 0, -9.81], dtype=np.float32), np.array([0, 0, 0], dtype=np.float32), time.time()
+        return (0.0, 0.0, -9.81), (0.0, 0.0, 0.0), time.time()
