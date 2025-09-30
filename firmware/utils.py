@@ -3,6 +3,7 @@ import tarfile
 
 import numpy as np
 import onnxruntime as ort
+
 from firmware.imu.bno055 import BNO055
 from firmware.imu.dummy import DummyIMU
 from firmware.imu.hiwonder import Hiwonder

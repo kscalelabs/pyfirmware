@@ -68,5 +68,3 @@ class Keyboard(CommandInterface):
 
             except (IOError, EOFError):
                 continue
-
-

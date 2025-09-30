@@ -3,6 +3,7 @@ import os
 import time
 
 import numpy as np
+
 from firmware.can import MotorDriver
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
