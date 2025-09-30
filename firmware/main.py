@@ -63,15 +63,14 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "dt_imu_ms": (t2 - t1) * 1000,
                 "dt_keyboard_ms": (t3 - t2) * 1000,
                 "dt_step_ms": (t4 - t3) * 1000,
-                "dt_lpf_ms": (t5 - t4) * 1000,
-                "dt_action_ms": (t6 - t5) * 1000,
-                "joint_angles": joint_angles.tolist() if hasattr(joint_angles, 'tolist') else joint_angles,
-                "joint_vels": joint_angular_velocities.tolist() if hasattr(joint_angular_velocities, 'tolist') else joint_angular_velocities,
+                "dt_action_ms": (t5 - t4) * 1000,
+                "joint_angles": joint_angles,
+                "joint_vels": joint_angular_velocities,
                 "joint_amps": [],  # TODO add
                 "joint_torques": [],  # TODO add
                 "joint_temps": [],  # TODO add
-                "projected_gravity": projected_gravity.tolist() if hasattr(projected_gravity, 'tolist') else projected_gravity,
-                "gyro": gyroscope.tolist() if hasattr(gyroscope, 'tolist') else gyroscope,
+                "projected_gravity": projected_gravity,
+                "gyro": gyroscope,
                 "command": command.tolist(),
                 "action": action.tolist(),
                 "joint_order": joint_order,
