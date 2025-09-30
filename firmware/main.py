@@ -3,11 +3,11 @@ import os
 import time
 
 import numpy as np
-from can import MotorDriver
-from commands.keyboard import Keyboard
-from commands.udp_listener import UDPListener
-from logger import Logger
-from utils import get_imu_reader, get_onnx_sessions
+from firmware.can import MotorDriver
+from firmware.commands.keyboard import Keyboard
+from firmware.commands.udp_listener import UDPListener
+from firmware.logger import Logger
+from firmware.utils import get_imu_reader, get_onnx_sessions
 
 
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:

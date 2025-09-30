@@ -1,7 +1,5 @@
 import time
 
-import numpy as np
-
 
 class DummyIMU:
     """Dummy IMU that returns zeros for teleop setups."""

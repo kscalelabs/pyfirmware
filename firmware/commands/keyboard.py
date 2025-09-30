@@ -4,7 +4,7 @@ import sys
 import termios
 import tty
 
-from commands.command_interface import CommandInterface
+from firmware.commands.command_interface import CommandInterface
 
 
 class Keyboard(CommandInterface):
@@ -70,11 +70,3 @@ class Keyboard(CommandInterface):
                 continue
 
 
-if __name__ == "__main__":
-    kb = Keyboard()
-
-    import time
-
-    while True:
-        print(kb.get_cmd())
-        time.sleep(0.1)

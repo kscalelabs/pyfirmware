@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Dict
 
-from actuators import RobotConfig
+from firmware.actuators import RobotConfig
 
 
 class CriticalFault(Exception):
