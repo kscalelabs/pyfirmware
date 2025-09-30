@@ -3,6 +3,7 @@
 # Parse command line arguments
 gstreamer=false
 command_source="keyboard"
+use_klog=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --gstreamer)
@@ -13,9 +14,13 @@ while [[ $# -gt 0 ]]; do
             command_source="$2"
             shift 2
             ;;
+        --klog)
+            use_klog=true
+            shift
+            ;;
         *)
             echo "Unknown option $1"
-            echo "Usage: $0 [--gstreamer] [--command-source keyboard|udp]"
+            echo "Usage: $0 [--gstreamer] [--command-source keyboard|udp] [--klog]"
             exit 1
             ;;
     esac
@@ -51,13 +56,21 @@ if [ "$gstreamer" = "true" ]; then
     gstreamer_pid=$!
     
     # run main firmware
-    "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    if [ "$use_klog" = "true" ]; then
+        klog-deploy --no-wait "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    else
+        "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    fi
     
     # kill gstreamer when done
     echo "Stopping GStreamer (PID: $gstreamer_pid)"
     kill $gstreamer_pid 2>/dev/null
 else
     # run main firmware only
-    "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    if [ "$use_klog" = "true" ]; then
+        klog-deploy --no-wait "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    else
+        "$(dirname "$(realpath "$0")")/_run.sh" "$policy" "$command_source"
+    fi
 fi
 
