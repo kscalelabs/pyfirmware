@@ -13,7 +13,7 @@ Loop:
 ### Installation:
 ```bash
 conda activate klog
-pip install -r firmware/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Run policy on robot:

@@ -10,14 +10,11 @@ with open("README.md", "r", encoding="utf-8") as f:
     long_description: str = f.read()
 
 
-with open("firmware/requirements.txt", "r", encoding="utf-8") as f:
+with open("requirements.txt", "r", encoding="utf-8") as f:
     requirements: list[str] = f.read().splitlines()
 
-requirements_dev = [
-    "mypy",
-    "pytest",
-    "ruff",
-]
+with open("requirements-dev.txt", "r", encoding="utf-8") as f:
+    requirements_dev: list[str] = f.read().splitlines()
 
 with open("firmware/__init__.py", "r", encoding="utf-8") as fh:
     version_re = re.search(r"^__version__ = \"([^\"]*)\"", fh.read(), re.MULTILINE)
@@ -36,7 +33,7 @@ setup(
     python_requires=">=3.11",
     install_requires=requirements,
     extras_require={"dev": requirements_dev},
-    packages=find_packages(),
+    packages=find_packages(include=["firmware", "firmware.*"]),
     # entry_points={
     #     "console_scripts": [
     #         "cli=firmware.cli:main",
