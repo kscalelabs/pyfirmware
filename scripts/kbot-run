@@ -22,10 +22,4 @@ _set_can_and_max_torques.sh
 # ---------------------------
 echo "Running firmware with policy: $policy"
 PY="$(command -v python)"
-"$PY" -m firmware.main "$policy" &
-app_pid=$!
-# Elevate scheduling for the running process without replacing its env
-if command -v chrt >/dev/null 2>&1; then
-    sudo -E chrt -f -p 80 "$app_pid" || true
-fi
-wait "$app_pid"
+sudo -E chrt 30 "$PY" -m firmware.main "$policy"
