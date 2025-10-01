@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+policy=""
+
+# Parse positional args
+policy="${1:-}"
+
+if [ -z "$policy" ]; then
+    echo "Usage: kbot-run <path-to-policy.kinfer>"
+    exit 1
+fi
+
+# ---------------------------
+# Bring up CAN and set torques (delegated to script)
+# ---------------------------
+bash "$(dirname "$(realpath "$0")")/_set_can_and_max_torques.sh"
+
+# ---------------------------
+# Run firmware policy loop
+# ---------------------------
+echo "Running firmware with policy: $policy"
+sudo -E chrt 80 python -m firmware.main "$policy"
