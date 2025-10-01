@@ -28,15 +28,25 @@ setup(
     description="The firmware project",
     author="Benjamin Bolte",
     url="https://github.com/kscalelabs/pyfirmware",
+    license="MIT",
     long_description=long_description,
     long_description_content_type="text/markdown",
     python_requires=">=3.11",
     install_requires=requirements,
     extras_require={"dev": requirements_dev},
     packages=find_packages(include=["firmware", "firmware.*"]),
-    # entry_points={
-    #     "console_scripts": [
-    #         "cli=firmware.cli:main",
-    #     ],
-    # },
+    package_data={"firmware": ["py.typed"]},
+    scripts=[
+        "scripts/kbot-deploy",
+        "scripts/kbot-run",
+        "scripts/kbot-sine",
+    ],
+    classifiers=[
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11",
+        "Operating System :: POSIX :: Linux",
+        "Intended Audience :: Developers",
+        "Topic :: Software Development",
+    ],
 )

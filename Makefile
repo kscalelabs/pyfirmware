@@ -5,9 +5,8 @@ firmware
 
 # Installing
 
-1. Create a new Conda environment: `conda create --name firmware python=3.11`
+1. Create/Update Conda env and install dev deps: `make setup`
 2. Activate the environment: `conda activate firmware`
-3. Install the package: `make install-dev`
 
 # Running Tests
 
@@ -59,3 +58,24 @@ static-checks:
 test:
 	python -m pytest
 .PHONY: test
+
+# ------------------------ #
+#     Conda Environment    #
+# ------------------------ #
+
+ENV ?= firmware
+
+conda-create:
+	bash scripts/setup-conda.sh $(ENV)
+.PHONY: conda-create
+
+conda-update:
+	bash scripts/setup-conda.sh $(ENV)
+.PHONY: conda-update
+
+install-dev:
+	@pip install -e .[dev]
+.PHONY: install-dev
+
+setup: conda-create
+.PHONY: setup

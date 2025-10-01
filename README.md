@@ -10,19 +10,46 @@ Loop:
    - Forward pass through policy network
    - Send policy actions to motors
 
-### Installation:
+### Installation
 ```bash
-conda activate klog
-pip install -r requirements.txt
+# create/update conda env
+make setup
+
+# activate environment
+conda activate firmware
+
+# install package for end users
+pip install .
 ```
 
-### Run policy on robot:
+### Usage
 ```bash
-scripts/deploy.sh
+# sine wave actuator test
+kbot-sine
+
+# run policy on bot
+kbot-run <path-to-policy.kinfer>
 ```
 
-### Sinewave test:
-Test the CAN buses and actuators with a slow sinewave command at 10% pd gains on all joints
+### Dev usage (internal)
 ```bash
-scripts/sine_wave_test.sh
+# requires klog installed on robot
+kbot-deploy [--gstreamer] [--command-source keyboard|udp]
+```
+
+### Alternative manual install
+```bash
+conda env create -n firmware -f environment.yml
+conda activate firmware
+pip install .
+```
+
+### Development setup
+```bash
+# create/update conda env
+make setup
+conda activate firmware
+
+# install in editable mode with dev extras
+pip install -e .[dev]
 ```
