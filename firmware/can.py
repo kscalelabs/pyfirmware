@@ -239,6 +239,14 @@ class MotorDriver:
             print("\033[1;31m❌ No actuators detected\033[0m")
             sys.exit(1)
 
+        angles = {
+            act_id: self.robot.actuators[act_id].can_to_physical_angle(state["angle_raw"])
+            for act_id, state in states.items()
+        }
+        if any(abs(angle) > 2.0 for angle in angles.values()):
+            print("\033[1;31m❌ Actuator angles too far from zero - move joints closer to home position\033[0m")
+            sys.exit(1)
+
         if any(state["fault_flags"] > 0 for state in states.values()):
             print("\033[1;31m❌ Actuator faults detected\033[0m")
 
