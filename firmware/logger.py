@@ -2,14 +2,15 @@
 
 import atexit
 import json
+import os
 import queue
 import threading
 from typing import Any, Dict
 
 
 class Logger:
-    def __init__(self, logpath: str) -> None:
-        self.logpath = logpath
+    def __init__(self, logdir: str) -> None:
+        self.logpath = os.path.join(logdir, "kinfer_log.ndjson")
 
         # Start background threads for processing logs
         self._register_shutdown_handlers()
