@@ -12,8 +12,8 @@ from firmware.commands.command_interface import CommandInterface
 class Keyboard(CommandInterface):
     """Tracks keyboard presses to update the command vector."""
 
-    def __init__(self, length: int) -> None:
-        super().__init__(length=16)
+    def __init__(self, length: int = 16) -> None:
+        super().__init__(length=length)
 
         # Set up stdin for raw input
         self._fd = sys.stdin.fileno()

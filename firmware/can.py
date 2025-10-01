@@ -1,6 +1,7 @@
 """CAN communication and motor driver interfaces for actuators."""
 
 import math
+import sys
 import socket
 import struct
 import time
@@ -160,9 +161,7 @@ class CANInterface:
                     parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
                     result = self._parse_feedback_response(parsed_frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
-                        print(
-                            f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m"
-                        )
+                        print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
@@ -193,7 +192,9 @@ class CANInterface:
                     except Exception:
                         print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
-    def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float) -> bytes:
+    def _build_pd_command_frame(
+        self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float
+    ) -> bytes:
         assert 0.0 <= scaling <= 1.0
         raw_torque = int(robotcfg.actuators[actuator_can_id].physical_to_can_torque(0))
         raw_angle = int(robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle))
@@ -236,7 +237,6 @@ class MotorDriver:
 
         if not states:
             print("\033[1;31m❌ No actuators detected\033[0m")
-            import sys
             sys.exit(1)
 
         if any(state["fault_flags"] > 0 for state in states.values()):
@@ -296,7 +296,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    exit(0 if main() else 1)
+    main()
 
 
 # .recv takes 10-30us if messages are available.

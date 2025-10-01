@@ -8,7 +8,7 @@ from typing import List
 class CommandInterface(ABC):
     """Abstract base class for command input interfaces."""
 
-    def __init__(self, length) -> None:
+    def __init__(self, length: int) -> None:
         self.cmd = [0.0] * length
         self.length = length
         self._running = True
