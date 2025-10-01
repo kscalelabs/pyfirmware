@@ -2,21 +2,13 @@ import math
 import socket
 import struct
 import time
-from dataclasses import dataclass
 from typing import Dict
 
-from firmware.actuators import RobotConfig
+from firmware.actuators import FaultCode, Mux, RobotConfig
 
 
 class CriticalFault(Exception):
     pass
-
-
-@dataclass
-class FaultCode:
-    code: int
-    critical: bool
-    description: str
 
 
 class CANInterface:
@@ -29,13 +21,6 @@ class CANInterface:
         self.host_id = 0xFD
         self.canbus_range = range(0, 7)
         self.actuator_range = range(10, 50)
-
-        # mux codes
-        self.MUX_PING = 0x00
-        self.MUX_CONTROL = 0x01
-        self.MUX_FEEDBACK = 0x02
-        self.MUX_MOTOR_ENABLE = 0x03
-        self.MUX_FAULT_RESPONSE = 0x15
 
         # fault codes
         self.MUX_0x15_FAULT_CODES = [
@@ -92,7 +77,7 @@ class CANInterface:
 
         if parsed_frame["mux"] != mux:
             print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
-            if parsed_frame["mux"] == self.MUX_FAULT_RESPONSE:
+            if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
                 self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
                 return self._receive_can_frame(sock, mux)  # call again recursively
         else:
@@ -121,7 +106,7 @@ class CANInterface:
             try:
                 sock.bind((f"can{canbus}",))
                 sock.settimeout(0.005)
-                sock.send(self._build_can_frame(0, self.MUX_PING))  # test message
+                sock.send(self._build_can_frame(0, Mux.PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
                 print("\033[92mSuccess\033[0m")
@@ -139,10 +124,10 @@ class CANInterface:
             print(f"\033[1;34m{canbus}\033[0m: \033[1;35m{actuators}\033[0m")
 
     def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
-        frame = self._build_can_frame(actuator_can_id, self.MUX_PING)
+        frame = self._build_can_frame(actuator_can_id, Mux.PING)
         self.sockets[canbus].send(frame)
         try:
-            _ = self._receive_can_frame(self.sockets[canbus], self.MUX_PING)
+            _ = self._receive_can_frame(self.sockets[canbus], Mux.PING)
         except Exception:
             return False
         return True
@@ -153,11 +138,9 @@ class CANInterface:
                 self._enable_motor(canbus, actuator_id)
 
     def _enable_motor(self, canbus: int, actuator_can_id: int):
-        frame = self._build_can_frame(actuator_can_id, self.MUX_MOTOR_ENABLE)
+        frame = self._build_can_frame(actuator_can_id, Mux.MOTOR_ENABLE)
         self.sockets[canbus].send(frame)
-        _ = self._receive_can_frame(
-            self.sockets[canbus], self.MUX_FEEDBACK
-        )  # motor enable response is a feedback response
+        _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
     def get_actuator_feedback(self) -> Dict[str, int]:
         """Send 1 message on each bus, and wait for all of them at once. - 3ms vs 10ms for sequential"""
@@ -167,12 +150,12 @@ class CANInterface:
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
-                    frame = self._build_can_frame(actuator_id, self.MUX_FEEDBACK)
+                    frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
                     sock.send(frame)
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
-                    parsed_frame = self._receive_can_frame(sock, self.MUX_FEEDBACK)
+                    parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
                     result = self._parse_feedback_response(parsed_frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
                         print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
@@ -202,7 +185,7 @@ class CANInterface:
             for actuator_id in self.actuators[canbus]:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     try:
-                        _ = self._receive_can_frame(self.sockets[canbus], self.MUX_FEEDBACK)
+                        _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
                     except:
                         print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
@@ -214,7 +197,7 @@ class CANInterface:
         raw_kp = int(robotcfg.actuators[actuator_can_id].raw_kp * scaling)
         raw_kd = int(robotcfg.actuators[actuator_can_id].raw_kd * scaling)
 
-        can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((self.MUX_CONTROL & 0x1F) << 24)) | self.EFF
+        can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((Mux.CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 

@@ -4,6 +4,22 @@ from enum import Enum
 from math import pi
 
 
+@dataclass
+class Mux:
+    PING: int = 0x00
+    CONTROL: int = 0x01
+    FEEDBACK: int = 0x02
+    MOTOR_ENABLE: int = 0x03
+    FAULT_RESPONSE: int = 0x15
+
+
+@dataclass
+class FaultCode:
+    code: int
+    critical: bool
+    description: str
+
+
 class RobstrideActuatorType(Enum):
     Robstride00 = 0
     Robstride01 = 1
