@@ -37,7 +37,6 @@ setup(
     packages=find_packages(include=["firmware", "firmware.*"]),
     package_data={"firmware": ["py.typed"]},
     scripts=[
-        "scripts/kbot-deploy",
         "scripts/kbot-run",
         "scripts/kbot-sine",
         "scripts/_set_can_and_max_torques.sh",

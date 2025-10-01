@@ -33,8 +33,8 @@ kbot-run <path-to-policy.kinfer>
 
 ### Dev usage (internal)
 ```bash
-# requires klog installed on robot
-kbot-deploy [--gstreamer] [--command-source keyboard|udp]
+# deploy and run on robot
+scripts/deploy.sh <path-to-policy.kinfer> [keyboard|udp]
 ```
 
 ### Alternative manual install
