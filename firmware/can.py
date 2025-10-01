@@ -138,7 +138,7 @@ class CANInterface:
     def enable_motors(self) -> None:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                self._enable_motor(canbus, actuator_id)
+                self._enable_motor(canbus, actuator_id)>
 
     def _enable_motor(self, canbus: int, actuator_can_id: int) -> None:
         frame = self._build_can_frame(actuator_can_id, Mux.MOTOR_ENABLE)
@@ -189,7 +189,7 @@ class CANInterface:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     try:
                         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
-                    except Exception:
+                    except:
                         print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
     def _build_pd_command_frame(
