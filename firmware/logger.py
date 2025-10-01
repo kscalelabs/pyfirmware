@@ -31,6 +31,7 @@ class Logger:
     def _log_worker(self, q: queue.Queue, filepath: str) -> None:
         """Background worker that processes logs from the queue in batches."""
         print("Logging worker started")
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, "a") as f:
             batch = []
             while self.running or not q.empty():
