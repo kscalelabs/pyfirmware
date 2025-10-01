@@ -13,9 +13,9 @@ if [ -z "$policy" ]; then
 fi
 
 # ---------------------------
-# Bring up CAN and set torques (delegated to script)
+# Bring up CAN and set torques
 # ---------------------------
-bash "$(dirname "$(realpath "$0")")/_set_can_and_max_torques.sh"
+_set_can_and_max_torques.sh
 
 # ---------------------------
 # Run firmware policy loop

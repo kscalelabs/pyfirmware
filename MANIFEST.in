@@ -7,4 +7,5 @@ include environment.yml
 include scripts/kbot-deploy
 include scripts/kbot-run
 include scripts/kbot-sine
+include scripts/_set_can_and_max_torques.sh
 include scripts/setup-conda.sh
