@@ -1,9 +1,9 @@
 """CAN communication and motor driver interfaces for actuators."""
 
 import math
-import sys
 import socket
 import struct
+import sys
 import time
 from typing import Dict
 

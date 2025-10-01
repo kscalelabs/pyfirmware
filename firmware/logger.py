@@ -19,7 +19,7 @@ class Logger:
         self.thread.start()
 
     def _register_shutdown_handlers(self) -> None:
-        def _safe_shutdown(*_args, **_kwargs):
+        def _safe_shutdown() -> None:
             try:
                 self._shutdown()
             except Exception:

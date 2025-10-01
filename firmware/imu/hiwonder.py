@@ -96,7 +96,7 @@ class Hiwonder:
         self.start()
 
     def _register_shutdown_handlers(self) -> None:
-        def _safe_shutdown(*_args, **_kwargs):
+        def _safe_shutdown() -> None:
             try:
                 self.shm.close()
                 if self.process is not None and self.process.is_alive():
