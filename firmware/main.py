@@ -17,6 +17,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata["joint_names"]
+    num_commands = metadata["num_commands"]
     carry = init_session.run(None, {})[0]
 
     imu_reader = get_imu_reader()
@@ -26,7 +27,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     input()  # wait for user to start policy
     print("🤖 Running policy...")
 
-    command_interface = Keyboard() if command_source == "keyboard" else UDPListener(length=18)
+    command_interface = Keyboard() if command_source == "keyboard" else UDPListener(length=num_commands)
 
     t0 = time.perf_counter()
     step_id = 0
