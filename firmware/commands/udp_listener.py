@@ -15,28 +15,6 @@ class UDPListener(CommandInterface):
         self.host = host
         self.sock = None
 
-        # Define the 18-element mapping
-        self.field_mapping_18 = {
-            "XVel": 0,
-            "YVel": 1,
-            "YawRate": 2,
-            "BaseHeight": 3,
-            "BaseRoll": 4,
-            "BasePitch": 5,
-            "RShoulderPitch": 6,
-            "RShoulderRoll": 7,
-            "RElbowPitch": 8,
-            "RElbowRoll": 9,
-            "RWristRoll": 10,
-            "RWristGripper": 11,
-            "LShoulderPitch": 12,
-            "LShoulderRoll": 13,
-            "LElbowPitch": 14,
-            "LElbowRoll": 15,
-            "LWristRoll": 16,
-            "LWristGripper": 17,
-        }
-
         if length == 18:
             self.cmd = [
                 0.0,  # XVel
@@ -59,7 +37,7 @@ class UDPListener(CommandInterface):
                 math.radians(-25.0),  # LWristGripper (16)
             ]
         else:
-            self.cmd = [
+            self.default_cmd = [
                 0.0,  # XVel
                 0.0,  # YVel
                 0.0,  # YawRate
@@ -77,6 +55,7 @@ class UDPListener(CommandInterface):
                 math.radians(-90.0),  # LElbowRoll (13)
                 0.0,  # LWristRoll (15)
             ]
+            self.cmd = self.default_cmd
         
         self.start()
 
@@ -96,12 +75,7 @@ class UDPListener(CommandInterface):
                         self.reset_cmd()
                     else:                        
                         if self.length == 18:
-                            # Use field mapping for 18-element commands
-                            for field_name, value in command_data.items():
-                                if field_name in self.field_mapping_18:
-                                    index = self.field_mapping_18[field_name]
-                                    self.cmd[index] = float(value)
-                                    # self.cmd[index] = max(-0.3, min(0.3, self.cmd[index]))
+                            self.cmd = command_data.get('commands', self.cmd)                                    # self.cmd[index] = max(-0.3, min(0.3, self.cmd[index]))
                         else:
                             # Use index-based updates for other lengths
                             updates = command_data.get('commands', {})
