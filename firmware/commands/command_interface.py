@@ -1,3 +1,5 @@
+"""Abstract interface for command input sources (keyboard, UDP, etc.)."""
+
 import threading
 from abc import ABC, abstractmethod
 from typing import List
@@ -6,7 +8,7 @@ from typing import List
 class CommandInterface(ABC):
     """Abstract base class for command input interfaces."""
 
-    def __init__(self, length: int = 16):
+    def __init__(self, length) -> None:
         self.cmd = [0.0] * length
         self.length = length
         self._running = True
@@ -38,6 +40,6 @@ class CommandInterface(ABC):
         """Get current command vector."""
         return self.cmd
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup on destruction."""
         self.stop()

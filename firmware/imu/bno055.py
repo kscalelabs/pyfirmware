@@ -1,3 +1,5 @@
+"""BNO055 IMU reader using periphery I2C."""
+
 import struct
 import time
 
@@ -17,13 +19,13 @@ class BNO055:
     GYRO_SCALE = 0.001090830782496456
     GRAVITY_SCALE = 1 / 100.0
 
-    def __init__(self, i2c_bus: str = "/dev/i2c-1", address: int = 0x28):
+    def __init__(self, i2c_bus: str = "/dev/i2c-1", address: int = 0x28) -> None:
         self.i2c = I2C(i2c_bus)
         self.address = address
         self._write_register(self.MODE_REGISTER, bytes([self.NDOF_MODE]))
         time.sleep(0.01)
 
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "i2c"):
             self.i2c.close()
 

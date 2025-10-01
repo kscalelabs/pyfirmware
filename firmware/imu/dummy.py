@@ -1,10 +1,12 @@
+"""Dummy IMU fallback implementation."""
+
 import time
 
 
 class DummyIMU:
     """Dummy IMU that returns zeros for teleop setups."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         print("⚠️  WARNING: No IMU device found")
         print("Use fixed output Dummy IMU? projected gravity = [0, 0, -9.81], gyro = [0, 0, 0] (y/n): ", end="")
         print("This may cause unstable behavior. Sure your policy doesn't need an IMU?(y/n): ", end="")

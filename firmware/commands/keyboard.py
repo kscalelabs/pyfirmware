@@ -1,3 +1,5 @@
+"""Keyboard command input implementation."""
+
 import atexit
 import select
 import sys
@@ -10,8 +12,8 @@ from firmware.commands.command_interface import CommandInterface
 class Keyboard(CommandInterface):
     """Tracks keyboard presses to update the command vector."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, length: int) -> None:
+        super().__init__(length=16)
 
         # Set up stdin for raw input
         self._fd = sys.stdin.fileno()

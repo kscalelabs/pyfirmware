@@ -1,3 +1,5 @@
+"""Hiwonder IMU reader using a background process and shared memory."""
+
 import atexit
 import mmap
 import multiprocessing
@@ -22,7 +24,7 @@ def open_or_create_mmap(path: str, size: int) -> mmap.mmap:
         return mmap.mmap(f.fileno(), size)
 
 
-def quaternion_multiply(q1, q2):
+def quaternion_multiply(q1: tuple[float, float, float, float], q2: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
     """Multiply two quaternions."""
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
@@ -35,7 +37,7 @@ def quaternion_multiply(q1, q2):
     return (w, x, y, z)
 
 
-def quaternion_to_projected_gravity(gravity, quaternion):
+def quaternion_to_projected_gravity(gravity: tuple[float, float, float], quaternion: tuple[float, float, float, float]) -> tuple[float, float, float]:
     """Rotate quaternion to projected gravity."""
     vx, vy, vz = gravity
     v_quat = (0.0, vx, vy, vz)
@@ -45,7 +47,7 @@ def quaternion_to_projected_gravity(gravity, quaternion):
     return (result_quat[1], result_quat[2], result_quat[3])
 
 
-def parse_gyro(data):
+def parse_gyro(data: bytes) -> tuple[float, float, float]:
     """Parse gyroscope data from IMU packet."""
     gx = struct.unpack("<h", data[2:4])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
     gy = struct.unpack("<h", data[4:6])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
@@ -53,7 +55,7 @@ def parse_gyro(data):
     return (gx, gy, gz)
 
 
-def parse_quaternion(data):
+def parse_quaternion(data: bytes) -> tuple[float, float, float, float]:
     """Parse quaternion data from IMU packet."""
     qw = struct.unpack("<h", data[2:4])[0] / 32768.0
     qx = struct.unpack("<h", data[4:6])[0] / 32768.0
@@ -65,7 +67,7 @@ def parse_quaternion(data):
 class Hiwonder:
     """Reads IMU data from a serial port in a separate process and shares via shared memory."""
 
-    def __init__(self, device="/dev/ttyUSB0", baudrate=230400, shm_path="/dev/shm/imu_shm"):
+    def __init__(self, device: str = "/dev/ttyUSB0", baudrate: int = 230400, shm_path: str = "/dev/shm/imu_shm") -> None:
         # Serial configuration (child process will open the port)
         self.device = device
         self.baudrate = baudrate
@@ -87,7 +89,7 @@ class Hiwonder:
         self._register_shutdown_handlers()
         self.start()
 
-    def _register_shutdown_handlers(self):
+    def _register_shutdown_handlers(self) -> None:
         def _safe_shutdown(*_args, **_kwargs):
             try:
                 self.shm.close()
@@ -103,7 +105,7 @@ class Hiwonder:
         atexit.register(_safe_shutdown)
 
     @staticmethod
-    def _imu_reading_loop(device, baudrate, shm_path, shm_size, running_event, shm_lock):
+    def _imu_reading_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running_event: multiprocessing.synchronize.Event, shm_lock: multiprocessing.synchronize.Lock) -> None:
         """Standalone IMU reading loop that runs in a separate process."""
         try:
             serial_conn = serial.Serial(device, baudrate, timeout=0)
@@ -139,7 +141,7 @@ class Hiwonder:
         # Cleanup
         serial_conn.close()
 
-    def start(self):
+    def start(self) -> None:
         """Start the IMU reading process."""
         if self.process is None or not self.process.is_alive():
             self.running.set()
@@ -161,7 +163,7 @@ class Hiwonder:
                 self.process = None
                 raise serial.SerialException(f"Failed to initialize IMU on {self.device}")
 
-    def test(self):
+    def test(self) -> None:
         """Test function that runs the IMU reader and prints data."""
         self.start()
         start_time = time.time()

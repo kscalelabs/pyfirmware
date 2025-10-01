@@ -1,3 +1,5 @@
+"""Asynchronous structured NDJSON logger with background flushing."""
+
 import atexit
 import json
 import queue
@@ -6,7 +8,7 @@ from typing import Any, Dict
 
 
 class Logger:
-    def __init__(self, logpath: str):
+    def __init__(self, logpath: str) -> None:
         self.logpath = logpath
 
         # Start background threads for processing logs
@@ -16,7 +18,7 @@ class Logger:
         self.thread = threading.Thread(target=self._log_worker, args=(self.queue, self.logpath), daemon=True)
         self.thread.start()
 
-    def _register_shutdown_handlers(self):
+    def _register_shutdown_handlers(self) -> None:
         def _safe_shutdown(*_args, **_kwargs):
             try:
                 self._shutdown()
@@ -25,7 +27,7 @@ class Logger:
 
         atexit.register(_safe_shutdown)
 
-    def _log_worker(self, q: queue.Queue, filepath: str):
+    def _log_worker(self, q: queue.Queue, filepath: str) -> None:
         """Background worker that processes logs from the queue in batches."""
         print("Logging worker started")
         with open(filepath, "a") as f:
@@ -42,12 +44,12 @@ class Logger:
                         batch = []
                     threading.Event().wait(1.0)
 
-    def _shutdown(self):
+    def _shutdown(self) -> None:
         self.running = False
         self.queue.join()
         self.thread.join()
 
-    def log(self, timestamp: float, data: Dict[str, Any]):
+    def log(self, timestamp: float, data: Dict[str, Any]) -> None:
         self.queue.put({"timestamp": timestamp, **data})
 
 

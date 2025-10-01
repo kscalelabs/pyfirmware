@@ -1,3 +1,5 @@
+"""CAN communication and motor driver interfaces for actuators."""
+
 import math
 import socket
 import struct
@@ -7,14 +9,14 @@ from typing import Dict
 from firmware.actuators import FaultCode, Mux, RobotConfig
 
 
-class CriticalFault(Exception):
+class CriticalFaultError(Exception):
     pass
 
 
 class CANInterface:
     """Communication only."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.FRAME_FMT = "<IBBBB8s"  # <I = little-endian u32; 4B = len, pad, res0, len8_dlc; 8s = 8 data bytes
         self.FRAME_SIZE = struct.calcsize(self.FRAME_FMT)
         self.EFF = 0x8000_0000
@@ -87,7 +89,7 @@ class CANInterface:
         for fault_code in faults:
             if fault_flags == fault_code.code:
                 if fault_code.critical:
-                    raise CriticalFault(
+                    raise CriticalFaultError(
                         f"\033[1;31mCRITICAL FAULT: actuator {actuator_can_id} has {fault_code.description}\033[0m"
                     )
                 else:
@@ -132,18 +134,18 @@ class CANInterface:
             return False
         return True
 
-    def enable_motors(self):
+    def enable_motors(self) -> None:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 self._enable_motor(canbus, actuator_id)
 
-    def _enable_motor(self, canbus: int, actuator_can_id: int):
+    def _enable_motor(self, canbus: int, actuator_can_id: int) -> None:
         frame = self._build_can_frame(actuator_can_id, Mux.MOTOR_ENABLE)
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
     def get_actuator_feedback(self) -> Dict[str, int]:
-        """Send 1 message on each bus, and wait for all of them at once. - 3ms vs 10ms for sequential"""
+        """Send one message per bus; wait for all of them concurrently."""
         results = {}
         max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
         for tranche in range(max_tranches):
@@ -158,7 +160,9 @@ class CANInterface:
                     parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
                     result = self._parse_feedback_response(parsed_frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
-                        print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
+                        print(
+                            f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m"
+                        )
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
@@ -175,7 +179,7 @@ class CANInterface:
             "temperature_raw": temp_be,
         }
 
-    def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float):
+    def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float) -> None:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 if actuator_id in actions:  # Only send commands to actuators in the actions dict
@@ -186,10 +190,10 @@ class CANInterface:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     try:
                         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
-                    except:
+                    except Exception:
                         print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
-    def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float):
+    def _build_pd_command_frame(self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float) -> bytes:
         assert 0.0 <= scaling <= 1.0
         raw_torque = int(robotcfg.actuators[actuator_can_id].physical_to_can_torque(0))
         raw_angle = int(robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle))
@@ -205,13 +209,13 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, max_scaling: float = 1.0):
+    def __init__(self, max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
         self.ci = CANInterface()
         self.startup_sequence()
 
-    def startup_sequence(self):
+    def startup_sequence(self) -> None:
         states = self.ci.get_actuator_feedback()
 
         print("\033[1;36mActuator states:\033[0m")
@@ -225,12 +229,15 @@ class MotorDriver:
             torque = self.robot.actuators[act_id].can_to_physical_torque(state["torque_raw"])
             temp = self.robot.actuators[act_id].can_to_physical_temperature(state["temperature_raw"])
             print(
-                f"{act_id:3d} | {name:3s} | \033[1;34m{angle:5.2f}\033[0m | \033[1;35m{velocity:8.2f}\033[0m | \033[1;33m{torque:6.2f}\033[0m | \033[1;36m{temp:5.1f}\033[0m | {fault_color}{state['fault_flags']:3d}\033[0m"
+                f"{act_id:3d} | {name:3s} | \033[1;34m{angle:5.2f}\033[0m | "
+                f"\033[1;35m{velocity:8.2f}\033[0m | \033[1;33m{torque:6.2f}\033[0m | "
+                f"\033[1;36m{temp:5.1f}\033[0m | {fault_color}{state['fault_flags']:3d}\033[0m"
             )
 
         if not states:
             print("\033[1;31m❌ No actuators detected\033[0m")
-            exit(1)
+            import sys
+            sys.exit(1)
 
         if any(state["fault_flags"] > 0 for state in states.values()):
             print("\033[1;31m❌ Actuator faults detected\033[0m")
@@ -249,7 +256,7 @@ class MotorDriver:
             time.sleep(0.1)
         print("✅ Homing complete")
 
-    def sine_wave(self):
+    def sine_wave(self) -> None:
         t0 = time.perf_counter()
         while True:
             t = time.perf_counter()
@@ -277,12 +284,12 @@ class MotorDriver:
         joint_velocities_ordered = [joint_velocities[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
         return joint_angles_ordered, joint_velocities_ordered
 
-    def take_action(self, action: list[float], joint_order: list[str]):
+    def take_action(self, action: list[float], joint_order: list[str]) -> None:
         action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
         self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
 
 
-def main():
+def main() -> None:
     driver = MotorDriver(max_scaling=0.1)
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
