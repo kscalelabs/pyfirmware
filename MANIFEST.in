@@ -1,1 +1,11 @@
-recursive-include firmware/ *.py *.txt py.typed MANIFEST.in
+recursive-include firmware/ *.py *.txt py.typed
+include README.md
+include LICENSE
+include requirements.txt
+include requirements-dev.txt
+include environment.yml
+include scripts/kbot-run
+include scripts/kbot-sine
+include scripts/_set_can_and_max_torques.sh
+include scripts/setup-conda.sh
+include scripts/deploy.sh

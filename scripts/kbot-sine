@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+echo "Running sine wave test to test actuators and CAN bus on 10% pd gains..."
+
+# bring up CAN and set max torques per actuator
+_set_can_and_max_torques.sh
+
+# run sine wave test
+python -m firmware.can
+
+

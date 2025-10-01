@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+policy=""
+
+# Parse positional args
+policy="${1:-}"
+
+if [ -z "$policy" ]; then
+    echo "Usage: kbot-run <path-to-policy.kinfer>"
+    exit 1
+fi
+
+# ---------------------------
+# Bring up CAN and set torques
+# ---------------------------
+_set_can_and_max_torques.sh
+
+# ---------------------------
+# Run firmware policy loop
+# ---------------------------
+echo "Running firmware with policy: $policy"
+PY="$(command -v python)"
+"$PY" -m firmware.main "$policy" &
+app_pid=$!
+# Elevate scheduling for the running process without replacing its env
+if command -v chrt >/dev/null 2>&1; then
+    sudo -E chrt -f -p 80 "$app_pid" || true
+fi
+wait "$app_pid"

@@ -1,13 +1,15 @@
 import argparse
+import datetime
 import os
 import time
 
 import numpy as np
-from can import MotorDriver
-from commands.keyboard import Keyboard
-from commands.udp_listener import UDPListener
-from logger import Logger
-from utils import get_imu_reader, get_onnx_sessions
+
+from firmware.can import MotorDriver
+from firmware.commands.keyboard import Keyboard
+from firmware.commands.udp_listener import UDPListener
+from firmware.logger import Logger
+from firmware.utils import get_imu_reader, get_onnx_sessions
 
 
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
@@ -93,5 +95,13 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    log_path = os.path.join(os.environ.get("KINFER_LOG_PATH"), "kinfer_log.ndjson")
+    kinfer_log_path = os.environ.get("KINFER_LOG_PATH")
+    if kinfer_log_path is not None:
+        log_path = os.path.join(kinfer_log_path, "kinfer_log.ndjson")
+    else:
+        policy_name = os.path.splitext(os.path.basename(args.kinfer_path))[0]
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}.ndjson")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
     runner(args.kinfer_path, log_path)

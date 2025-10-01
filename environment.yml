@@ -1,0 +1,12 @@
+name: firmware
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - onnxruntime
+  - pyserial
+  - pip:
+      - python-periphery
+

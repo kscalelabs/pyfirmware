@@ -18,8 +18,6 @@ class ActuatorConfig:
     name: str
     full_name: str
     actuator_type: RobstrideActuatorType
-    # joint_min: float
-    # joint_max: float
     joint_bias: float
     kp: float
     kd: float
