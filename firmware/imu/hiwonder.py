@@ -116,8 +116,8 @@ class Hiwonder:
         baudrate: int,
         shm_path: str,
         shm_size: int,
-        running_event: multiprocessing.synchronize.Event,
-        shm_lock: multiprocessing.synchronize.Lock,
+        running_event,
+        shm_lock,
     ) -> None:
         """Standalone IMU reading loop that runs in a separate process."""
         try:
