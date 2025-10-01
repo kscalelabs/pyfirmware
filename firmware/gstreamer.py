@@ -1,3 +1,5 @@
+"""WebRTC server using GStreamer and websockets for streaming video/audio."""
+
 import asyncio
 import json
 import os
@@ -32,7 +34,7 @@ VIDEO_SOURCES = [
 AUDIO_SOURCE = "hw:0,0"
 
 
-async def glib_main_loop_iteration():
+async def glib_main_loop_iteration() -> None:
     while True:
         # Process all pending GLib events without blocking
         while GLib.main_context_default().iteration(False):
@@ -42,7 +44,7 @@ async def glib_main_loop_iteration():
 
 
 class WebRTCServer:
-    def __init__(self, loop, flip_video=False):
+    def __init__(self, loop: asyncio.AbstractEventLoop, flip_video: bool = False) -> None:
         self.pipe = None
         self.webrtc = None
         self.ws = None  # active client connection
@@ -51,7 +53,7 @@ class WebRTCServer:
         self.added_streams = 0
         self.flip_video = flip_video
 
-    def connect_audio(self, webrtc):
+    def connect_audio(self, webrtc) -> None:
         audio_src = Gst.ElementFactory.make("alsasrc", "audio_src")
         audio_conv = Gst.ElementFactory.make("audioconvert", "audio_conv")
         audio_resample = Gst.ElementFactory.make("audioresample", "audio_resample")
@@ -82,7 +84,7 @@ class WebRTCServer:
         else:
             print("Audio linked to webrtcbin")
 
-    def start_pipeline(self, active_cameras: list[int] = [1], audio: bool = True, undistort: bool = False):
+    def start_pipeline(self, active_cameras: list[int] = [1], audio: bool = True, undistort: bool = False) -> None:
         print("Starting pipeline")
         self.pipe = Gst.Pipeline.new("pipeline")
         webrtc = Gst.parse_launch(PIPELINE_DESC)
@@ -175,7 +177,7 @@ class WebRTCServer:
         # os.environ["GST_TRACERS"] = "cpuusage;queuelevel;interlatency;proctime;bitrate;framerate;buffer;scheduling;graphic"
         print("Pipeline started")
 
-    def on_bus_message(self, bus, message):
+    def on_bus_message(self, bus, message) -> int:
         """Handle messages from the GStreamer bus, specifically for latency."""
         t = message.type
         if t == Gst.MessageType.LATENCY:
@@ -184,21 +186,21 @@ class WebRTCServer:
 
         return GLib.SOURCE_CONTINUE
 
-    def close_pipeline(self):
+    def close_pipeline(self) -> None:
         if self.pipe:
             self.pipe.set_state(Gst.State.NULL)
             self.pipe = None
             self.webrtc = None
             self.added_data_channel = False
 
-    def on_message_string(self, channel, message):
+    def on_message_string(self, channel, message) -> None:
         print("Received:", message)
 
-    def on_data_channel(self, webrtc, channel):
+    def on_data_channel(self, webrtc, channel) -> None:
         print("New data channel:", channel.props.label)
         channel.connect("on-message-string", self.on_message_string)
 
-    def on_incoming_stream(self, _, pad):
+    def on_incoming_stream(self, _, pad) -> None:
         if pad.direction != Gst.PadDirection.SRC:
             return
 
@@ -301,7 +303,7 @@ class WebRTCServer:
 
         Gst.debug_bin_to_dot_file(self.pipe, Gst.DebugGraphDetails.ALL, f"pipeline_graph_{self.added_streams}")
 
-        async def delayed_snapshot(pipe, name, delay=5.0):
+        async def delayed_snapshot(pipe, name, delay: float = 5.0) -> None:
             await asyncio.sleep(delay)
             print("Taking DELAYEDsnapshot")
             Gst.debug_bin_to_dot_file(pipe, Gst.DebugGraphDetails.ALL, name)
@@ -315,7 +317,7 @@ class WebRTCServer:
         # Force latency recalculation after adding new stream
         # GLib.timeout_add(100, lambda: self.pipe.recalculate_latency() or False)
 
-    def on_negotiation_needed(self, element):
+    def on_negotiation_needed(self, element) -> None:
         print("Negotiation needed")
         if self.added_data_channel:
             print("Data channel already added")
@@ -329,7 +331,7 @@ class WebRTCServer:
         promise = Gst.Promise.new_with_change_func(self.on_offer_created, element, None)
         self.webrtc.emit("create-offer", None, promise)
 
-    def on_offer_created(self, promise, _, __):
+    def on_offer_created(self, promise, _, __) -> None:
         print("on offer created")
         promise.wait()
         reply = promise.get_reply()
@@ -341,11 +343,11 @@ class WebRTCServer:
         message = json.dumps({"sdp": {"type": "offer", "sdp": text}})
         asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
-    def send_ice_candidate_message(self, _, mlineindex, candidate):
+    def send_ice_candidate_message(self, _, mlineindex, candidate) -> None:
         message = json.dumps({"ice": {"candidate": candidate, "sdpMLineIndex": mlineindex}})
         asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
-    def handle_client_message(self, message):
+    def handle_client_message(self, message: str) -> None:
         print("Handling client message")
         print(message)
         msg = json.loads(message)
@@ -370,7 +372,7 @@ class WebRTCServer:
 
             return
 
-    async def websocket_handler(self, ws):
+    async def websocket_handler(self, ws) -> None:
         print("Client connected")
         self.ws = ws
         async for msg in ws:
@@ -380,7 +382,7 @@ class WebRTCServer:
         self.close_pipeline()
 
 
-async def main():
+async def main() -> None:
     # Parse command line arguments
     import argparse
 

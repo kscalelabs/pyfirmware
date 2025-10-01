@@ -1,5 +1,8 @@
+"""Utility helpers."""
+
 import json
 import tarfile
+from typing import Any
 
 import numpy as np
 import onnxruntime as ort
@@ -44,7 +47,7 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
     return init_session, step_session, metadata
 
 
-def get_imu_reader():
+def get_imu_reader() -> Any:
     """Get an IMU reader, falling back to dummy IMU if none found."""
     try:
         return Hiwonder()

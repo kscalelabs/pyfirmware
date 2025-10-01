@@ -1,3 +1,5 @@
+"""Actuator configuration, conversion utilities, and robot configuration data."""
+
 import math
 from dataclasses import dataclass
 from enum import Enum
