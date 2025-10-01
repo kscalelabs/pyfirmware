@@ -1,6 +1,6 @@
 # Kbot Firmware
 
-From scratch barebones firmware rewrite in python. Intent is to keep it small, around 1k lines of code. Previous versions were 10x bigger. Minimize complexity --> Minimize bugs.
+From scratch firmware rewrite in python. Intent is to keep it as small and as simple as possible. Minimize complexity --> Minimize bugs.
 
 ### Control loop overview
 Loop runs at 50hz. Roundtrip time is around 4.5ms, after which it waits 15.5ms to get to 50hz.
@@ -12,22 +12,23 @@ Loop:
 
 ### Installation
 ```bash
-# create/update conda env
+git clone https://www.github.com/kscalelabs/pyfirmware
+cd pyfirmware
+
+# install conda env
 make setup
-
-# activate environment
 conda activate firmware
-
-# install package for end users
 pip install .
 ```
 
 ### Usage
+You can test the actuators with a simple sinewave test at low pd gains by runing:
 ```bash
-# sine wave actuator test
 kbot-sine
+```
 
-# run policy on bot
+To run your policy:
+```bash
 kbot-run <path-to-policy.kinfer>
 ```
 
