@@ -52,8 +52,12 @@ echo "Deploying policy: $policy"
 # Optional gstreamer locally
 if [ "$gstreamer" = true ]; then
     echo "Starting GStreamer with --flip"
-    sudo -E chrt 80 python -m firmware.gstreamer --flip >/dev/null 2>&1 &
+    PY="$(command -v python)"
+    "$PY" -m firmware.gstreamer --flip >/dev/null 2>&1 &
     gstreamer_pid=$!
+    if command -v chrt >/dev/null 2>&1; then
+        sudo -E chrt -f -p 80 "$gstreamer_pid" || true
+    fi
 fi
 
 # Deploy and run repo _run.sh on the robot (torque setup isolated there)
