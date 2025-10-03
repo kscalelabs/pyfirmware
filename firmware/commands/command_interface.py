@@ -4,26 +4,25 @@ import threading
 from abc import ABC, abstractmethod
 from typing import List
 
-
 CMD_NAMES = [
     "xvel",
     "yvel",
     "yawrate",
     "baseheight",
     "baseroll",
-    "basepitch", 
+    "basepitch",
     "rshoulderpitch",  # 21
-    "rshoulderroll",   # 22
-    "relebowpitch",    # 24
-    "relebowroll",     # 23
-    "rwristroll",      # 25
-    "rwristgripper",   # 26
+    "rshoulderroll",  # 22
+    "relebowpitch",  # 24
+    "relebowroll",  # 23
+    "rwristroll",  # 25
+    "rwristgripper",  # 26
     "lshoulderpitch",  # 11
-    "lshoulderroll",   # 12
-    "lelebowpitch",    # 14
-    "lelebowroll",     # 13
-    "lwristroll",      # 15
-    "lwristgripper",   # 16
+    "lshoulderroll",  # 12
+    "lelebowpitch",  # 14
+    "lelebowroll",  # 13
+    "lwristroll",  # 15
+    "lwristgripper",  # 16
 ]
 
 
@@ -31,7 +30,7 @@ class CommandInterface(ABC):
     """Abstract base class for command input interfaces."""
 
     def __init__(self, policy_command_names: List[str]) -> None:
-        self.cmd = {cmd: 0.0 for cmd in CMD_NAMES}            
+        self.cmd = {cmd: 0.0 for cmd in CMD_NAMES}
         self.policy_command_names = [name.lower() for name in policy_command_names]
         for name in self.policy_command_names:
             assert name in CMD_NAMES, f"Policy command name '{name}' not found in CMD_NAMES"

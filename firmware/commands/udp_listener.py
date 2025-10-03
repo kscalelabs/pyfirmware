@@ -2,13 +2,14 @@
 
 import json
 import socket
+import time
 from typing import List
 
 from firmware.commands.command_interface import CMD_NAMES, CommandInterface
 
 
 class UDPListener(CommandInterface):
-    """Listens for UDP commands and updates the command vector. """
+    """Listens for UDP commands and updates the command vector."""
 
     def __init__(self, command_names: List[str], port: int = 10000, host: str = "0.0.0.0") -> None:
         print(f"Using UDP input on port {port} for commands: {command_names}")
@@ -52,11 +53,7 @@ class UDPListener(CommandInterface):
 
 if __name__ == "__main__":
     print("Starting UDP listener on port 10000...")
-    print("Send JSON commands like:")
-    print('  Named: {"commands": {"xvel": 0.1, "yvel": -0.05}}')
-    print('  Index: {"commands": {"0": 0.1, "1": -0.05}}')
-    print('  Vector: {"commands": [0.1, -0.05, 0.0, ...]}')
-    print('  Reset: {"type": "reset"}')
+    print("Send JSON commands like: {'commands': [0.1, -0.05, 0.0]} or {'type': 'reset'}")
     print("Press Ctrl+C to stop")
 
     listener = UDPListener(command_names=CMD_NAMES, port=10000)
@@ -65,9 +62,8 @@ if __name__ == "__main__":
         while True:
             cmd = listener.get_cmd()
             print(f"Current command: {cmd}")
-            import time
-
             time.sleep(1.0)
+
     except KeyboardInterrupt:
         print("\nStopping UDP listener...")
         listener.stop()
