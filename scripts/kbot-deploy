@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Defaults
+gstreamer=false
+command_source="keyboard"
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --gstreamer)
+            gstreamer=true
+            shift
+            ;;
+        --command-source)
+            command_source="${2:-keyboard}"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option $1"
+            echo "Usage: kbot-deploy [--gstreamer] [--command-source keyboard|udp]"
+            exit 1
+            ;;
+    esac
+done
+
+# download kinfer models (rsync remote -> local cache)
+policy_dir="${HOME}/.policies"
+remote_policies="mu:~/kodachrome/policies/"
+
+mkdir -p "$policy_dir"
+rsync -aLP --ignore-existing "$remote_policies" "$policy_dir/"
+
+# user selects kinfer model via fzf (most recent first)
+policy="$policy_dir/$(find "$policy_dir" -maxdepth 1 -type f -printf "%T@ %f\n" | sort -nr | cut -d' ' -f2- | fzf --prompt 'Policy to deploy: ' --height 20% --reverse)"
+
+if [ -z "${policy:-}" ]; then
+    echo "No policy selected."
+    exit 1
+fi
+
+echo "Deploying policy: $policy"
+
+# Bring up CAN and set torques
+_set_can_and_max_torques.sh
+
+PY="$(command -v python)"
+
+if [ "$gstreamer" = "true" ]; then
+    echo "Starting GStreamer with --flip"
+    sudo -E chrt 29 "$PY" "$(dirname "$(realpath "$0")")/../firmware/gstreamer.py" --flip > /dev/null 2>&1 &
+    gstreamer_pid=$!
+
+    echo "Running firmware..."
+    sudo -E chrt 30 "$PY" -m firmware.main "$policy" --command-source "$command_source"
+
+    echo "Stopping GStreamer (PID: $gstreamer_pid)"
+    kill "$gstreamer_pid" 2>/dev/null || true
+else
+    echo "Running firmware..."
+    sudo -E chrt 30 "$PY" -m firmware.main "$policy" --command-source "$command_source"
+fi
+
+
