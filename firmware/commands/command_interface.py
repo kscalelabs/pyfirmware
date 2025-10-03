@@ -13,14 +13,14 @@ CMD_NAMES = [
     "basepitch",
     "rshoulderpitch",  # 21
     "rshoulderroll",  # 22
-    "relebowpitch",  # 24
-    "relebowroll",  # 23
+    "rshoulderyaw",  # 23
+    "relbowpitch",  # 24
     "rwristroll",  # 25
     "rwristgripper",  # 26
     "lshoulderpitch",  # 11
     "lshoulderroll",  # 12
-    "lelebowpitch",  # 14
-    "lelebowroll",  # 13
+    "lshoulderyaw",  # 13
+    "lelbowpitch",  # 14
     "lwristroll",  # 15
     "lwristgripper",  # 16
 ]

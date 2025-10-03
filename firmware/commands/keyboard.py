@@ -14,7 +14,7 @@ class Keyboard(CommandInterface):
     """Tracks keyboard presses to update the command vector."""
 
     def __init__(self, command_names: List[str]) -> None:
-        super().__init__(command_names=command_names)
+        super().__init__(policy_command_names=command_names)
 
         # Set up stdin for raw input
         self._fd = sys.stdin.fileno()
