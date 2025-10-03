@@ -40,6 +40,7 @@ setup(
         "scripts/kbot-run",
         "scripts/kbot-sine",
         "scripts/_set_can_and_max_torques.sh",
+        "scripts/kbot-deploy",
     ],
     classifiers=[
         "License :: OSI Approved :: MIT License",
