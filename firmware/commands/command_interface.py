@@ -5,18 +5,43 @@ from abc import ABC, abstractmethod
 from typing import List
 
 
+CMD_NAMES = [
+    "xvel",
+    "yvel",
+    "yawrate",
+    "baseheight",
+    "baseroll",
+    "basepitch", 
+    "rshoulderpitch",  # 21
+    "rshoulderroll",   # 22
+    "relebowpitch",    # 24
+    "relebowroll",     # 23
+    "rwristroll",      # 25
+    "rwristgripper",   # 26
+    "lshoulderpitch",  # 11
+    "lshoulderroll",   # 12
+    "lelebowpitch",    # 14
+    "lelebowroll",     # 13
+    "lwristroll",      # 15
+    "lwristgripper",   # 16
+]
+
+
 class CommandInterface(ABC):
     """Abstract base class for command input interfaces."""
 
-    def __init__(self, length: int) -> None:
-        self.cmd = [0.0] * length
-        self.length = length
+    def __init__(self, policy_command_names: List[str]) -> None:
+        self.cmd = {cmd: 0.0 for cmd in CMD_NAMES}            
+        self.policy_command_names = [name.lower() for name in policy_command_names]
+        for name in self.policy_command_names:
+            assert name in CMD_NAMES, f"Policy command name '{name}' not found in CMD_NAMES"
+
         self._running = True
         self._thread = None
 
     @abstractmethod
     def _read_input(self) -> None:
-        """Read input from the specific interface and update command vector in a separate thread."""
+        """Separate thread that reads input from the specific interface and updates command vector."""
         pass
 
     def start(self) -> None:
@@ -34,11 +59,11 @@ class CommandInterface(ABC):
 
     def reset_cmd(self) -> None:
         """Reset all commands to zero."""
-        self.cmd = [0.0] * self.length
+        self.cmd = {cmd: 0.0 for cmd in self.cmd.keys()}
 
     def get_cmd(self) -> List[float]:
-        """Get current command vector."""
-        return self.cmd
+        """Get current command vector per policy specification."""
+        return [self.cmd[name] for name in self.policy_command_names]
 
     def __del__(self) -> None:
         """Cleanup on destruction."""

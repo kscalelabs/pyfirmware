@@ -5,6 +5,7 @@ import select
 import sys
 import termios
 import tty
+from typing import List
 
 from firmware.commands.command_interface import CommandInterface
 
@@ -12,8 +13,8 @@ from firmware.commands.command_interface import CommandInterface
 class Keyboard(CommandInterface):
     """Tracks keyboard presses to update the command vector."""
 
-    def __init__(self, length: int = 16) -> None:
-        super().__init__(length=length)
+    def __init__(self, command_names: List[str]) -> None:
+        super().__init__(command_names=command_names)
 
         # Set up stdin for raw input
         self._fd = sys.stdin.fileno()
@@ -27,7 +28,6 @@ class Keyboard(CommandInterface):
     def _read_input(self) -> None:
         """Read keyboard input and update command vector."""
         while self._running:
-            # Use select to check for input with a timeout
             rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
             if not rlist:
                 continue
@@ -39,34 +39,34 @@ class Keyboard(CommandInterface):
                 if ch == "0":
                     self.reset_cmd()
                 elif ch == "w":
-                    self.cmd[0] += 0.1
+                    self.cmd["xvel"] += 0.1
                 elif ch == "s":
-                    self.cmd[0] -= 0.1
+                    self.cmd["xvel"] -= 0.1
                 elif ch == "a":
-                    self.cmd[1] += 0.1
+                    self.cmd["yvel"] += 0.1
                 elif ch == "d":
-                    self.cmd[1] -= 0.1
+                    self.cmd["yvel"] -= 0.1
                 elif ch == "q":
-                    self.cmd[2] += 0.1
+                    self.cmd["yawrate"] += 0.1
                 elif ch == "e":
-                    self.cmd[2] -= 0.1
+                    self.cmd["yawrate"] -= 0.1
 
                 # base pose
                 elif ch == "=":
-                    self.cmd[3] += 0.05
+                    self.cmd["baseheight"] += 0.05
                 elif ch == "-":
-                    self.cmd[3] -= 0.05
+                    self.cmd["baseheight"] -= 0.05
                 elif ch == "r":
-                    self.cmd[4] += 0.1
+                    self.cmd["baseroll"] += 0.1
                 elif ch == "f":
-                    self.cmd[4] -= 0.1
+                    self.cmd["baseroll"] -= 0.1
                 elif ch == "t":
-                    self.cmd[5] += 0.1
+                    self.cmd["basepitch"] += 0.1
                 elif ch == "g":
-                    self.cmd[5] -= 0.1
+                    self.cmd["basepitch"] -= 0.1
 
                 # clamp
-                self.cmd = [max(-0.3, min(0.3, cmd)) for cmd in self.cmd]
+                self.cmd = {k: max(-0.3, min(0.3, v)) for k, v in self.cmd.items()}
 
             except (IOError, EOFError):
                 continue
