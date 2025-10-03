@@ -65,3 +65,7 @@ conda activate firmware
 # install in editable mode with dev extras
 pip install -e .[dev]
 ```
+
+## Known bugs
+- occasionally a timeout on the can bus will crash the firmware
+- critical faults raise an error, stopping the firmware, rather than gracefully handling
