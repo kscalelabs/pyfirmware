@@ -8,15 +8,18 @@ CMD_NAMES = [
     "xvel",
     "yvel",
     "yawrate",
+
     "baseheight",
     "baseroll",
     "basepitch",
+
     "rshoulderpitch",  # 21
     "rshoulderroll",  # 22
     "rshoulderyaw",  # 23
     "relbowpitch",  # 24
     "rwristroll",  # 25
     "rwristgripper",  # 26
+
     "lshoulderpitch",  # 11
     "lshoulderroll",  # 12
     "lshoulderyaw",  # 13
