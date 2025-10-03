@@ -98,13 +98,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    kinfer_log_path = os.environ.get("KINFER_LOG_PATH")
-    if kinfer_log_path is not None:
-        log_dir = os.path.join(kinfer_log_path)
-    else:
-        policy_name = os.path.splitext(os.path.basename(args.kinfer_path))[0]
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
-        os.makedirs(os.path.dirname(log_dir), exist_ok=True)
+    policy_name = os.path.splitext(os.path.basename(args.kinfer_path))[0]
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
 
     runner(args.kinfer_path, log_dir)
