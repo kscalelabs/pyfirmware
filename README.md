@@ -45,8 +45,7 @@ kbot-run <path-to-policy.kinfer>
 
 ## Dev usage (internal)
 ```bash
-# deploy with klog
-scripts/deploy.sh <path-to-policy.kinfer> [keyboard|udp]
+kbot-deploy [--gstreamer] [--command-source keyboard|udp]
 ```
 
 ## Alternative manual install
