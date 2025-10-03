@@ -276,7 +276,7 @@ class MotorDriver:
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             t3 = time.perf_counter()
             print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us")
-            time.sleep(0.02 - (time.perf_counter() - t))
+            time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.ci.get_actuator_feedback()

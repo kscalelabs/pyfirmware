@@ -39,7 +39,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = np.array(command_interface.get_cmd(), dtype=np.float32)
+        command = command_interface.get_cmd()
         t3 = time.perf_counter()
 
         action, carry = step_session.run(
@@ -49,7 +49,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "joint_angular_velocities": np.array(joint_angular_velocities, dtype=np.float32),
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
-                "command": command,
+                "command": np.array(command, dtype=np.float32),
                 "carry": carry,
             },
         )
@@ -77,7 +77,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "joint_temps": [],  # TODO add
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
-                "command": command.tolist(),
+                "command": command,
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },
