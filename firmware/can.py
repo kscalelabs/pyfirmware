@@ -189,7 +189,7 @@ class CANInterface:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     try:
                         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
-                    except Exception:
+                    except:
                         print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
 
     def _build_pd_command_frame(
@@ -276,7 +276,7 @@ class MotorDriver:
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             t3 = time.perf_counter()
             print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us")
-            time.sleep(0.02 - (time.perf_counter() - t))
+            time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.ci.get_actuator_feedback()

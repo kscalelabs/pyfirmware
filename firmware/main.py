@@ -19,7 +19,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata["joint_names"]
-    num_commands = metadata["num_commands"]
+    command_names = metadata["command_names"]
     carry = init_session.run(None, {})[0]
 
     imu_reader = get_imu_reader()
@@ -29,7 +29,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     input()  # wait for user to start policy
     print("🤖 Running policy...")
 
-    command_interface = Keyboard() if command_source == "keyboard" else UDPListener(length=num_commands)
+    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
 
     t0 = time.perf_counter()
     step_id = 0
@@ -39,7 +39,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = np.array(command_interface.get_cmd(), dtype=np.float32)
+        command = command_interface.get_cmd()
         t3 = time.perf_counter()
 
         action, carry = step_session.run(
@@ -49,7 +49,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "joint_angular_velocities": np.array(joint_angular_velocities, dtype=np.float32),
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
-                "command": command,
+                "command": np.array(command, dtype=np.float32),
                 "carry": carry,
             },
         )
@@ -77,7 +77,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "joint_temps": [],  # TODO add
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
-                "command": command.tolist(),
+                "command": command,
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },
