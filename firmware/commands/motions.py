@@ -1003,6 +1003,310 @@ def create_boxing(dt: float = 0.01) -> Motion:
     ]
     return Motion(keyframes, dt=dt)
 
+def create_boxing_guard_hold(dt: float = 0.01) -> Motion:
+    """Raise guard and hold without walking."""
+    keyframes = [
+        # Start neutral
+        Keyframe(time=0.0),
+
+        # Raise guard
+        Keyframe(
+            time=0.2,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),  # Forward and up
+                "rshoulderroll": math.radians(15.0),   # Slightly inward
+                "rshoulderyaw": math.radians(30.0),    # Rotate in
+                "relbowpitch": math.radians(30.0),         # Bent up
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),   # Forward and up
+                "lshoulderroll": math.radians(-15.0),   # Slightly inward
+                "lshoulderyaw": math.radians(-30.0),    # Rotate in
+                "lelbowpitch": math.radians(-30.0),         # Bent up
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Hold guard for a few seconds
+        Keyframe(
+            time=3.0,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+    ]
+    return Motion(keyframes, dt=dt)
+
+def create_boxing_left_punch(dt: float = 0.01) -> Motion:
+    """Raise guard, throw left punch, return to guard. No walking."""
+    keyframes = [
+        # Start neutral
+        Keyframe(time=0.0),
+
+        # Raise guard
+        Keyframe(
+            time=0.2,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Hold guard
+        Keyframe(
+            time=1.8,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Left punch land
+        Keyframe(
+            time=1.81,
+            positions={
+                # Right arm stays in guard
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm extends
+                "lshoulderpitch": math.radians(100.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(85.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Left punch hold
+        Keyframe(
+            time=2.0,
+            positions={
+                # Right arm stays in guard
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm extended
+                "lshoulderpitch": math.radians(100.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(85.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Return to guard
+        Keyframe(
+            time=2.2,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Hold guard
+        Keyframe(
+            time=2.5,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+    ]
+    return Motion(keyframes, dt=dt)
+
+def create_boxing_right_punch(dt: float = 0.01) -> Motion:
+    """Raise guard, throw right punch, return to guard. No walking."""
+    keyframes = [
+        # Start neutral
+        Keyframe(time=0.0),
+
+        # Raise guard
+        Keyframe(
+            time=0.2,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Hold guard
+        Keyframe(
+            time=2.5,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Right punch land
+        Keyframe(
+            time=2.51,
+            positions={
+                # Right arm extends
+                "rshoulderpitch": math.radians(-100.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(-85.0),
+
+                # Left arm stays in guard
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Right punch hold
+        Keyframe(
+            time=2.7,
+            positions={
+                # Right arm extended
+                "rshoulderpitch": math.radians(-100.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(-85.0),
+
+                # Left arm stays in guard
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Return to guard
+        Keyframe(
+            time=2.9,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+
+        # Hold guard
+        Keyframe(
+            time=3.2,
+            positions={
+                # Right arm
+                "rshoulderpitch": math.radians(-55.0),
+                "rshoulderroll": math.radians(15.0),
+                "rshoulderyaw": math.radians(30.0),
+                "relbowpitch": math.radians(30.0),
+
+                # Left arm
+                "lshoulderpitch": math.radians(55.0),
+                "lshoulderroll": math.radians(-15.0),
+                "lshoulderyaw": math.radians(-30.0),
+                "lelbowpitch": math.radians(-30.0),
+
+                "base_pitch": math.radians(10.0),
+            },
+        ),
+    ]
+    return Motion(keyframes, dt=dt)
+
 def create_cone_motion(dt: float = 0.01) -> Motion:
     """Creates a conical motion by rotating base roll and pitch in a circular pattern."""
     # Parameters for the cone motion
@@ -1030,6 +1334,62 @@ def create_cone_motion(dt: float = 0.01) -> Motion:
             )
         )
     
+    return Motion(keyframes, dt=dt)
+
+def create_come_at_me(dt: float = 0.01) -> Motion:
+    """Opens arms into a slightly raised T-pose ("come at me bro"). No walking."""
+    keyframes = [
+        # Start neutral
+        Keyframe(time=0.0),
+
+        # Move to slightly raised T-pose
+        Keyframe(
+            time=0.6,
+            positions={
+                # Right arm (slightly above horizontal)
+                "rshoulderpitch": 0.0,
+                "rshoulderroll": math.radians(-100.0),
+                "rshoulderyaw": 0.0,
+                "relbowpitch": math.radians(10.0),
+
+                # Left arm (slightly above horizontal)
+                "lshoulderpitch": 0.0,
+                "lshoulderroll": math.radians(100.0),
+                "lshoulderyaw": 0.0,
+                "lelbowpitch": math.radians(-10.0),
+
+                # Neutral base
+                "base_pitch": 0.0,
+                "base_height": 0.0,
+            },
+        ),
+
+        # Hold the pose
+        Keyframe(
+            time=3.0,
+            positions={
+                "rshoulderpitch": 0.0,
+                "rshoulderroll": math.radians(-100.0),
+                "rshoulderyaw": 0.0,
+                "relbowpitch": math.radians(10.0),
+
+                "lshoulderpitch": 0.0,
+                "lshoulderroll": math.radians(100.0),
+                "lshoulderyaw": 0.0,
+                "lelbowpitch": math.radians(-10.0),
+
+                "base_pitch": 0.0,
+                "base_height": 0.0,
+            },
+        ),
+
+        # Empty keyframe to interpolate back to start
+        Keyframe(
+            time=3.2,
+            positions={},
+            commands={},
+        ),
+    ]
     return Motion(keyframes, dt=dt)
 
 def create_squats(dt: float = 0.01) -> Motion:
@@ -1098,6 +1458,10 @@ MOTIONS = {
     'pirouette': create_pirouette,
     'backflip': create_backflip,
     'boxing': create_boxing,
+    'boxing_guard_hold': create_boxing_guard_hold,
+    'boxing_left_punch': create_boxing_left_punch,
+    'boxing_right_punch': create_boxing_right_punch,
+    'come_at_me': create_come_at_me,
     'cone': create_cone_motion,
     # Test motions - automatically generate test functions for each joint
     **{

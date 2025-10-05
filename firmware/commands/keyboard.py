@@ -84,6 +84,15 @@ class Keyboard(CommandInterface):
                     self.set_motion("wave")
                 elif ch == "x":
                     self.set_motion("salute")
+                elif ch == "c":
+                    self.set_motion("come_at_me")
+                elif ch == "v":
+                    self.set_motion("boxing_guard_hold")
+                elif ch == "b":
+                    self.set_motion("boxing_left_punch")
+                elif ch == "n":
+                    self.set_motion("boxing_right_punch")
+            
 
             except (IOError, EOFError):
                 continue
