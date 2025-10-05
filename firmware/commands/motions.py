@@ -27,6 +27,20 @@ POSITIONS = [
     "lwristroll"
 ]
 
+
+ACTION_SPACE_JOINT_LIMITS: dict[str, tuple[float, float]] = {
+    "rshoulderpitch": (-3.490658, 1.047198),
+    "rshoulderroll": (-1.658063-math.radians(10.0), 0.436332+math.radians(10.0)),
+    "rshoulderyaw": (-1.671886, 1.671886),
+    "relbowpitch": (0.0-math.radians(90.0), 2.478368+math.radians(90.0)),
+    "rwristroll": (-1.37881, 1.37881),
+    "lshoulderpitch": (-1.047198, 3.490658),
+    "lshoulderroll": (-0.436332-math.radians(10.0), 1.658063+math.radians(10.0)),
+    "lshoulderyaw": (-1.671886, 1.671886),
+    "lelbowpitch": (-2.478368-math.radians(90.0), 0.0+math.radians(90.0)),
+    "lwristroll": (-1.37881, 1.37881),
+}
+
 @attrs.define
 class Keyframe:
     """A keyframe in a motion sequence."""
@@ -94,6 +108,11 @@ class Motion:
             **{cmd: commands.get(cmd, 0.0) for cmd in COMMANDS},
             **{joint: positions.get(joint, 0.0) for joint in POSITIONS}
         }
+
+        # clamp the values to the action space joint limits
+        for joint, value in all_values.items():
+            if joint in ACTION_SPACE_JOINT_LIMITS:
+                all_values[joint] = max(ACTION_SPACE_JOINT_LIMITS[joint][0], min(ACTION_SPACE_JOINT_LIMITS[joint][1], value))
         
         self.current_time += self.dt
         return all_values
@@ -138,16 +157,11 @@ def create_wave(dt: float = 0.01) -> Motion:
     keyframes = [
         Keyframe(
             time=0.0,
-            positions={
-                "rshoulderroll": math.radians(-45.0),
-                "relbowpitch": math.radians(90.0),
-            }
         ),
         Keyframe(
             time=0.5,
             positions={
                 "rshoulderroll": math.radians(-45.0),
-                "rshoulderyaw": math.radians(45.0),
                 "relbowpitch": math.radians(90.0),
             }
         ),
@@ -155,16 +169,27 @@ def create_wave(dt: float = 0.01) -> Motion:
             time=1.0,
             positions={
                 "rshoulderroll": math.radians(-45.0),
-                "rshoulderyaw": math.radians(-45.0),
+                "rshoulderyaw": math.radians(45.0),
                 "relbowpitch": math.radians(90.0),
             }
         ),
         Keyframe(
             time=1.5,
             positions={
+                "rshoulderroll": math.radians(-45.0),
+                "rshoulderyaw": math.radians(-45.0),
+                "relbowpitch": math.radians(90.0),
+            }
+        ),
+        Keyframe(
+            time=2.0,
+            positions={
                 "rshoulderroll": math.radians(-10.0),
                 "relbowpitch": math.radians(90.0),
             }
+        ),
+        Keyframe(
+            time=2.5,
         ),
     ]
     return Motion(keyframes, dt=dt)
@@ -172,6 +197,9 @@ def create_wave(dt: float = 0.01) -> Motion:
 def create_salute(dt: float = 0.01) -> Motion:
     """Creates a saluting motion sequence."""
     keyframes = [
+        Keyframe(
+            time=0.0,
+        ),
         Keyframe(
             time=0.6,
             positions={
@@ -183,14 +211,14 @@ def create_salute(dt: float = 0.01) -> Motion:
             time=1.1,
             positions={
                 "rshoulderroll": math.radians(-90.0),
-                "relbowpitch": math.radians(90.0),
+                "relbowpitch": math.radians(85.0),
             }
         ),
         Keyframe(
             time=2.1,
             positions={
                 "rshoulderroll": math.radians(-90.0),
-                "relbowpitch": math.radians(90.0),
+                "relbowpitch": math.radians(85.0),
             }
         ),
         Keyframe(
@@ -199,6 +227,9 @@ def create_salute(dt: float = 0.01) -> Motion:
                 "rshoulderroll": math.radians(-10.0),
                 "relbowpitch": math.radians(0.0),
             }
+        ),
+        Keyframe(
+            time=3.0,
         ),
     ]
     return Motion(keyframes, dt=dt)
