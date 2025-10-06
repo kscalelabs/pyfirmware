@@ -33,7 +33,8 @@ class CommandInterface(ABC):
         self.cmd = {cmd: 0.0 for cmd in CMD_NAMES}
         self.policy_command_names = [name.lower() for name in policy_command_names]
         for name in self.policy_command_names:
-            assert name in CMD_NAMES, f"Policy command name '{name}' not found in CMD_NAMES"
+            if name not in CMD_NAMES:
+                print(f"Warning: Policy command name '{name}' not supported by firmware")
 
         self._running = True
         self._thread = None
@@ -62,7 +63,7 @@ class CommandInterface(ABC):
 
     def get_cmd(self) -> List[float]:
         """Get current command vector per policy specification."""
-        return [self.cmd[name] for name in self.policy_command_names]
+        return [self.cmd.get(name, 0.0) for name in self.policy_command_names]
 
     def __del__(self) -> None:
         """Cleanup on destruction."""
