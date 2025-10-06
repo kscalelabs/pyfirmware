@@ -7,8 +7,9 @@ import termios
 import tty
 from typing import List
 
+from kmotions.motions import MOTIONS
+
 from firmware.commands.command_interface import CommandInterface
-from firmware.commands.motions import MOTIONS
 
 
 class Keyboard(CommandInterface):
@@ -30,7 +31,7 @@ class Keyboard(CommandInterface):
     def set_motion(self, motion_name: str) -> None:
         """Set the active motion."""
         print(f"Setting active motion to {motion_name}")
-        self.active_motion = MOTIONS[motion_name](dt=0.02) #TODO hard coded
+        self.active_motion = MOTIONS[motion_name](dt=0.02)  # TODO hard coded
 
     def _read_input(self) -> None:
         """Read keyboard input and update command vector."""
@@ -92,11 +93,9 @@ class Keyboard(CommandInterface):
                     self.set_motion("boxing_left_punch")
                 elif ch == "n":
                     self.set_motion("boxing_right_punch")
-            
 
             except (IOError, EOFError):
                 continue
-
 
     def get_cmd(self) -> List[float]:
         """Get current command vector per policy specification."""
@@ -104,7 +103,6 @@ class Keyboard(CommandInterface):
             commands = self.active_motion.get_next_motion_frame()
             if commands is None:
                 self.active_motion = None
-                return super().get_cmd()
             else:
                 # only get commands the policy supports and fill the rest with zeros
                 return [commands[name] if name in commands else 0.0 for name in self.policy_command_names]
