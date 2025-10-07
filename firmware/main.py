@@ -35,7 +35,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     step_id = 0
     while True:
         t, tt = time.perf_counter(), time.time()
-        joint_angles, joint_angular_velocities = motor_driver.get_joint_angles_and_velocities(joint_order)
+        joint_angles, joint_vels, torques, temps = motor_driver.get_joint_angles_and_velocities(joint_order)
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
@@ -46,7 +46,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
             None,
             {
                 "joint_angles": np.array(joint_angles, dtype=np.float32),
-                "joint_angular_velocities": np.array(joint_angular_velocities, dtype=np.float32),
+                "joint_angular_velocities": np.array(joint_vels, dtype=np.float32),
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
                 "command": np.array(command, dtype=np.float32),
@@ -71,10 +71,10 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "dt_step_ms": (t4 - t3) * 1000,
                 "dt_action_ms": (t5 - t4) * 1000,
                 "joint_angles": joint_angles,
-                "joint_vels": joint_angular_velocities,
+                "joint_vels": joint_vels,
                 "joint_amps": [],  # TODO add
-                "joint_torques": [],  # TODO add
-                "joint_temps": [],  # TODO add
+                "joint_torques": torques,
+                "joint_temps": temps,
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
                 "command": command,

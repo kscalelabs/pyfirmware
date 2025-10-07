@@ -280,17 +280,21 @@ class MotorDriver:
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.ci.get_actuator_feedback()
-        joint_angles, joint_velocities = {}, {}
+        joint_angles, joint_vels, torques, temps = {}, {}, {}, {}
         for id in self.robot.actuators.keys():
             if id in fb:
                 joint_angles[id] = self.robot.actuators[id].can_to_physical_angle(fb[id]["angle_raw"])
-                joint_velocities[id] = self.robot.actuators[id].can_to_physical_velocity(fb[id]["angular_velocity_raw"])
+                joint_vels[id] = self.robot.actuators[id].can_to_physical_velocity(fb[id]["angular_velocity_raw"])
+                torques[id] = self.robot.actuators[id].can_to_physical_torque(fb[id]["torque_raw"])
+                temps[id] = self.robot.actuators[id].can_to_physical_temperature(fb[id]["temperature_raw"])
             else:  # fill absent actuators with zeros
-                joint_angles[id], joint_velocities[id] = 0.0, 0.0
+                joint_angles[id], joint_vels[id], torques[id], temps[id] = 0.0, 0.0, 0.0, 0.0
 
         joint_angles_ordered = [joint_angles[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
-        joint_velocities_ordered = [joint_velocities[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
-        return joint_angles_ordered, joint_velocities_ordered
+        joint_vels_ordered = [joint_vels[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
+        torques_ordered = [torques[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
+        temps_ordered = [temps[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
+        return joint_angles_ordered, joint_vels_ordered, torques_ordered, temps_ordered
 
     def take_action(self, action: list[float], joint_order: list[str]) -> None:
         action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
