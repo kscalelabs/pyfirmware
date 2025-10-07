@@ -306,7 +306,9 @@ class MotorDriver:
             t2 = time.perf_counter()
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             t3 = time.perf_counter()
-            print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us")
+            self.ci.receive_missing_responses()
+            t4 = time.perf_counter()
+            print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us")
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
     def receive_missing_responses(self) -> None:
