@@ -1,0 +1,32 @@
+[Unit]
+Description=K-Bot Master Process
+Documentation=https://docs.kscale.dev/robots/k-bot/
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/pyfirmware
+ExecStart=/usr/bin/python3 firmware/master_process.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

@@ -29,7 +29,14 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     input()  # wait for user to start policy
     print("🤖 Running policy...")
 
-    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
+    command_interface = None
+    if command_source == "keyboard":
+        command_interface = Keyboard(command_names) 
+    else:
+        if len(command_names) > 0:
+            command_interface = UDPListener(command_names)
+        else:
+            command_interface = UDPListener()
 
     t0 = time.perf_counter()
     step_id = 0
