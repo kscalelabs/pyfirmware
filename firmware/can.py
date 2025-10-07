@@ -118,8 +118,9 @@ class CANInterface:
                 continue
 
             for actuator_id in self.actuator_range:
-                if self._ping_actuator(canbus, actuator_id):
+                if self._ping_actuator(canbus, actuator_id) != -1:
                     self.actuators[canbus].append(actuator_id)
+                self.actuators[canbus] = list(set(self.actuators[canbus]))
 
         total_actuators = sum(len(actuators) for actuators in self.actuators.values())
         print(f"\033[1;32mFound {total_actuators} actuators on {len(self.sockets)} sockets\033[0m")
@@ -130,10 +131,9 @@ class CANInterface:
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
         self.sockets[canbus].send(frame)
         try:
-            _ = self._receive_can_frame(self.sockets[canbus], Mux.PING)
+            return self._receive_can_frame(self.sockets[canbus], Mux.PING)["actuator_can_id"]
         except Exception:
-            return False
-        return True
+            return -1
 
     def enable_motors(self) -> None:
         for canbus in self.sockets.keys():
@@ -311,7 +311,14 @@ if __name__ == "__main__":
     main()
 
 
-# .recv takes 10-30us if messages are available.
-# TODO deal with feedback request timeouts
-# TODO dont die on critical faults
-# TODO Flush bus when timeing out on set pd target messages to prevent async issues.
+# # .recv takes 10-30us if messages are available.
+# # TODO deal with feedback request timeouts
+#     just failed today again. 
+#     solution: safely timeout, and record missing ressponse in state. 
+#         look for it later. + set timestamp with x sec timeout
+# todo fix response mismatch - same solution as above i thinkg
+# # TODO Flush bus when timeing out on set pd target messages to prevent async issues.
+# # TODO dont die on critical faults
+#     # really?
+# fix ping double counting
+# fix dict structure
