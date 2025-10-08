@@ -2,6 +2,13 @@
 
 set -euo pipefail
 
+# verify active environment is 'firmware'
+env_name="${CONDA_DEFAULT_ENV:-${MAMBA_DEFAULT_ENV:-$(basename "${VIRTUAL_ENV:-}")}}"
+if [ "${env_name}" != "firmware" ]; then
+    echo "Error: active environment must be 'firmware' (current: '${env_name:-none}')"
+    exit 1
+fi
+
 # Defaults
 gstreamer=false
 command_source="keyboard"
