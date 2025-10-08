@@ -79,9 +79,9 @@ class CANInterface:
         """Recursively receive can frames until the mux is the expected value."""
         try:
             frame = sock.recv(self.FRAME_SIZE)
-        except TimeoutError:
+        except Exception as e:
             if mux != Mux.PING:
-                print(f"\033[1;33mWARNING: timeout receiving can frame for mux 0x{mux:02X}\033[0m")
+                print(f"\033[1;33mWARNING: error receiving can frame for mux 0x{mux:02X}: {e}\033[0m")
                 self.missing_responses[sock].append(time.time())
             return -1
         parsed_frame = self._parse_can_frame(frame)
@@ -173,7 +173,7 @@ class CANInterface:
                         continue
                     result = self._parse_feedback_response(frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
-                        print(f"\033[1;33mWARNING: got actuator {actuator_id}, expected {result['actuator_can_id']}\033[0m")
+                        print(f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m")
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
