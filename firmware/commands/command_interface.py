@@ -16,13 +16,13 @@ CMD_NAMES = [
     "rshoulderyaw",  # 23
     "relbowpitch",  # 24
     "rwristroll",  # 25
-    "rwristgripper",  # 26
+    "rgripper",  # 26
     "lshoulderpitch",  # 11
     "lshoulderroll",  # 12
     "lshoulderyaw",  # 13
     "lelbowpitch",  # 14
     "lwristroll",  # 15
-    "lwristgripper",  # 16
+    "lgripper",  # 16
 ]
 
 
