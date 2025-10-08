@@ -106,4 +106,4 @@ if __name__ == "__main__":
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
 
-    runner(args.kinfer_path, log_dir)
+    runner(args.kinfer_path, log_dir, args.command_source)
