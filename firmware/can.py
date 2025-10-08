@@ -79,8 +79,8 @@ class CANInterface:
         try:
             frame = sock.recv(self.FRAME_SIZE)
         except TimeoutError:
-            print(f"\033[1;33mWARNING: timeout receiving can frame for mux {mux}\033[0m")
             if mux != Mux.PING:
+                print(f"\033[1;33mWARNING: timeout receiving can frame for mux {mux}\033[0m")
                 self.missing_responses[sock].append(time.time())
             return -1
         parsed_frame = self._parse_can_frame(frame)
