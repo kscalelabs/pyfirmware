@@ -42,9 +42,9 @@ def _parse_quat(data: bytes) -> tuple[float, float, float, float]:
 def _quat_to_gravity(q: tuple[float, float, float, float]) -> tuple[float, float, float]:
     """Convert quaternion to projected gravity vector."""
     w, x, y, z = q
-    gx = 2 * (x * z - w * y) * 9.81
-    gy = 2 * (w * x + y * z) * 9.81
-    gz = (w * w - x * x - y * y + z * z) * 9.81
+    gx = 2 * (w * y - x * z) * 9.81
+    gy = -2 * (w * x + y * z) * 9.81
+    gz = -(w * w - x * x - y * y + z * z) * 9.81
     return (gx, gy, gz)
 
 
