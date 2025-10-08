@@ -215,7 +215,7 @@ class CANInterface:
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
     def receive_missing_responses(self) -> None:
-        """Single-pass drain of late responses"""
+        """Single-pass drain of late responses."""
         # Prune stale entries (>1s)
         now_s = time.time()
         self.missing_responses = {
@@ -229,7 +229,7 @@ class CANInterface:
         # Process any readable sockets
         for sock, missing_responses in self.missing_responses.items():
             if missing_responses:
-                if (frame := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
+                if (_ := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
                     missing_responses.remove(missing_responses[0])  # Remove the oldest missing response
 
 

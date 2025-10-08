@@ -14,6 +14,7 @@ RECORD_STRUCT = struct.Struct("<dfffffff")
 
 
 def _open_mmap(path: str, size: int) -> mmap.mmap:
+    """Open or create a shared memory map."""
     if not os.path.exists(path):
         with open(path, "wb") as f:
             f.write(b"\x00" * size)
@@ -48,7 +49,7 @@ def _quat_to_gravity(q: tuple[float, float, float, float]) -> tuple[float, float
     return (gx, gy, gz)
 
 
-def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running, lock) -> None:
+def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running: mp.Event, lock: mp.Lock) -> None:
     try:
         ser = serial.Serial(device, baudrate, timeout=0)
         shm = _open_mmap(shm_path, shm_size)
@@ -75,7 +76,9 @@ def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running
 
 
 class Hiwonder:
-    def __init__(self, device: str = "/dev/ttyUSB0", baudrate: int = 230400, shm_path: str = "/dev/shm/imu_shm"):
+    def __init__(
+        self, device: str = "/dev/ttyUSB0", baudrate: int = 230400, shm_path: str = "/dev/shm/imu_shm"
+    ) -> None:
         self.shm = _open_mmap(shm_path, RECORD_STRUCT.size)
         self.lock = mp.Lock()
         self.running = mp.Event()
