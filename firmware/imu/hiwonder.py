@@ -2,11 +2,10 @@
 
 import atexit
 import mmap
-import multiprocessing
+import multiprocessing as mp
 import os
 import struct
 import time
-from multiprocessing import Process
 
 import serial
 
@@ -14,52 +13,24 @@ import serial
 RECORD_STRUCT = struct.Struct("<dfffffff")
 
 
-def open_or_create_mmap(path: str, size: int) -> mmap.mmap:
-    """Create the file if missing and return an mmap of given size."""
+def _open_mmap(path: str, size: int) -> mmap.mmap:
     if not os.path.exists(path):
         with open(path, "wb") as f:
             f.write(b"\x00" * size)
-
     with open(path, "r+b") as f:
         return mmap.mmap(f.fileno(), size)
 
 
-def quaternion_multiply(
-    q1: tuple[float, float, float, float], q2: tuple[float, float, float, float]
-) -> tuple[float, float, float, float]:
-    """Multiply two quaternions."""
-    w1, x1, y1, z1 = q1
-    w2, x2, y2, z2 = q2
-
-    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-
-    return (w, x, y, z)
-
-
-def quaternion_to_projected_gravity(
-    gravity: tuple[float, float, float], quaternion: tuple[float, float, float, float]
-) -> tuple[float, float, float]:
-    """Rotate quaternion to projected gravity."""
-    vx, vy, vz = gravity
-    v_quat = (0.0, vx, vy, vz)
-    q_conj = (quaternion[0], -quaternion[1], -quaternion[2], -quaternion[3])
-    temp = quaternion_multiply(q_conj, v_quat)
-    result_quat = quaternion_multiply(temp, quaternion)
-    return (result_quat[1], result_quat[2], result_quat[3])
-
-
-def parse_gyro(data: bytes) -> tuple[float, float, float]:
+def _parse_gyro(data: bytes) -> tuple[float, float, float]:
     """Parse gyroscope data from IMU packet."""
-    gx = struct.unpack("<h", data[2:4])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
-    gy = struct.unpack("<h", data[4:6])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
-    gz = struct.unpack("<h", data[6:8])[0] / 32768.0 * 2000.0 * 3.14159 / 180.0
+    scale = 2000.0 * 3.14159 / 180.0 / 32768.0
+    gx = struct.unpack("<h", data[2:4])[0] * scale
+    gy = struct.unpack("<h", data[4:6])[0] * scale
+    gz = struct.unpack("<h", data[6:8])[0] * scale
     return (gx, gy, gz)
 
 
-def parse_quaternion(data: bytes) -> tuple[float, float, float, float]:
+def _parse_quat(data: bytes) -> tuple[float, float, float, float]:
     """Parse quaternion data from IMU packet."""
     qw = struct.unpack("<h", data[2:4])[0] / 32768.0
     qx = struct.unpack("<h", data[4:6])[0] / 32768.0
@@ -68,150 +39,91 @@ def parse_quaternion(data: bytes) -> tuple[float, float, float, float]:
     return (qw, qx, qy, qz)
 
 
+def _quat_to_gravity(q: tuple[float, float, float, float]) -> tuple[float, float, float]:
+    """Convert quaternion to projected gravity vector."""
+    w, x, y, z = q
+    gx = 2 * (x * z - w * y) * 9.81
+    gy = 2 * (w * x + y * z) * 9.81
+    gz = (w * w - x * x - y * y + z * z) * 9.81
+    return (gx, gy, gz)
+
+
+def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running, lock) -> None:
+    try:
+        ser = serial.Serial(device, baudrate, timeout=0)
+        shm = _open_mmap(shm_path, shm_size)
+    except Exception:
+        return
+
+    gyro = (0.0, 0.0, 0.0)
+    quat = (0.0, 0.0, 0.0, 0.0)
+
+    while running.is_set():
+        time.sleep(0.0001)
+        if ser.read(1) == b"\x55":
+            data = b"\x55" + ser.read(10)
+            if len(data) == 11 and (sum(data[:10]) & 0xFF) == data[10]:
+                if data[1] == 0x52:
+                    gyro = _parse_gyro(data)
+                elif data[1] == 0x59:
+                    quat = _parse_quat(data)
+                with lock:
+                    shm.seek(0)
+                    shm.write(RECORD_STRUCT.pack(time.time(), *gyro, *quat))
+
+    ser.close()
+
+
 class Hiwonder:
-    """Reads IMU data from a serial port in a separate process and shares via shared memory."""
+    def __init__(self, device: str = "/dev/ttyUSB0", baudrate: int = 230400, shm_path: str = "/dev/shm/imu_shm"):
+        self.shm = _open_mmap(shm_path, RECORD_STRUCT.size)
+        self.lock = mp.Lock()
+        self.running = mp.Event()
+        self.running.set()
 
-    def __init__(
-        self, device: str = "/dev/ttyUSB0", baudrate: int = 230400, shm_path: str = "/dev/shm/imu_shm"
-    ) -> None:
-        # Serial configuration (child process will open the port)
-        self.device = device
-        self.baudrate = baudrate
+        self.proc = mp.Process(
+            target=_read_loop,
+            args=(device, baudrate, shm_path, RECORD_STRUCT.size, self.running, self.lock),
+            daemon=True,
+        )
+        self.proc.start()
+        time.sleep(0.1)
 
-        # Shared memory setup
-        self.shm_path = shm_path
-        self.shm_size = RECORD_STRUCT.size
-        self.shm = open_or_create_mmap(self.shm_path, self.shm_size)
-        self.shm_lock = multiprocessing.Lock()
+        if not self.proc.is_alive():
+            raise serial.SerialException(f"Failed to connect to {device}")
 
-        # Process management
-        self.process = None
-        self.running = multiprocessing.Event()
+        atexit.register(self._cleanup)
 
-        # standard gravity
-        self.gravity = (0.0, 0.0, -9.81)
-
-        # Register clean shutdown hooks only for the main process
-        self._register_shutdown_handlers()
-        self.start()
-
-    def _register_shutdown_handlers(self) -> None:
-        def _safe_shutdown() -> None:
-            try:
-                self.shm.close()
-                if self.process is not None and self.process.is_alive():
-                    self.running.clear()
-                    self.process.join(timeout=1.0)
-                    if self.process.is_alive():
-                        self.process.terminate()
-                    self.process = None
-            except Exception:
-                pass
-
-        atexit.register(_safe_shutdown)
-
-    @staticmethod
-    def _imu_reading_loop(
-        device: str,
-        baudrate: int,
-        shm_path: str,
-        shm_size: int,
-        running_event,
-        shm_lock,
-    ) -> None:
-        """Standalone IMU reading loop that runs in a separate process."""
+    def _cleanup(self) -> None:
         try:
-            serial_conn = serial.Serial(device, baudrate, timeout=0)
+            self.running.clear()
+            if self.proc.is_alive():
+                self.proc.join(timeout=1.0)
+                if self.proc.is_alive():
+                    self.proc.terminate()
+            self.shm.close()
         except Exception:
-            return
-
-        # Shared memory setup (child creates/opens and maps its own view)
-        shm = open_or_create_mmap(shm_path, shm_size)
-
-        last_gyro = (0.0, 0.0, 0.0)
-        last_quaternion = (0.0, 0.0, 0.0, 0.0)
-
-        while running_event.is_set():
-            time.sleep(0.0001)
-
-            # Read byte-by-byte until we find sync byte
-            if serial_conn.read(1) == b"\x55":
-                # Found sync, read remaining 10 bytes
-                data = b"\x55" + serial_conn.read(10)
-
-                if len(data) == 11 and (sum(data[:10]) & 0xFF) == data[10]:
-                    timestamp = time.time()
-                    if data[1] == 0x52:  # Gyro
-                        last_gyro = parse_gyro(data)
-                    elif data[1] == 0x59:  # Quaternion
-                        last_quaternion = parse_quaternion(data)
-
-                    packed_data = RECORD_STRUCT.pack(timestamp, *last_gyro, *last_quaternion)
-                    with shm_lock:
-                        shm.seek(0)
-                        shm.write(packed_data)
-
-        # Cleanup
-        serial_conn.close()
-
-    def start(self) -> None:
-        """Start the IMU reading process."""
-        if self.process is None or not self.process.is_alive():
-            self.running.set()
-            self.process = Process(
-                target=self._imu_reading_loop,
-                args=(self.device, self.baudrate, self.shm_path, self.shm_size, self.running, self.shm_lock),
-            )
-            # Ensure child exits if parent dies unexpectedly
-            self.process.daemon = True
-            self.process.start()
-
-            # Give the process a moment to try connecting
-            time.sleep(0.1)
-
-            # Check if process died due to connection error
-            if not self.process.is_alive():
-                # Clean up the dead process
-                self.process.join()
-                self.process = None
-                raise serial.SerialException(f"Failed to initialize IMU on {self.device}")
-
-    def test(self) -> None:
-        """Test function that runs the IMU reader and prints data."""
-        self.start()
-        start_time = time.time()
-        while True:
-            time.sleep(0.02)
-            projgrav, gyro, timestamp = self.get_projected_gravity_and_gyroscope()
-            print(f"gravity: {projgrav}, gyro: {gyro}, t: {timestamp - start_time:.3f}")
+            pass
 
     def get_projected_gravity_and_gyroscope(self) -> tuple[tuple[float, ...], tuple[float, ...], float]:
-        """Get the latest projected gravity and gyroscope data from shared memory."""
-        try:
-            # Read from shared memory with lock
-            with self.shm_lock:
-                self.shm.seek(0)
-                packed_data = self.shm.read(self.shm_size)
+        """Returns (projected_gravity, gyro, timestamp)."""
+        with self.lock:
+            self.shm.seek(0)
+            data = self.shm.read(RECORD_STRUCT.size)
 
-            if len(packed_data) == self.shm_size:
-                # Unpack data: timestamp + gyro (3 floats) + quaternion (4 floats)
-                unpacked_data = RECORD_STRUCT.unpack(packed_data)
-                timestamp = unpacked_data[0]
-                gyro = unpacked_data[1:4]
-                quaternion = unpacked_data[4:8]
-                proj_grav = quaternion_to_projected_gravity(self.gravity, quaternion)
-
-                return proj_grav, gyro, timestamp
-            else:
-                # Return default values if shared memory is not properly initialized
-                return (0.0, 0.0, -9.81), (0.0, 0.0, 0.0), 0.0
-
-        except Exception as e:
-            print(f"Error reading from shared memory: {e}")
-            return (0.0, 0.0, -9.81), (0.0, 0.0, 0.0), 0.0
+        if len(data) == RECORD_STRUCT.size:
+            vals = RECORD_STRUCT.unpack(data)
+            gyro = vals[1:4]
+            quat = vals[4:8]
+            gravity = _quat_to_gravity(quat)
+            return gravity, gyro, vals[0]
+        return (0.0, 0.0, -9.81), (0.0, 0.0, 0.0), 0.0
 
 
-# for testing
 if __name__ == "__main__":
     imu = Hiwonder()
-    imu.test()
+    t0 = time.time()
+    while True:
+        time.sleep(0.02)
+        gravity, gyro, ts = imu.get_projected_gravity_and_gyroscope()
+        print(f"gravity: {gravity}, gyro: {gyro}, t: {ts - t0:.3f}")
