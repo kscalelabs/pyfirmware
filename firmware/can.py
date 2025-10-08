@@ -81,7 +81,7 @@ class CANInterface:
             frame = sock.recv(self.FRAME_SIZE)
         except TimeoutError:
             if mux != Mux.PING:
-                print(f"\033[1;33mWARNING: timeout receiving can frame for mux {mux}\033[0m")
+                print(f"\033[1;33mWARNING: timeout receiving can frame for mux 0x{mux:02X}\033[0m")
                 self.missing_responses[sock].append(time.time())
             return -1
         parsed_frame = self._parse_can_frame(frame)
@@ -169,10 +169,11 @@ class CANInterface:
                     actuator_id = self.actuators[can][tranche]
                     frame = self._receive_can_frame(sock, Mux.FEEDBACK)
                     if frame == -1:  # timeout
+                        print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
                         continue
                     result = self._parse_feedback_response(frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
-                        print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
+                        print(f"\033[1;33mWARNING: got actuator {actuator_id}, expected {result['actuator_can_id']}\033[0m")
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
@@ -199,6 +200,8 @@ class CANInterface:
             for actuator_id in self.actuators[canbus]:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     frame = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
+                    if frame == -1:  # timeout
+                        print(f"\033[1;33mWARNING: [spdt] recv timeout actuator {actuator_id}\033[0m")
 
     def _build_pd_command_frame(
         self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float
@@ -229,7 +232,9 @@ class CANInterface:
         # Process any readable sockets
         for sock, missing_responses in self.missing_responses.items():
             if missing_responses:
+                print("try receive..")
                 if (_ := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
+                    print("\treceived")
                     missing_responses.remove(missing_responses[0])  # Remove the oldest missing response
 
 
@@ -345,8 +350,10 @@ if __name__ == "__main__":
     main()
 
 
-# # .recv takes 10-30us if messages are available.
 
+# # .recv takes 10-30us if messages are available.
+# TODO reset motor after critical fault? 
+# TODO reset all act upons startup
 # # TODO dont die on critical faults?
 # TODO if missing response - feed last known good value instead of 0
 # TODO tune down CAN timeout
