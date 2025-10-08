@@ -88,7 +88,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         )
         print(
             f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, "
-            f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+            f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms, missing responses={(t6 - t5) * 1000:.2f} ms"
         )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
