@@ -1,7 +1,7 @@
 # qr_display.py
 import qrcode
-from PIL import Image, ImageTk, ImageDraw, ImageFont
-import tkinter as tk
+from PIL import Image
+import pygame
 from dotenv import load_dotenv
 import os
 import signal
@@ -16,19 +16,34 @@ ip_address = os.getenv('MY_IP')
 # Combine them into a string (you can use JSON or any format)
 data = f"{user_id}:{secret_key}:{ip_address}"
 
+# Global flag for graceful shutdown
+shutdown_requested = False
+
+def signal_handler(sig, frame):
+    """Handle shutdown signals gracefully."""
+    global shutdown_requested
+    shutdown_requested = True
+    pygame.quit()
+    sys.exit(0)
+
 def create_display():
-    """Create the main display with background image and QR code overlay"""
-    # Get screen dimensions
-    root = tk.Tk()
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
+    """Create the main display with background image and QR code overlay using pygame"""
+    # Set up pygame for console mode (same as DisplayManager)
+    os.environ.setdefault("SDL_VIDEODRIVER", "KMSDRM")
+    os.environ.setdefault("SDL_KMSDRM_DEVICE", "/dev/dri/card0")
+    os.environ.setdefault("SDL_RENDER_DRIVER", "software")
     
-    # Print screen dimensions to console
-    print(f"Screen dimensions: {screen_width} x {screen_height}")
+    pygame.init()
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen_width, screen_height = screen.get_size()
     
     # Load and process the background image
+    bg_surface = None
     try:
-        bg_image = Image.open("images/hello.webp")
+        # Get the directory where this script is located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        bg_image_path = os.path.join(script_dir, "hello.webp")
+        bg_image = Image.open(bg_image_path)
         
         # Calculate scaling to fit the image optimally while maintaining aspect ratio
         img_width, img_height = bg_image.size
@@ -41,24 +56,20 @@ def create_display():
         new_height = int(img_height * scale)
         bg_image = bg_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        # Create a black background canvas
-        canvas_image = Image.new('RGB', (screen_width, screen_height), 'black')
-        
-        # Center the background image on the black canvas
-        x_offset = (screen_width - new_width) // 2
-        y_offset = (screen_height - new_height) // 2
-        canvas_image.paste(bg_image, (x_offset, y_offset))
+        # Convert PIL image to pygame surface
+        bg_surface = pygame.image.fromstring(
+            bg_image.tobytes(), bg_image.size, bg_image.mode
+        )
         
     except FileNotFoundError:
-        print("Warning: hello.webp not found, using solid black background")
-        canvas_image = Image.new('RGB', (screen_width, screen_height), 'black')
+        bg_surface = None
     
     # Generate QR code
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=16,  # Doubled size for better visibility
-        border=2,     # Smaller border
+        box_size=9,
+        border=2,
     )
     qr.add_data(data)
     qr.make(fit=True)
@@ -66,9 +77,14 @@ def create_display():
     # Create QR code with explicit RGB mode
     qr_img = qr.make_image(fill_color="white", back_color="black").convert('RGB')
     
+    # Convert QR code to pygame surface
+    qr_surface = pygame.image.fromstring(
+        qr_img.tobytes(), qr_img.size, qr_img.mode
+    )
+    
     # Position QR code in top right with margins
-    qr_width, qr_height = qr_img.size
-    margin = 20  # Margin from edges
+    qr_width, qr_height = qr_surface.get_size()
+    margin = 20
     qr_x = screen_width - qr_width - margin
     qr_y = margin
     
@@ -78,89 +94,71 @@ def create_display():
     if qr_y < 0:
         qr_y = margin
     
-    # Paste QR code onto the canvas using simple (x, y) coordinates
-    # Both images are now in RGB mode, so this should work
-    canvas_image.paste(qr_img, (qr_x, qr_y))
-    
-    # Add text at the bottom
-    draw = ImageDraw.Draw(canvas_image)
+    # Create text surface
     text = "Scan the QR code inside the app to connect"
     
     # Try to use a system font, fallback to default if not available
     try:
-        # Try different font sizes and families
-        font_size = 72  # Doubled from 36 to 72
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        font_size = 36
+        font = pygame.font.Font("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
     except (OSError, IOError):
         try:
-            # Fallback for different systems
-            font = ImageFont.truetype("arial.ttf", 72)  # Doubled from 36 to 72
+            font = pygame.font.Font("arial.ttf", 72)
         except (OSError, IOError):
-            # Final fallback to default font
-            font = ImageFont.load_default()
+            font = pygame.font.Font(None, 72)  # Default font
     
-    # Get text dimensions for centering
-    bbox = draw.textbbox((0, 0), text, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
+    text_surface = font.render(text, True, (255, 255, 255))  # White text
     
     # Calculate position for centered text at bottom
+    text_width, text_height = text_surface.get_size()
     text_x = (screen_width - text_width) // 2
     text_y = screen_height - text_height - 40  # 40px margin from bottom
     
-    # Draw text with white color
-    draw.text((text_x, text_y), text, font=font, fill='white')
-    
-    return root, canvas_image
+    return screen, bg_surface, qr_surface, (qr_x, qr_y), text_surface, (text_x, text_y)
 
-# Signal handler for graceful shutdown
-def signal_handler(sig, frame):
-    print("\nShutting down...")
-    if 'root' in globals():
-        root.quit()
-        root.destroy()
-    sys.exit(0)
-
-# Register signal handler for Ctrl+C
+# Register signal handler for graceful shutdown
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 # Create the display
-root, canvas_image = create_display()
-root.title("QR Code Display")
+screen, bg_surface, qr_surface, qr_pos, text_surface, text_pos = create_display()
 
-# Convert PIL image to Tkinter image
-tk_img = ImageTk.PhotoImage(canvas_image)
-
-# Create label with black background and pack
-label = tk.Label(root, image=tk_img, bg='black')
-label.pack(fill=tk.BOTH, expand=True)
-
-# Configure root window
-root.configure(bg='black')  # Set window background to black
-root.attributes("-fullscreen", True)
-root.bind("<Escape>", lambda e: root.destroy())  # Press Esc to quit
-root.bind("<Control-c>", lambda e: signal_handler(None, None))  # Ctrl+C binding
-
-# Handle window close button
-root.protocol("WM_DELETE_WINDOW", lambda: signal_handler(None, None))
-
-# Add periodic check for signal handling
-def check_for_interrupts():
-    """Periodically check if we should quit (helps with Ctrl+C)"""
-    try:
-        root.after(100, check_for_interrupts)  # Check every 100ms
-    except tk.TclError:
-        # Window was destroyed
-        pass
-
-print(f"Display created with QR code containing: {data}")
-print("Press Escape or Ctrl+C to quit")
-
-# Start the periodic check
-check_for_interrupts()
+# Main loop - display image permanently
+clock = pygame.time.Clock()
 
 try:
-    root.mainloop()
+    while not shutdown_requested:
+        # Handle events (minimal)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                shutdown_requested = True
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    shutdown_requested = True
+        
+        # Clear screen with black
+        screen.fill((0, 0, 0))
+        
+        # Draw background image (centered if available)
+        if bg_surface is not None:
+            bg_width, bg_height = bg_surface.get_size()
+            bg_x = (screen.get_width() - bg_width) // 2
+            bg_y = (screen.get_height() - bg_height) // 2
+            screen.blit(bg_surface, (bg_x, bg_y))
+        
+        # Draw QR code in top right
+        screen.blit(qr_surface, qr_pos)
+        
+        # Draw text at bottom
+        screen.blit(text_surface, text_pos)
+        
+        # Update display
+        pygame.display.flip()
+        
+        # Limit to 30 FPS (no need for high refresh rate for static display)
+        clock.tick(30)
+        
 except KeyboardInterrupt:
-    signal_handler(None, None)
+    pass
+finally:
+    pygame.quit()

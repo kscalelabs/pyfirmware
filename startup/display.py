@@ -102,7 +102,7 @@ def main():
     try:
         while True:
             dm.update()
-            time.sleep(0.01)
+            time.sleep(0.05)
     except KeyboardInterrupt:
         dm.close()
 
