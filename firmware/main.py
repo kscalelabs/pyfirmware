@@ -57,6 +57,8 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 
         motor_driver.take_action(action, joint_order)
         t5 = time.perf_counter()
+        motor_driver.receive_missing_responses()
+        t6 = time.perf_counter()
 
         dt = time.perf_counter() - t
         logger.log(
@@ -65,11 +67,13 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "step_id": step_id,
                 "timestamp": tt,
                 "dt_ms": dt * 1000,
+                "dt_roundtrip_ms": (t5 - t) * 1000,
                 "dt_joints_ms": (t1 - t) * 1000,
                 "dt_imu_ms": (t2 - t1) * 1000,
                 "dt_keyboard_ms": (t3 - t2) * 1000,
                 "dt_step_ms": (t4 - t3) * 1000,
                 "dt_action_ms": (t5 - t4) * 1000,
+                "dt_missing_responses_ms": (t6 - t5) * 1000,
                 "joint_angles": joint_angles,
                 "joint_vels": joint_vels,
                 "joint_amps": [],  # TODO add
@@ -84,7 +88,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         )
         print(
             f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, "
-            f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+            f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms, missing responses={(t6 - t5) * 1000:.2f} ms"
         )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
@@ -102,4 +106,4 @@ if __name__ == "__main__":
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
 
-    runner(args.kinfer_path, log_dir)
+    runner(args.kinfer_path, log_dir, args.command_source)

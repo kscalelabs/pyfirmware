@@ -25,6 +25,8 @@ class CANInterface:
         self.canbus_range = range(0, 7)
         self.actuator_range = range(10, 50)
 
+        self.CAN_TIMEOUT = 0.005
+
         # fault codes
         self.MUX_0x15_FAULT_CODES = [
             FaultCode(0x01, True, "Motor Over-temperature (>145°C)"),
@@ -49,6 +51,7 @@ class CANInterface:
         self.sockets = {}
         self.actuators = {}
         self._find_actuators()
+        self.missing_responses = {sock: [] for sock in self.sockets.values()}
 
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | ((self.host_id) << 8) | ((mux & 0x1F) << 24)) | self.EFF
@@ -74,7 +77,13 @@ class CANInterface:
 
     def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
         """Recursively receive can frames until the mux is the expected value."""
-        frame = sock.recv(self.FRAME_SIZE)
+        try:
+            frame = sock.recv(self.FRAME_SIZE)
+        except TimeoutError:
+            if mux != Mux.PING:
+                print(f"\033[1;33mWARNING: timeout receiving can frame for mux 0x{mux:02X}\033[0m")
+                self.missing_responses[sock].append(time.time())
+            return -1
         parsed_frame = self._parse_can_frame(frame)
         self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
 
@@ -108,7 +117,7 @@ class CANInterface:
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
-                sock.settimeout(0.005)
+                sock.settimeout(self.CAN_TIMEOUT)
                 sock.send(self._build_can_frame(0, Mux.PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
@@ -118,8 +127,9 @@ class CANInterface:
                 continue
 
             for actuator_id in self.actuator_range:
-                if self._ping_actuator(canbus, actuator_id):
+                if self._ping_actuator(canbus, actuator_id) != -1:
                     self.actuators[canbus].append(actuator_id)
+                self.actuators[canbus] = list(set(self.actuators[canbus]))
 
         total_actuators = sum(len(actuators) for actuators in self.actuators.values())
         print(f"\033[1;32mFound {total_actuators} actuators on {len(self.sockets)} sockets\033[0m")
@@ -129,11 +139,10 @@ class CANInterface:
     def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
         self.sockets[canbus].send(frame)
-        try:
-            _ = self._receive_can_frame(self.sockets[canbus], Mux.PING)
-        except Exception:
-            return False
-        return True
+        response = self._receive_can_frame(self.sockets[canbus], Mux.PING)
+        if response == -1:
+            return -1
+        return response["actuator_can_id"]
 
     def enable_motors(self) -> None:
         for canbus in self.sockets.keys():
@@ -158,10 +167,13 @@ class CANInterface:
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
-                    parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    result = self._parse_feedback_response(parsed_frame)
+                    frame = self._receive_can_frame(sock, Mux.FEEDBACK)
+                    if frame == -1:  # timeout
+                        print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
+                        continue
+                    result = self._parse_feedback_response(frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
-                        print(f"\033[1;33mWARNING: actuator {actuator_id} != {result['actuator_can_id']}\033[0m")
+                        print(f"\033[1;33mWARNING: got actuator {actuator_id}, expected {result['actuator_can_id']}\033[0m")
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
@@ -187,10 +199,9 @@ class CANInterface:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
-                    try:
-                        _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
-                    except:
-                        print(f"\033[1;33mWARNING: lost response from actuator {actuator_id} on pd target send\033[0m")
+                    frame = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
+                    if frame == -1:  # timeout
+                        print(f"\033[1;33mWARNING: [spdt] recv timeout actuator {actuator_id}\033[0m")
 
     def _build_pd_command_frame(
         self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float
@@ -205,6 +216,26 @@ class CANInterface:
         can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((Mux.CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
+
+    def receive_missing_responses(self) -> None:
+        """Single-pass drain of late responses."""
+        # Prune stale entries (>1s)
+        now_s = time.time()
+        self.missing_responses = {
+            sock: [t for t in timestamps if (now_s - t) < 1.0] for sock, timestamps in self.missing_responses.items()
+        }
+        total_missing_responses = sum(len(timestamps) for timestamps in self.missing_responses.values())
+        if not total_missing_responses:
+            return
+        print(f"Total missing responses: {total_missing_responses}")
+
+        # Process any readable sockets
+        for sock, missing_responses in self.missing_responses.items():
+            if missing_responses:
+                print("try receive..")
+                if (_ := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
+                    print("\treceived")
+                    missing_responses.remove(missing_responses[0])  # Remove the oldest missing response
 
 
 class MotorDriver:
@@ -254,6 +285,7 @@ class MotorDriver:
         input()  # wait for user to enable motors
         self.ci.enable_motors()
         print("✅ Motors enabled")
+
         print("\nHoming...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for scale in [math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(30)]:
@@ -275,8 +307,15 @@ class MotorDriver:
             t2 = time.perf_counter()
             self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             t3 = time.perf_counter()
-            print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us")
+            self.ci.receive_missing_responses()
+            t4 = time.perf_counter()
+            print(
+                f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us"
+            )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
+
+    def receive_missing_responses(self) -> None:
+        self.ci.receive_missing_responses()
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.ci.get_actuator_feedback()
@@ -311,7 +350,10 @@ if __name__ == "__main__":
     main()
 
 
-# .recv takes 10-30us if messages are available.
-# TODO deal with feedback request timeouts
-# TODO dont die on critical faults
-# TODO Flush bus when timeing out on set pd target messages to prevent async issues.
+
+# # .recv takes 10-30us if messages are available.
+# TODO reset motor after critical fault? 
+# TODO reset all act upons startup
+# # TODO dont die on critical faults?
+# TODO if missing response - feed last known good value instead of 0
+# TODO tune down CAN timeout
