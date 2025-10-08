@@ -27,7 +27,9 @@ ACTION_SPACE_JOINT_LIMITS: dict[str, tuple[float, float]] = {
 
 
 def clamp(name: str, value: float) -> float:
-    return min(max(value, ACTION_SPACE_JOINT_LIMITS[name][0]), ACTION_SPACE_JOINT_LIMITS[name][1])
+    if name in ACTION_SPACE_JOINT_LIMITS:
+        return min(max(value, ACTION_SPACE_JOINT_LIMITS[name][0]), ACTION_SPACE_JOINT_LIMITS[name][1])
+    return value
 
 
 class Keyboard(CommandInterface):
