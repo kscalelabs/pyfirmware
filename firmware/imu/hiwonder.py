@@ -181,7 +181,7 @@ class Hiwonder:
         self.start()
         start_time = time.time()
         while True:
-            time.sleep(0.1)
+            time.sleep(0.02)
             projgrav, gyro, timestamp = self.get_projected_gravity_and_gyroscope()
             print(f"gravity: {projgrav}, gyro: {gyro}, t: {timestamp - start_time:.3f}")
 
