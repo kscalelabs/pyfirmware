@@ -1,7 +1,6 @@
 """CAN communication and motor driver interfaces for actuators."""
 
 import math
-import select
 import socket
 import struct
 import sys
@@ -25,6 +24,8 @@ class CANInterface:
         self.host_id = 0xFD
         self.canbus_range = range(0, 7)
         self.actuator_range = range(10, 50)
+
+        self.CAN_TIMEOUT = 0.005
 
         # fault codes
         self.MUX_0x15_FAULT_CODES = [
@@ -116,7 +117,7 @@ class CANInterface:
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
-                sock.settimeout(0.005)
+                sock.settimeout(self.CAN_TIMEOUT)
                 sock.send(self._build_can_frame(0, Mux.PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
@@ -223,19 +224,11 @@ class CANInterface:
             return
         print(f"Total missing responses: {total_missing_responses}")
 
-        # Try to read from sockets with pending responses
-        sockets = list(self.missing_responses.keys())
-        try:
-            readable, _, _ = select.select(sockets, [], [], timeout=0.001)
-        except Exception:
-            print(f"\033[1;33mWARNING: exception in receive_missing_responses\033[0m")
-            return
-
         # Process any readable sockets
-        for sock in readable:
-            if (frame := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
-                # Remove the oldest missing response
-                self.missing_responses[sock].remove(self.missing_responses[sock][0])
+        for sock, missing_responses in self.missing_responses.items():
+            if missing_responses:
+                if (frame := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
+                    missing_responses.remove(missing_responses[0]) # Remove the oldest missing response
 
 
 class MotorDriver:
@@ -285,6 +278,7 @@ class MotorDriver:
         input()  # wait for user to enable motors
         self.ci.enable_motors()
         print("✅ Motors enabled")
+    
         print("\nHoming...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for scale in [math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(30)]:
@@ -351,3 +345,4 @@ if __name__ == "__main__":
 
 # # TODO dont die on critical faults?
 # TODO if missing response - feed last known good value instead of 0
+# TODO tune down CAN timeout
