@@ -168,7 +168,7 @@ class CANInterface:
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
                     frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    if frame == -1: # timeout
+                    if frame == -1:  # timeout
                         continue
                     result = self._parse_feedback_response(frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
@@ -218,7 +218,9 @@ class CANInterface:
         """Single-pass drain of late responses"""
         # Prune stale entries (>1s)
         now_s = time.time()
-        self.missing_responses = {sock: [t for t in timestamps if (now_s - t) < 1.0] for sock, timestamps in self.missing_responses.items()}
+        self.missing_responses = {
+            sock: [t for t in timestamps if (now_s - t) < 1.0] for sock, timestamps in self.missing_responses.items()
+        }
         total_missing_responses = sum(len(timestamps) for timestamps in self.missing_responses.values())
         if not total_missing_responses:
             return
@@ -228,7 +230,7 @@ class CANInterface:
         for sock, missing_responses in self.missing_responses.items():
             if missing_responses:
                 if (frame := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
-                    missing_responses.remove(missing_responses[0]) # Remove the oldest missing response
+                    missing_responses.remove(missing_responses[0])  # Remove the oldest missing response
 
 
 class MotorDriver:
@@ -278,7 +280,7 @@ class MotorDriver:
         input()  # wait for user to enable motors
         self.ci.enable_motors()
         print("✅ Motors enabled")
-    
+
         print("\nHoming...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for scale in [math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(30)]:
@@ -302,7 +304,9 @@ class MotorDriver:
             t3 = time.perf_counter()
             self.ci.receive_missing_responses()
             t4 = time.perf_counter()
-            print(f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us")
+            print(
+                f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us"
+            )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
     def receive_missing_responses(self) -> None:
