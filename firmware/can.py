@@ -307,14 +307,14 @@ class MotorDriver:
         t0 = time.perf_counter()
         while True:
             t = time.perf_counter()
-            _ = self.ci.get_actuator_feedback()
+            _ = self.can.get_actuator_feedback()
             t1 = time.perf_counter()
             angle = 0.3 * math.sin(2 * math.pi * 0.5 * (t - t0))
             action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
             t2 = time.perf_counter()
-            self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
+            self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             t3 = time.perf_counter()
-            self.ci.receive_missing_responses()
+            self.can.receive_missing_responses()
             t4 = time.perf_counter()
             print(
                 f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us"
@@ -322,10 +322,10 @@ class MotorDriver:
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
     def receive_missing_responses(self) -> None:
-        self.ci.receive_missing_responses()
+        self.can.receive_missing_responses()
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
-        fb = self.ci.get_actuator_feedback()
+        fb = self.can.get_actuator_feedback()
         joint_angles, joint_vels, torques, temps = {}, {}, {}, {}
         for id in self.robot.actuators.keys():
             if id in fb:
@@ -344,7 +344,7 @@ class MotorDriver:
 
     def take_action(self, action: list[float], joint_order: list[str]) -> None:
         action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
-        self.ci.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
+        self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
 
 
 def main() -> None:
