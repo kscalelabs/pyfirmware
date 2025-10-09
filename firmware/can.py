@@ -252,6 +252,11 @@ class MotorDriver:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
         self.can = CANInterface()
+        # Cache for last known good values (initialized to zeros)
+        self.last_known_feedback = {
+            id: {"angle": 0.0, "velocity": 0.0, "torque": 0.0, "temperature": 0.0}
+            for id in self.robot.actuators.keys()
+        }
         self.startup_sequence()
 
     def startup_sequence(self) -> None:
@@ -330,11 +335,24 @@ class MotorDriver:
         joint_angles, joint_vels, torques, temps = {}, {}, {}, {}
         for id in self.robot.actuators.keys():
             if id in fb:
+                # Update cache with new values
                 joint_angles[id] = self.robot.actuators[id].can_to_physical_angle(fb[id]["angle_raw"])
                 joint_vels[id] = self.robot.actuators[id].can_to_physical_velocity(fb[id]["angular_velocity_raw"])
                 torques[id] = self.robot.actuators[id].can_to_physical_torque(fb[id]["torque_raw"])
                 temps[id] = self.robot.actuators[id].can_to_physical_temperature(fb[id]["temperature_raw"])
-            else:  # fill absent actuators with zeros
+                
+                self.last_known_feedback[id]["angle"] = joint_angles[id]
+                self.last_known_feedback[id]["velocity"] = joint_vels[id]
+                self.last_known_feedback[id]["torque"] = torques[id]
+                self.last_known_feedback[id]["temperature"] = temps[id]
+            elif id in self.last_known_feedback:
+                # Fall back to last known good values
+                joint_angles[id] = self.last_known_feedback[id]["angle"]
+                joint_vels[id] = self.last_known_feedback[id]["velocity"]
+                torques[id] = self.last_known_feedback[id]["torque"]
+                temps[id] = self.last_known_feedback[id]["temperature"]
+            else:
+                # Ultimate fallback to zeros for unknown actuators
                 joint_angles[id], joint_vels[id], torques[id], temps[id] = 0.0, 0.0, 0.0, 0.0
 
         joint_angles_ordered = [joint_angles[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
@@ -362,6 +380,5 @@ if __name__ == "__main__":
 # TODO reset motor after critical fault?
 # TODO reset all act upons startup
 # # TODO dont die on critical faults?
-# TODO if missing response - feed last known good value instead of 0
 # upd listener .clip ccmds
 # dont remember missing messages, just try to receive always
