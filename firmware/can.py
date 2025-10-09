@@ -363,3 +363,5 @@ if __name__ == "__main__":
 # TODO reset all act upons startup
 # # TODO dont die on critical faults?
 # TODO if missing response - feed last known good value instead of 0
+# upd listener .clip ccmds
+# dont remember missing messages, just try to receive always

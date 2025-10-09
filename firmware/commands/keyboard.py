@@ -122,9 +122,10 @@ class Keyboard(CommandInterface):
         if self.active_motion:
             commands = self.active_motion.get_next_motion_frame()
             if commands:
-                clamped_commands = {name: clamp(name, commands[name]) for name in self.policy_command_names}
                 # only get commands the policy supports and fill the rest with zeros
-                return [clamped_commands[name] for name in self.policy_command_names]
+                policy_commands = {name: commands.get(name, 0.0) for name in self.policy_command_names}
+                clamped_commands = {name: clamp(name, policy_commands[name]) for name in self.policy_command_names}
+                return [v for v in clamped_commands.values()]
             else:
                 self.active_motion = None
                 self.reset_cmd()
