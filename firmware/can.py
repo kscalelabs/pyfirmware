@@ -75,12 +75,12 @@ class CANInterface:
             "payload": payload,
         }
 
-    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
+    def _receive_can_frame(self, sock: socket.socket, mux: int, track_missed_responses: bool = True) -> Dict[str, int]:
         """Recursively receive can frames until the mux is the expected value."""
         try:
             frame = sock.recv(self.FRAME_SIZE)
         except Exception as e:
-            if mux != Mux.PING:
+            if mux != Mux.PING and track_missed_responses:
                 print(f"\033[1;33mWARNING: error receiving can frame for mux 0x{mux:02X}: {e}\033[0m")
                 self.missing_responses[sock].append(time.time())
             return -1
@@ -129,7 +129,7 @@ class CANInterface:
             for actuator_id in self.actuator_range:
                 if self._ping_actuator(canbus, actuator_id) != -1:
                     self.actuators[canbus].append(actuator_id)
-                self.actuators[canbus] = list(set(self.actuators[canbus]))
+            self.actuators[canbus] = sorted(list(set(self.actuators[canbus])))
 
         total_actuators = sum(len(actuators) for actuators in self.actuators.values())
         print(f"\033[1;32mFound {total_actuators} actuators on {len(self.sockets)} sockets\033[0m")
@@ -201,7 +201,7 @@ class CANInterface:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     frame = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
                     if frame == -1:  # timeout
-                        print(f"\033[1;33mWARNING: [spdt] recv timeout actuator {actuator_id}\033[0m")
+                        print(f"\033[1;33mWARNING: [spdt] recv timeout\033[0m")
 
     def _build_pd_command_frame(
         self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float
@@ -219,10 +219,10 @@ class CANInterface:
 
     def receive_missing_responses(self) -> None:
         """Single-pass drain of late responses."""
-        # Prune stale entries (>1s)
+        # Prune messages that have been lost for more than 200ms
         now_s = time.time()
         self.missing_responses = {
-            sock: [t for t in timestamps if (now_s - t) < 1.0] for sock, timestamps in self.missing_responses.items()
+            sock: [t for t in timestamps if (now_s - t) < 0.2] for sock, timestamps in self.missing_responses.items()
         }
         total_missing_responses = sum(len(timestamps) for timestamps in self.missing_responses.values())
         if not total_missing_responses:
@@ -233,7 +233,7 @@ class CANInterface:
         for sock, missing_responses in self.missing_responses.items():
             if missing_responses:
                 print("try receive..")
-                if (_ := self._receive_can_frame(sock, Mux.FEEDBACK)) != -1:
+                if (_ := self._receive_can_frame(sock, Mux.FEEDBACK, track_missed_responses=False)) != -1:
                     print("\treceived")
                     missing_responses.remove(missing_responses[0])  # Remove the oldest missing response
 
