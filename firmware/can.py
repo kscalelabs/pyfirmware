@@ -174,7 +174,9 @@ class CANInterface:
                         continue
                     result = self._parse_feedback_response(frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
-                        print(f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m")
+                        print(
+                            f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
+                        )
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
@@ -198,14 +200,14 @@ class CANInterface:
                 if actuator_id in actions:
                     frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
                     self.sockets[bus].send(frame)
-        
+
         # Receive all responses
         for bus in self.sockets.keys():
             for actuator_id in self.actuators[bus]:
-                if actuator_id in actions: # Only wait for responses from actuators we commanded
+                if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
                     if frame == -1:  # timeout
-                        print(f"\033[1;33mWARNING: [spdt] recv timeout\033[0m")
+                        print("\033[1;33mWARNING: [spdt] recv timeout\033[0m")
 
     def _build_pd_command_frame(
         self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float
@@ -268,11 +270,15 @@ class MotorDriver:
             torque = self.robot.actuators[act_id].can_to_physical_torque(state["torque_raw"])
             temp = self.robot.actuators[act_id].can_to_physical_temperature(state["temperature_raw"])
             fault_color = "\033[1;31m" if state["fault_flags"] > 0 else "\033[1;32m"
-            print(f"{act_id:3d} | {name:4s} | {angle:5.2f} | {velocity:8.2f} | {torque:6.2f} | {temp:5.1f} | {fault_color}{state['fault_flags']:3d}\033[0m")
+            print(
+                f"{act_id:3d} | {name:4s} | {angle:5.2f} | {velocity:8.2f} | {torque:6.2f} | {temp:5.1f} | {fault_color}{state['fault_flags']:3d}\033[0m"
+            )
 
         # Check for issues
-        angles = {act_id: self.robot.actuators[act_id].can_to_physical_angle(state["angle_raw"]) 
-                  for act_id, state in states.items()}
+        angles = {
+            act_id: self.robot.actuators[act_id].can_to_physical_angle(state["angle_raw"])
+            for act_id, state in states.items()
+        }
         if any(abs(angle) > 2.0 for angle in angles.values()):
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
@@ -352,8 +358,7 @@ if __name__ == "__main__":
 
 
 # # .recv takes 10-30us if messages are available.
-# TODO reset motor after critical fault? 
+# TODO reset motor after critical fault?
 # TODO reset all act upons startup
 # # TODO dont die on critical faults?
 # TODO if missing response - feed last known good value instead of 0
-# TODO tune down CAN timeout
