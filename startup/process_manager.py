@@ -31,25 +31,29 @@ class ProcessManager:
         self.processes: Dict[str, subprocess.Popen] = {}
         self.status: Dict[str, ProcessStatus] = {}
         self.running = True
+        self.status_change_callback = None  # Callback for status updates
         
         # Define available process options with their commands
         self.options = {
             "display": {
-                "cmd": ["python3", "startup/display.py"],
-                "cwd": None,
-                "priority": None
+                "cmd": ["python3", "display.py"]
             },
             "qr": {
-                "cmd": ["python3", "startup/qr_code.py"],
-                "cwd": None,
-                "priority": None
+                "cmd": ["python3", "qr_code.py"]
             },
             "camera": {
-                "cmd": ["python3", "firmware/gstreamer.py"],
-                "cwd": None,
-                "priority": None
+                "cmd": ["python3", "../firmware/gstreamer.py"]
             }
         }
+    
+    def set_status_change_callback(self, callback):
+        """Set callback to be called when process status changes."""
+        self.status_change_callback = callback
+    
+    def _notify_status_change(self):
+        """Notify that status has changed."""
+        if self.status_change_callback:
+            asyncio.create_task(self.status_change_callback())
         
     def start_process(self, name: str) -> bool:
         """Start a subprocess by name. Name must be one of: display, qr, camera."""
@@ -66,25 +70,15 @@ class ProcessManager:
             # Get process configuration
             config = self.options[name]
             cmd = config["cmd"]
-            cwd = config["cwd"]
-            priority = config["priority"]
             
             # Prepare environment
             env = os.environ.copy()
-            if priority is not None:
-                env['NICE_VALUE'] = str(priority)
-            
             # Start process
             process = subprocess.Popen(
                 cmd,
-                cwd=cwd,
+                cwd=None,
                 env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE,
-                bufsize=0,  # Unbuffered for real-time output
-                universal_newlines=True,
-                preexec_fn=self._set_process_priority(priority) if priority else None
+                preexec_fn=None
             )
             
             self.processes[name] = process
@@ -102,6 +96,9 @@ class ProcessManager:
             # Start monitoring task
             asyncio.create_task(self._monitor_process(name, process))
             
+            # Notify status change
+            self._notify_status_change()
+            
             return True
             
         except Exception as e:
@@ -114,6 +111,8 @@ class ProcessManager:
                 exit_code=None,
                 last_error=str(e)
             )
+            # Notify status change
+            self._notify_status_change()
             return False
     
     def stop_process(self, name: str, timeout: int = 10) -> bool:
@@ -121,7 +120,7 @@ class ProcessManager:
         if name not in self.processes:
             print(f"Process {name} not found")
             return False
-        
+        print(f"Stopping process {name}")
         process = self.processes[name]
         
         try:
@@ -143,6 +142,10 @@ class ProcessManager:
             
             del self.processes[name]
             print(f"Stopped process {name}")
+            
+            # Notify status change
+            self._notify_status_change()
+            
             return True
             
         except Exception as e:
@@ -169,17 +172,34 @@ class ProcessManager:
     def get_status(self) -> Dict[str, Any]:
         """Get comprehensive status of all processes."""
         status_dict = {}
-        for name, status in self.status.items():
-            status_dict[name] = {
-                'running': status.running,
-                'pid': status.pid,
-                'start_time': status.start_time,
-                'exit_code': status.exit_code,
-                'last_error': status.last_error,
-                'uptime': time.time() - status.start_time if status.start_time else 0,
-                'cpu_percent': status.cpu_percent,
-                'memory_mb': status.memory_mb
-            }
+        
+        # Include all possible processes, even if not started yet
+        for name in self.options.keys():
+            if name in self.status:
+                status = self.status[name]
+                status_dict[name] = {
+                    'running': status.running,
+                    'pid': status.pid,
+                    'start_time': status.start_time,
+                    'exit_code': status.exit_code,
+                    'last_error': status.last_error,
+                    'uptime': time.time() - status.start_time if status.start_time else 0,
+                    'cpu_percent': status.cpu_percent,
+                    'memory_mb': status.memory_mb
+                }
+            else:
+                # Process has never been started
+                status_dict[name] = {
+                    'running': False,
+                    'pid': None,
+                    'start_time': None,
+                    'exit_code': None,
+                    'last_error': None,
+                    'uptime': 0,
+                    'cpu_percent': 0.0,
+                    'memory_mb': 0.0
+                }
+        
         return status_dict
     
     def cleanup_all(self):
@@ -199,33 +219,19 @@ class ProcessManager:
         return set_priority
     
     async def _monitor_process(self, name: str, process: subprocess.Popen):
-        """Monitor process output and status."""
+        """Monitor if process is alive."""
         try:
+            # Just wait for process to end
             while process.poll() is None and self.running:
-                # Read output (non-blocking)
-                try:
-                    line = process.stdout.readline()
-                    if line:
-                        print(line)
-                        pass  # Output available but not logging
-                except:
-                    pass
-                
-                # Update resource usage
-                try:
-                    import psutil
-                    proc = psutil.Process(process.pid)
-                    self.status[name].cpu_percent = proc.cpu_percent()
-                    self.status[name].memory_mb = proc.memory_info().rss / 1024 / 1024
-                except:
-                    pass
-                
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(1.0)
             
             # Process ended
             self.status[name].running = False
             self.status[name].exit_code = process.returncode
-            print(f"Process {name} ended with code {process.returncode}")
+            print(f"Process '{name}' ended (exit code: {process.returncode})")
+            
+            # Notify status change
+            self._notify_status_change()
             
         except Exception as e:
             print(f"Error monitoring process {name}: {e}")

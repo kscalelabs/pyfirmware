@@ -1,4 +1,5 @@
 import os
+import signal
 import time
 import random
 import pygame
@@ -99,11 +100,26 @@ class DisplayManager:
 def main():
     print("Starting Face")
     dm = DisplayManager()
+    
+    # Flag for graceful shutdown
+    shutdown_requested = [False]  # Using list so it can be modified in closure
+    
+    def signal_handler(signum, frame):
+        print(f"Received signal {signum}, shutting down gracefully...")
+        shutdown_requested[0] = True
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     try:
-        while True:
+        while not shutdown_requested[0]:
             dm.update()
             time.sleep(0.05)
     except KeyboardInterrupt:
+        pass
+    finally:
+        print("Closing display...")
         dm.close()
 
 if __name__ == "__main__":

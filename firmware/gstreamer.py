@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import signal
 
 import gi
 import websockets
@@ -117,7 +118,7 @@ class WebRTCServer:
             conv = Gst.ElementFactory.make("videoconvert", f"conv{i}")
 
             # Add videoflip element only if flip is enabled
-            if self.flip_video:
+            if not self.flip_video:
                 flip = Gst.ElementFactory.make("videoflip", f"flip{i}")
                 flip.set_property("method", 2)  # 2 = vertical flip
 
@@ -126,7 +127,7 @@ class WebRTCServer:
             sink_queue.set_property("max-size-buffers", 2)
 
             elements_to_add = [src, capsfilter, conv, sink_queue]
-            if self.flip_video:
+            if not self.flip_video:
                 elements_to_add.append(flip)
 
             for e in elements_to_add:
@@ -136,7 +137,7 @@ class WebRTCServer:
             src.link(capsfilter)
             capsfilter.link(conv)
 
-            if self.flip_video:
+            if not self.flip_video:
                 conv.link(flip)
                 flip.link(sink_queue)
             else:
@@ -393,13 +394,26 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     server = WebRTCServer(loop, flip_video=args.flip)
 
+    # Create shutdown event
+    shutdown_event = asyncio.Event()
+    
+    def signal_handler(signum):
+        print(f"Received signal {signum}, shutting down gracefully...")
+        shutdown_event.set()
+    
+    # Register signal handlers
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
+
     async def handler(websocket):
         await server.websocket_handler(websocket)
 
     asyncio.create_task(glib_main_loop_iteration())
     async with websockets.serve(handler, "0.0.0.0", 8765):
         print("WebSocket server running on ws://0.0.0.0:8765")
-        await asyncio.Future()  # run forever
+        await shutdown_event.wait()  # wait for shutdown signal
+        print("Closing pipeline and shutting down...")
+        server.close_pipeline()
 
 
 if __name__ == "__main__":
