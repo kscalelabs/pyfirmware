@@ -110,7 +110,7 @@ class CANInterface:
 
     def _find_actuators(self) -> None:
         print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
-        for canbus in self.canbus_range:
+        for canbus in self.CANBUS_RANGE:
             print(f"Scanning bus {canbus}: ", end="")
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
@@ -124,7 +124,7 @@ class CANInterface:
                 print("\033[91mFailed\033[0m")
                 continue
 
-            for actuator_id in self.actuator_range:
+            for actuator_id in self.ACTUATOR_RANGE:
                 if self._ping_actuator(canbus, actuator_id) != -1:
                     self.actuators[canbus].append(actuator_id)
             self.actuators[canbus] = sorted(list(set(self.actuators[canbus])))
@@ -239,7 +239,8 @@ class CANInterface:
         for sock, missing_responses in self.missing_responses.items():
             if missing_responses:
                 print("try receive..")
-                if (_ := self._receive_can_frame(sock, Mux.FEEDBACK, track_missed_responses=False)) != -1:
+                result = self._receive_can_frame(sock, Mux.FEEDBACK, track_missed_responses=False)
+                if result != -1:
                     print("\treceived")
                     missing_responses.remove(missing_responses[0])  # Remove the oldest missing response
 
