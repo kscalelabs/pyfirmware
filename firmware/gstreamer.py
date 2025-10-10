@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import signal
+import socket
 
 import gi
 import websockets
@@ -53,6 +54,10 @@ class WebRTCServer:
         self.added_data_channel = False
         self.added_streams = 0
         self.flip_video = flip_video
+        
+        # UDP socket for forwarding commands to UDP listener
+        self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_target = ("127.0.0.1", 10000)
 
     def connect_audio(self, webrtc) -> None:
         audio_src = Gst.ElementFactory.make("alsasrc", "audio_src")
@@ -193,9 +198,23 @@ class WebRTCServer:
             self.pipe = None
             self.webrtc = None
             self.added_data_channel = False
+    
+    def cleanup(self) -> None:
+        """Clean up resources including UDP socket."""
+        self.close_pipeline()
+        if self.udp_sock:
+            self.udp_sock.close()
 
     def on_message_string(self, channel, message) -> None:
-        print("Received:", message)
+        """Handle incoming messages from WebRTC data channel and forward to UDP listener."""
+        print("Received data channel message:", message)
+        try:
+            msg = {"commands": json.loads(message)}
+            # Forward the command object to UDP listener on port 10000
+            self.udp_sock.sendto(json.dumps(msg).encode("utf-8"), self.udp_target)
+            print(f"Forwarded command to UDP {self.udp_target}: {msg}")
+        except Exception as e:
+            print(f"Error forwarding command: {e}")
 
     def on_data_channel(self, webrtc, channel) -> None:
         print("New data channel:", channel.props.label)
@@ -411,9 +430,10 @@ async def main() -> None:
     asyncio.create_task(glib_main_loop_iteration())
     async with websockets.serve(handler, "0.0.0.0", 8765):
         print("WebSocket server running on ws://0.0.0.0:8765")
+        print("Forwarding commands to UDP listener on port 10000")
         await shutdown_event.wait()  # wait for shutdown signal
         print("Closing pipeline and shutting down...")
-        server.close_pipeline()
+        server.cleanup()
 
 
 if __name__ == "__main__":

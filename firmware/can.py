@@ -216,7 +216,13 @@ class MotorDriver:
         self.ci = CANInterface()
         self.startup_sequence()
 
-    def startup_sequence(self) -> None:
+
+    def get_actuator_info(self) -> dict:
+        """Get stored actuator information (actuator IDs organized by canbus socket)."""
+        return self.ci.actuators
+
+    def startup_sequence(self) -> dict:
+        """Check actuator states and verify they're ready. Returns actuator states."""
         states = self.ci.get_actuator_feedback()
 
         print("\033[1;36mActuator states:\033[0m")
@@ -250,8 +256,9 @@ class MotorDriver:
         if any(state["fault_flags"] > 0 for state in states.values()):
             print("\033[1;31m❌ Actuator faults detected\033[0m")
 
-        print("Press Enter to enable motors...")
-        input()  # wait for user to enable motors
+    def enable_and_home(self) -> None:
+        """Enable motors and home them to their bias positions."""
+        print("Enabling motors...")
         self.ci.enable_motors()
         print("✅ Motors enabled")
         print("\nHoming...")

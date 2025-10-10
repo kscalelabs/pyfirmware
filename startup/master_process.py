@@ -19,20 +19,26 @@ class WebSocketHandler:
         self.pm = process_manager
         self.clients = set()
         self.first_connection = True
-        
-        # Register callback for status changes
-        self.pm.set_status_change_callback(self.broadcast_status)
+        self.broadcast_interval = 2.0  # seconds between status broadcasts
+    
+    def get_status_message(self):
+        """Generate status message (not sent automatically)."""
+        status = self.pm.get_status()
+        return json.dumps({
+            "type": "status_update",
+            "processes": status
+        })
     
     async def broadcast_status(self):
         """Broadcast current process status to all connected clients."""
         if not self.clients:
             return
         
-        status = self.pm.get_status()
-        message = json.dumps({
-            "type": "status_update",
-            "processes": status
-        })
+        try:
+            message = self.get_status_message()
+        except Exception as e:
+            print(f"Error generating status message: {e}")
+            return
         
         # Send to all connected clients
         disconnected = set()
@@ -46,7 +52,24 @@ class WebSocketHandler:
                 disconnected.add(client)
         
         # Remove disconnected clients
-        self.clients -= disconnected
+        if disconnected:
+            self.clients -= disconnected
+            print(f"Removed {len(disconnected)} disconnected client(s)")
+    
+    async def periodic_broadcast(self):
+        """Periodically broadcast status to all clients. Auto-restarts on failure."""
+        while True:
+            try:
+                await asyncio.sleep(self.broadcast_interval)
+                await self.broadcast_status()
+            except asyncio.CancelledError:
+                # Task was cancelled, exit gracefully
+                print("Periodic broadcast task cancelled")
+                break
+            except Exception as e:
+                print(f"Error in periodic broadcast: {e}, restarting in 5 seconds...")
+                await asyncio.sleep(5)  # Wait before restarting
+                continue
     
     async def handle_client(self, websocket):
         """Handle a WebSocket client connection."""
@@ -56,11 +79,7 @@ class WebSocketHandler:
         
         # Send initial status to the newly connected client
         try:
-            status = self.pm.get_status()
-            await websocket.send(json.dumps({
-                "type": "status_update",
-                "processes": status
-            }))
+            await websocket.send(self.get_status_message())
         except Exception as e:
             print(f"Error sending initial status to {client_ip}: {e}")
         
@@ -166,9 +185,12 @@ async def main():
         
         print("✓ WebSocket server running on 0.0.0.0:8764", flush=True)
         print("✓ Master process ready", flush=True)
-        print("  Available processes: display, qr, camera", flush=True)
-        print("  Send: {\"type\": \"display|qr|camera\", \"active\": true|false}", flush=True)
+        print("  Available processes: display, qr, camera, download, run_policy", flush=True)
+        print("  Send: {\"type\": \"display|qr|camera|download|run_policy\", \"active\": true|false}", flush=True)
         print(flush=True)
+        
+        # Start periodic status broadcast
+        asyncio.create_task(ws_handler.periodic_broadcast())
         
         await server.wait_closed()
     except OSError as e:

@@ -31,7 +31,6 @@ class ProcessManager:
         self.processes: Dict[str, subprocess.Popen] = {}
         self.status: Dict[str, ProcessStatus] = {}
         self.running = True
-        self.status_change_callback = None  # Callback for status updates
         
         # Define available process options with their commands
         self.options = {
@@ -43,20 +42,21 @@ class ProcessManager:
             },
             "camera": {
                 "cmd": ["python3", "../firmware/gstreamer.py"]
+            },
+            "sounds": {
+                "cmd": ["python", "sounds.py"]
+            },
+            "download": {
+                "cmd": ["bash", "download_kinfer_policies.sh"]
+            },
+            "run_policy": {
+                "cmd": ["python", "-m", "firmware.main --websocket"],
+                "cwd": str(Path(__file__).parent.parent.absolute())  # jack-dev directory
             }
         }
     
-    def set_status_change_callback(self, callback):
-        """Set callback to be called when process status changes."""
-        self.status_change_callback = callback
-    
-    def _notify_status_change(self):
-        """Notify that status has changed."""
-        if self.status_change_callback:
-            asyncio.create_task(self.status_change_callback())
-        
     def start_process(self, name: str) -> bool:
-        """Start a subprocess by name. Name must be one of: display, qr, camera."""
+        """Start a subprocess by name. Name must be one of: display, qr, camera, sounds, download, run_policy."""
         try:
             # Validate name
             if name not in self.options:
@@ -71,12 +71,15 @@ class ProcessManager:
             config = self.options[name]
             cmd = config["cmd"]
             
+            # Set working directory - use config's cwd if specified, otherwise startup folder
+            cwd = config.get("cwd", str(Path(__file__).parent.absolute()))
+            
             # Prepare environment
             env = os.environ.copy()
             # Start process
             process = subprocess.Popen(
                 cmd,
-                cwd=None,
+                cwd=cwd,
                 env=env,
                 preexec_fn=None
             )
@@ -96,9 +99,6 @@ class ProcessManager:
             # Start monitoring task
             asyncio.create_task(self._monitor_process(name, process))
             
-            # Notify status change
-            self._notify_status_change()
-            
             return True
             
         except Exception as e:
@@ -111,8 +111,6 @@ class ProcessManager:
                 exit_code=None,
                 last_error=str(e)
             )
-            # Notify status change
-            self._notify_status_change()
             return False
     
     def stop_process(self, name: str, timeout: int = 10) -> bool:
@@ -142,9 +140,6 @@ class ProcessManager:
             
             del self.processes[name]
             print(f"Stopped process {name}")
-            
-            # Notify status change
-            self._notify_status_change()
             
             return True
             
@@ -229,9 +224,6 @@ class ProcessManager:
             self.status[name].running = False
             self.status[name].exit_code = process.returncode
             print(f"Process '{name}' ended (exit code: {process.returncode})")
-            
-            # Notify status change
-            self._notify_status_change()
             
         except Exception as e:
             print(f"Error monitoring process {name}: {e}")
