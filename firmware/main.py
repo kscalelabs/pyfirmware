@@ -49,12 +49,12 @@ def ramp_down_motors(motor_driver: MotorDriver) -> None:
         home_targets = {id: motor_driver.robot.actuators[id].joint_bias for id in motor_driver.robot.actuators.keys()}
         
         # Ramp down from current scaling to 0 (reverse of ramp up)
-        for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) for i in range(50)]):
+        for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
             if scale > motor_driver.max_scaling:
                 continue
             print(f"PD ramp down: {scale:.3f}")
             motor_driver.can.set_pd_targets(home_targets, robotcfg=motor_driver.robot, scaling=scale)
-            time.sleep(0.1)  # Faster than ramp up
+            time.sleep(0.1)  # Slower ramp down for safety
         
         # Final zero torque command
         motor_driver.can.set_pd_targets(home_targets, robotcfg=motor_driver.robot, scaling=0.0)
