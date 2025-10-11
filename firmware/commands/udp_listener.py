@@ -11,7 +11,7 @@ from firmware.commands.command_interface import CMD_NAMES, CommandInterface
 class UDPListener(CommandInterface):
     """Listens for UDP commands and updates the command vector."""
 
-    def __init__(self, command_names: List[str], port: int = 10000, host: str = "0.0.0.0") -> None:
+    def __init__(self, command_names: List[str] = CMD_NAMES, port: int = 10000, host: str = "0.0.0.0") -> None:
         print(f"Using UDP input on port {port} for commands: {command_names}")
         super().__init__(policy_command_names=command_names)
 
