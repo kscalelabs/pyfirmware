@@ -50,7 +50,7 @@ class ProcessManager:
                 "cmd": ["bash", "download_kinfer_policies.sh"]
             },
             "run_policy": {
-                "cmd": ["python", "-m", "firmware.main --websocket"],
+                "cmd": ["python", "-m", "firmware.main", "--websocket"],
                 "cwd": str(Path(__file__).parent.parent.absolute())  # jack-dev directory
             }
         }

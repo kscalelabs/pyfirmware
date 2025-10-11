@@ -11,7 +11,7 @@ import websockets
 from websockets.server import WebSocketServerProtocol
 
 
-class WebSocket:
+class WebSocketInterface:
     """WebSocket interface that waits for a client connection before proceeding."""
     
     def __init__(self, websocket: WebSocketServerProtocol, server):
