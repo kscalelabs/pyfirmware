@@ -20,15 +20,26 @@ from firmware.utils import get_imu_reader, get_onnx_sessions
 from firmware.utils import DummyIMU
 
 
-# Global shutdown flag
+# Global shutdown flag and interface reference
 shutdown_requested = False
+launch_interface_ref = None
 
 
 def signal_handler(signum, frame):
     """Handle shutdown signals."""
-    global shutdown_requested
+    global shutdown_requested, launch_interface_ref
     print(f"\n⚠️  Received signal {signum}, initiating shutdown...")
     shutdown_requested = True
+    
+    # Immediately close the server if it exists
+    if launch_interface_ref is not None:
+        try:
+            # Close the server synchronously
+            if hasattr(launch_interface_ref, 'server') and launch_interface_ref.server:
+                print("🛑 Force closing WebSocket server...")
+                launch_interface_ref.server.close()
+        except Exception as e:
+            print(f"⚠️  Error in signal handler cleanup: {e}")
 
 def ramp_down_motors(motor_driver: MotorDriver) -> None:
     """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
@@ -167,7 +178,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
 
 async def main(use_websocket: bool = False):
     """Main entry point that sets up launch interface and runs the policy."""
-    global shutdown_requested
+    global shutdown_requested, launch_interface_ref
     
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
@@ -180,9 +191,11 @@ async def main(use_websocket: bool = False):
         if use_websocket:
             print("🌐 Using WebSocket interface...")
             launchInterface = await WebSocketInterface.create()
+            launch_interface_ref = launchInterface  # Store global reference for signal handler
         else:
             print("⌨️  Using keyboard interface...")
             launchInterface = KeyboardLaunchInterface()
+            launch_interface_ref = launchInterface
         
         # Get kinfer path from client/user
         kinfer_path = await launchInterface.getKinferPath()
@@ -206,6 +219,7 @@ async def main(use_websocket: bool = False):
         traceback.print_exc()
     
     finally:
+        global launch_interface_ref
         if launchInterface is not None:
             print("Closing interface...")
             try:
@@ -214,8 +228,8 @@ async def main(use_websocket: bool = False):
             except Exception as e:
                 print(f"⚠️  Error closing interface: {e}")
         
-        # Give time for sockets to close
-        await asyncio.sleep(0.5)
+        # Clear global reference
+        launch_interface_ref = None
         print("👋 Shutdown complete")
 
 
@@ -232,4 +246,6 @@ if __name__ == "__main__":
         asyncio.run(main(use_websocket=args.websocket))
     except KeyboardInterrupt:
         print("\n👋 Interrupted by user")
+    finally:
+        # Ensure process exits cleanly, releasing all resources including ports
         sys.exit(0)
