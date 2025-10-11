@@ -39,18 +39,11 @@ class WebSocketInterface:
                 pass
         
         # Start the server with SO_REUSEADDR to allow quick restart
-        import socket
         server = await websockets.serve(
             handle_connection, 
             host, 
             port,
-            # Allow immediate reuse of the port after shutdown
-            sock=None,
-            create_protocol=None,
-            family=socket.AF_INET,
-            flags=socket.AI_PASSIVE,
-            reuse_address=True,
-            reuse_port=False
+            reuse_address=True  # Allow immediate reuse of the port after shutdown
         )
         print(f"✅ WebSocket server running on ws://{host}:{port}")
         print(f"⏳ Waiting for client connection...")
