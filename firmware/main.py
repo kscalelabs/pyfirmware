@@ -42,28 +42,29 @@ def ramp_down_motors(motor_driver: MotorDriver) -> None:
             if scale > motor_driver.max_scaling:
                 continue
             print(f"PD ramp down: {scale:.3f}")
-            motor_driver.ci.set_pd_targets(home_targets, robotcfg=motor_driver.robot, scaling=scale)
+            motor_driver.can.set_pd_targets(home_targets, robotcfg=motor_driver.robot, scaling=scale)
             time.sleep(0.05)  # Faster than ramp up
         
         # Final zero torque command
-        motor_driver.ci.set_pd_targets(home_targets, robotcfg=motor_driver.robot, scaling=0.0)
+        motor_driver.can.set_pd_targets(home_targets, robotcfg=motor_driver.robot, scaling=0.0)
         print("✅ Motors ramped down")
     except Exception as e:
         print(f"⚠️  Error during motor ramp down: {e}")
 
 
-async def runner(kinfer_path: str, log_dir: str, launchInterface: WebSocketInterface) -> None:
+async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
     global shutdown_requested
     
     logger = Logger(log_dir)
     motor_driver = None
 
     try:
-        #set up command interface
+        # Set up command interface
         init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
         joint_order = metadata["joint_names"]
         command_names = metadata["command_names"]
-        command_interface = None
+        carry = init_session.run(None, {})[0]
+
         command_source = await launchInterface.getCommandSource()
         if command_source == "keyboard":
             command_interface = Keyboard(command_names) 
@@ -72,8 +73,6 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface: WebSocketInter
                 command_interface = UDPListener(command_names)
             else:
                 command_interface = UDPListener()
-
-        carry = init_session.run(None, {})[0]
 
         imu_reader = get_imu_reader()
         if not await launchInterface.askIMUPermission(imu_reader):
@@ -96,13 +95,11 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface: WebSocketInter
             return
         print("🤖 Running policy...")
 
-        
-
         t0 = time.perf_counter()
         step_id = 0
         while not shutdown_requested:
             t, tt = time.perf_counter(), time.time()
-            joint_angles, joint_angular_velocities = motor_driver.get_joint_angles_and_velocities(joint_order)
+            joint_angles, joint_vels, torques, temps = motor_driver.get_joint_angles_and_velocities(joint_order)
             t1 = time.perf_counter()
             projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
             t2 = time.perf_counter()
@@ -113,7 +110,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface: WebSocketInter
                 None,
                 {
                     "joint_angles": np.array(joint_angles, dtype=np.float32),
-                    "joint_angular_velocities": np.array(joint_angular_velocities, dtype=np.float32),
+                    "joint_angular_velocities": np.array(joint_vels, dtype=np.float32),
                     "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                     "gyroscope": np.array(gyroscope, dtype=np.float32),
                     "command": np.array(command, dtype=np.float32),
@@ -124,6 +121,8 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface: WebSocketInter
 
             motor_driver.take_action(action, joint_order)
             t5 = time.perf_counter()
+            motor_driver.receive_missing_responses()
+            t6 = time.perf_counter()
 
             dt = time.perf_counter() - t
             logger.log(
@@ -132,16 +131,18 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface: WebSocketInter
                     "step_id": step_id,
                     "timestamp": tt,
                     "dt_ms": dt * 1000,
+                    "dt_roundtrip_ms": (t5 - t) * 1000,
                     "dt_joints_ms": (t1 - t) * 1000,
                     "dt_imu_ms": (t2 - t1) * 1000,
                     "dt_keyboard_ms": (t3 - t2) * 1000,
                     "dt_step_ms": (t4 - t3) * 1000,
                     "dt_action_ms": (t5 - t4) * 1000,
+                    "dt_missing_responses_ms": (t6 - t5) * 1000,
                     "joint_angles": joint_angles,
-                    "joint_vels": joint_angular_velocities,
+                    "joint_vels": joint_vels,
                     "joint_amps": [],  # TODO add
-                    "joint_torques": [],  # TODO add
-                    "joint_temps": [],  # TODO add
+                    "joint_torques": torques,
+                    "joint_temps": temps,
                     "projected_gravity": projected_gravity,
                     "gyroscope": gyroscope,
                     "command": command,
@@ -151,7 +152,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface: WebSocketInter
             )
             print(
                 f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, "
-                f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms"
+                f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms, missing responses={(t6 - t5) * 1000:.2f} ms"
             )
             step_id += 1
             time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
