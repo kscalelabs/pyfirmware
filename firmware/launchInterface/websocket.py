@@ -4,6 +4,7 @@ import asyncio
 import glob
 import json
 import os
+import struct
 from pathlib import Path
 from typing import Optional
 
@@ -38,12 +39,20 @@ class WebSocketInterface:
             except asyncio.CancelledError:
                 pass
         
-        # Start the server with SO_REUSEADDR to allow quick restart
+        # Create socket manually with SO_REUSEADDR to ensure port can be reused immediately
+        import socket as sock_module
+        sock = sock_module.socket(sock_module.AF_INET, sock_module.SOCK_STREAM)
+        sock.setsockopt(sock_module.SOL_SOCKET, sock_module.SO_REUSEADDR, 1)
+        # Set SO_LINGER to close immediately without waiting for pending data
+        sock.setsockopt(sock_module.SOL_SOCKET, sock_module.SO_LINGER, struct.pack('ii', 1, 0))
+        sock.bind((host, port))
+        sock.listen(1)
+        sock.setblocking(False)
+        
+        # Start the server using our configured socket
         server = await websockets.serve(
-            handle_connection, 
-            host, 
-            port,
-            reuse_address=True  # Allow immediate reuse of the port after shutdown
+            handle_connection,
+            sock=sock
         )
         print(f"✅ WebSocket server running on ws://{host}:{port}")
         print(f"⏳ Waiting for client connection...")
