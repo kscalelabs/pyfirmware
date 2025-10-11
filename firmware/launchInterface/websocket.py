@@ -38,8 +38,20 @@ class WebSocketInterface:
             except asyncio.CancelledError:
                 pass
         
-        # Start the server
-        server = await websockets.serve(handle_connection, host, port)
+        # Start the server with SO_REUSEADDR to allow quick restart
+        import socket
+        server = await websockets.serve(
+            handle_connection, 
+            host, 
+            port,
+            # Allow immediate reuse of the port after shutdown
+            sock=None,
+            create_protocol=None,
+            family=socket.AF_INET,
+            flags=socket.AI_PASSIVE,
+            reuse_address=True,
+            reuse_port=False
+        )
         print(f"✅ WebSocket server running on ws://{host}:{port}")
         print(f"⏳ Waiting for client connection...")
         
@@ -220,11 +232,19 @@ class WebSocketInterface:
     
     async def close(self):
         """Close the WebSocket connection and server."""
+        print("🔌 Closing WebSocket connection...")
         try:
-            await self.websocket.close()
-        except:
-            pass
+            if self.websocket:
+                await self.websocket.close()
+                print("✅ WebSocket connection closed")
+        except Exception as e:
+            print(f"⚠️  Error closing websocket: {e}")
         
         if self.server:
-            self.server.close()
-            await self.server.wait_closed()
+            print("🛑 Stopping WebSocket server...")
+            try:
+                self.server.close()
+                await self.server.wait_closed()
+                print("✅ WebSocket server stopped")
+            except Exception as e:
+                print(f"⚠️  Error stopping server: {e}")
