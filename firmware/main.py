@@ -185,7 +185,6 @@ async def main(use_websocket: bool = False):
     signal.signal(signal.SIGINT, signal_handler)
     print("✅ Signal handlers registered (SIGTERM, SIGINT)")
     
-    # Choose launch interface based on argument
     launchInterface = None
     try:
         if use_websocket:
@@ -219,7 +218,6 @@ async def main(use_websocket: bool = False):
         traceback.print_exc()
     
     finally:
-        global launch_interface_ref
         if launchInterface is not None:
             print("Closing interface...")
             try:
