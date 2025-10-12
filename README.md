@@ -22,7 +22,7 @@ pip install .
 ```
 
 ## Usage
-You can test the actuators with a simple sinewave test at low pd gains by runing:
+You can test the actuators with a simple sinewave test at low pd gains by running:
 ```bash
 kbot-sine
 ```
