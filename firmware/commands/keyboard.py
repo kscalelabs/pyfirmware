@@ -11,6 +11,7 @@ from typing import List
 from kmotions.motions import MOTIONS
 
 from firmware.commands.command_interface import CommandInterface
+from firmware.logger import Logger
 
 ACTION_SPACE_JOINT_LIMITS: dict[str, tuple[float, float]] = {
     "rshoulderpitch": (-3.490658, 1.047198),
@@ -35,8 +36,9 @@ def clamp(name: str, value: float) -> float:
 class Keyboard(CommandInterface):
     """Tracks keyboard presses to update the command vector."""
 
-    def __init__(self, command_names: List[str]) -> None:
+    def __init__(self, command_names: List[str], logger: Logger) -> None:
         super().__init__(policy_command_names=command_names)
+        self.logger = logger
         self.active_motion = None
 
         # Set up stdin for raw input
@@ -50,7 +52,7 @@ class Keyboard(CommandInterface):
 
     def set_motion(self, motion_name: str) -> None:
         """Set the active motion."""
-        print(f"Setting active motion to {motion_name}")
+        self.logger.info(f"Setting active motion to {motion_name}")
         self.active_motion = MOTIONS[motion_name](dt=0.02)  # TODO hard coded
 
     def _read_input(self) -> None:

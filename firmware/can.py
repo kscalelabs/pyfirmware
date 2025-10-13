@@ -8,6 +8,7 @@ import time
 from typing import Dict
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
+from firmware.logger import Logger
 
 
 class CriticalFaultError(Exception):
@@ -47,7 +48,8 @@ class CANInterface:
         FaultCode(0x01, False, "Undervoltage"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, logger: Logger) -> None:
+        self.logger = logger
         self.sockets = {}
         self.actuators = {}
         self._find_actuators()
@@ -80,13 +82,13 @@ class CANInterface:
             frame = sock.recv(self.FRAME_SIZE)
         except Exception as e:
             if mux != Mux.PING:
-                print(f"\033[1;33mWARNING: error receiving can frame for mux 0x{mux:02X}: {e}\033[0m")
+                self.logger.warning(f"Error receiving can frame for mux 0x{mux:02X}: {e}")
             return -1
         parsed_frame = self._parse_can_frame(frame)
         self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
 
         if parsed_frame["mux"] != mux:
-            print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
+            self.logger.warning(f"Unexpected mux 0x{parsed_frame['mux']:02X} in feedback response")
             if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
                 self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
                 return self._receive_can_frame(sock, mux)  # call again recursively
@@ -99,7 +101,7 @@ class CANInterface:
                 msg = f"Actuator {actuator_can_id}: {fault_code.description}"
                 if fault_code.critical:
                     raise CriticalFaultError(f"\033[1;31mCRITICAL FAULT: {msg}\033[0m")
-                print(f"\033[1;33mWARNING: {msg}\033[0m")
+                self.logger.warning(f"{msg}")
 
     def _process_fault_response(self, payload: bytes, actuator_can_id: int) -> None:
         fault_value, warning_value = struct.unpack("<II", payload)  # Little-endian uint32
@@ -107,9 +109,9 @@ class CANInterface:
         self._check_for_faults(self.MUX_0x15_WARNING_CODES, warning_value, actuator_can_id)
 
     def _find_actuators(self) -> None:
-        print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
+        self.logger.info("🔍 Scanning CAN buses for actuators...")
         for canbus in self.CANBUS_RANGE:
-            print(f"Scanning bus {canbus}: ", end="")
+            self.logger.info(f"Scanning bus {canbus}: ", end="")
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
@@ -117,9 +119,9 @@ class CANInterface:
                 sock.send(self._build_can_frame(0, Mux.PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
-                print("\033[92mSuccess\033[0m")
+                self.logger.info("\033[92mSuccess\033[0m")
             except Exception:
-                print("\033[91mFailed\033[0m")
+                self.logger.error("\033[91mFailed\033[0m")
                 continue
 
             for actuator_id in self.ACTUATOR_RANGE:
@@ -128,9 +130,9 @@ class CANInterface:
             self.actuators[canbus] = sorted(list(set(self.actuators[canbus])))
 
         total_actuators = sum(len(actuators) for actuators in self.actuators.values())
-        print(f"\033[1;32mFound {total_actuators} actuators on {len(self.sockets)} sockets\033[0m")
+        self.logger.info(f"Found {total_actuators} actuators on {len(self.sockets)} sockets")
         for canbus, actuators in self.actuators.items():
-            print(f"\033[1;34m{canbus}\033[0m: \033[1;35m{actuators}\033[0m")
+            self.logger.info(f"{canbus}: {actuators}")
 
     def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
@@ -168,13 +170,11 @@ class CANInterface:
                     actuator_id = self.actuators[can][tranche]
                     frame = self._receive_can_frame(sock, Mux.FEEDBACK)
                     if frame == -1:  # timeout
-                        print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
+                        self.logger.warning(f"[gaf] recv timeout actuator {actuator_id}")
                         continue
                     result = self._parse_feedback_response(frame)
                     if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
-                        print(
-                            f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
-                        )
+                        self.logger.warning(f"[gaf] expected {actuator_id}, got {result['actuator_can_id']}")
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
         return results
@@ -205,7 +205,7 @@ class CANInterface:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
                     if frame == -1:  # timeout
-                        print("\033[1;33mWARNING: [spdt] recv timeout\033[0m")
+                        self.logger.warning("[spdt] recv timeout")
 
     def _build_pd_command_frame(
         self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float
@@ -229,16 +229,17 @@ class CANInterface:
         for canbus, sock in self.sockets.items():
             result = self._receive_can_frame(sock, Mux.FEEDBACK)
             if result != -1:
-                print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
+                self.logger.info(f"flushed message on bus {canbus}")
 
 
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, max_scaling: float = 1.0) -> None:
+    def __init__(self, logger: Logger, max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
-        self.can = CANInterface()
+        self.logger = logger
+        self.can = CANInterface(logger)
         # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {
             id: {"angle": 0.0, "velocity": 0.0, "torque": 0.0, "temperature": 0.0} for id in self.robot.actuators.keys()
@@ -249,12 +250,12 @@ class MotorDriver:
         states = self.can.get_actuator_feedback()
 
         if not states:
-            print("\033[1;31mERROR: No actuators detected\033[0m")
+            self.logger.error("No actuators detected")
             sys.exit(1)
 
-        print("\nActuator states:")
-        print("ID  | Name | Angle | Velocity | Torque | Temp  | Faults")
-        print("----|------|-------|----------|--------|-------|-------")
+        self.logger.info("Actuator states:")
+        self.logger.info("ID  | Name | Angle | Velocity | Torque | Temp  | Faults")
+        self.logger.info("----|------|-------|----------|--------|-------|-------")
         for act_id, state in states.items():
             name = self.robot.actuators[act_id].name[:3]
             angle = self.robot.actuators[act_id].can_to_physical_angle(state["angle_raw"])
@@ -262,7 +263,7 @@ class MotorDriver:
             torque = self.robot.actuators[act_id].can_to_physical_torque(state["torque_raw"])
             temp = self.robot.actuators[act_id].can_to_physical_temperature(state["temperature_raw"])
             fault_color = "\033[1;31m" if state["fault_flags"] > 0 else "\033[1;32m"
-            print(
+            self.logger.info(
                 f"{act_id:3d} | {name:4s} | {angle:5.2f} | {velocity:8.2f} | {torque:6.2f} | {temp:5.1f} | {fault_color}{state['fault_flags']:3d}\033[0m"
             )
 
@@ -272,19 +273,19 @@ class MotorDriver:
             for act_id, state in states.items()
         }
         if any(abs(angle) > 2.0 for angle in angles.values()):
-            print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
+            self.logger.error("Actuator angles too far from zero - move joints closer to home position")
             sys.exit(1)
 
         if any(state["fault_flags"] > 0 for state in states.values()):
-            print("\033[1;33mWARNING: Actuator faults detected\033[0m")
+            self.logger.warning("Actuator faults detected")
 
     def enable_and_home(self) -> None:
         """Enable motors and home them to their bias positions."""
-        print("Enabling motors...")
+        self.logger.info("Enabling motors...")
         self.can.enable_motors()
-        print("✅ Motors enabled")
+        self.logger.info("✅ Motors enabled")
 
-        print("\nHoming...")
+        self.logger.info("Homing...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for i in range(30):
             scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29)
@@ -292,7 +293,7 @@ class MotorDriver:
                 break
             self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=scale)
             time.sleep(0.1)
-        print("✅ Homing complete")
+        self.logger.info("Homing complete")
     
     def get_actuator_info(self) -> dict:
         """Get stored actuator information (actuator IDs organized by canbus socket)."""
@@ -300,7 +301,7 @@ class MotorDriver:
         
     def ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
-        print("\n🔽 Ramping down motors...")
+        self.logger.info("Ramping down motors...")
         try:
             # Get current positions as targets
             home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
@@ -314,9 +315,9 @@ class MotorDriver:
             
             # Final zero torque command
             self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=0.0)
-            print("✅ Motors ramped down")
+            self.logger.info("✅ Motors ramped down")
         except Exception as e:
-            print(f"⚠️  Error during motor ramp down: {e}")
+            self.logger.error(f"Error during motor ramp down: {e}")
 
     def sine_wave(self) -> None:
         """Run a sine wave motion on all actuators."""
@@ -332,7 +333,7 @@ class MotorDriver:
             t3 = time.perf_counter()
             self.can.flush_can_busses()
             t4 = time.perf_counter()
-            print(
+            self.logger.info(
                 f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us"
             )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))

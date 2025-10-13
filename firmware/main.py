@@ -15,10 +15,10 @@ from firmware.can import MotorDriver
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.launchInterface import KeyboardLaunchInterface, WebSocketInterface
-from firmware.logger import Logger
+from firmware.logger_general import Logger
 from firmware.utils import get_imu_reader, get_onnx_sessions
 from firmware.utils import DummyIMU
-
+from firmware.logger import Logger as Logger_run
 
 # Global shutdown flag and interface reference
 shutdown_requested = False
@@ -55,10 +55,15 @@ def signal_handler(signum, frame):
 async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
     global shutdown_requested, motor_driver_ref, motors_enabled
     
-    logger = Logger(log_dir)
+    # Create logger
+    logger = Logger(logdir=log_dir, console_level="INFO")
+    logger_run = Logger_run(logdir=log_dir)
     motor_driver = None
 
     try:
+        logger.info("Starting robot policy execution", 
+                   extra_data={"kinfer_path": kinfer_path, "log_dir": log_dir})
+        
         # Set up command interface
         init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
         joint_order = metadata["joint_names"]
@@ -66,36 +71,51 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
         carry = init_session.run(None, {})[0]
 
         command_source = await launchInterface.get_command_source()
+        logger.info(f"Command source selected: {command_source}")
+        
         if command_source == "keyboard":
-            command_interface = Keyboard(command_names) 
+            command_interface = Keyboard(command_names, logger)
+            logger.debug("Initialized keyboard command interface")
         else:
             if len(command_names) > 0:
-                command_interface = UDPListener(command_names)
+                command_interface = UDPListener(logger, command_names)
             else:
-                command_interface = UDPListener()
+                command_interface = UDPListener(logger)
+            logger.debug("Initialized UDP command interface")
 
         imu_reader = get_imu_reader()
+        logger.debug(f"IMU reader initialized: {type(imu_reader).__name__}")
+        
         if not await launchInterface.ask_imu_permission(imu_reader):
+            logger.warning("IMU permission denied, aborting execution")
             return
+            
         if imu_reader is None:
             imu_reader = DummyIMU()
+            logger.warning("Using dummy IMU - no real IMU hardware detected")
+
         
-        motor_driver = MotorDriver()
+        motor_driver = MotorDriver(logger)
         motor_driver_ref = motor_driver  # Store global reference for signal handler
+        logger.debug("Motor driver initialized")
         
         actuator_info = motor_driver.get_actuator_info()
+        logger.debug("Retrieved actuator information", extra_data=actuator_info)
+        
         start_motors = await launchInterface.ask_motor_permission(actuator_info)
         if not start_motors:
-            print("Start Actuators- User Aborted")
+            logger.warning("Motor permission denied, aborting execution")
             return
         motor_driver.enable_and_home()
         motors_enabled = True  # Mark motors as enabled
+        logger.info("Motors enabled and homed successfully")
         
         launchPolicy = await launchInterface.launch_policy_permission()
         if not launchPolicy:
-            print("Launch Policy- User Aborted")
+            logger.warning("Policy launch permission denied, aborting execution")
             return
-        print("🤖 Running policy...")
+            
+        logger.info("Starting policy execution")
 
         t0 = time.perf_counter()
         step_id = 0
@@ -127,7 +147,8 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
             t6 = time.perf_counter()
 
             dt = time.perf_counter() - t
-            logger.log(
+            
+            logger_run.log(
                 t - t0,
                 {
                     "step_id": step_id,
@@ -139,10 +160,10 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
                     "dt_keyboard_ms": (t3 - t2) * 1000,
                     "dt_step_ms": (t4 - t3) * 1000,
                     "dt_action_ms": (t5 - t4) * 1000,
-                    "dt_missing_responses_ms": (t6 - t5) * 1000,
+                    "dt_flush_can_busses_ms": (t6 - t5) * 1000,
                     "joint_angles": joint_angles,
-                    "joint_vels": joint_vels,
-                    "joint_amps": [],  # TODO add
+                    "joint_velocities": joint_vels,
+                    # "joint_amps": [],  # TODO add
                     "joint_torques": torques,
                     "joint_temps": temps,
                     "projected_gravity": projected_gravity,
@@ -152,14 +173,21 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
                     "joint_order": joint_order,
                 },
             )
-            print(
-                f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, "
-                f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms, missing responses={(t6 - t5) * 1000:.2f} ms"
+            logger.debug(
+            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, get imu={(t2 - t1) * 1000:.2f} ms, "
+            f".step()={(t4 - t3) * 1000:.2f} ms, take action={(t5 - t4) * 1000:.2f} ms, missing responses={(t6 - t5) * 1000:.2f} ms"
             )
+
+            
             step_id += 1
             time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
     
-    except:
+    except Exception as e:
+        # Log the error before cleanup
+        logger.error(
+            f"Policy execution failed: {str(e)}",
+            extra_data={"error_type": type(e).__name__}
+        )
         # Always cleanup motors on exit
         end_policy()
 
@@ -172,32 +200,41 @@ async def main(use_websocket: bool = False):
     signal.signal(signal.SIGINT, signal_handler)
     print("✅ Signal handlers registered (SIGTERM, SIGINT)")
     
+    # Create a temporary logger for startup messages
+    logger = Logger("/tmp", console_level="INFO")
+    logger.info(f"Starting robot firmware", extra_data={"use_websocket": use_websocket})
+    
     launchInterface = None
     try:
         if use_websocket:
             launchInterface = await WebSocketInterface.create()
             launch_interface_ref = launchInterface  # Store global reference for signal handler
+            logger.info("WebSocket interface created successfully")
         else:
             launchInterface = KeyboardLaunchInterface()
             launch_interface_ref = launchInterface
+            logger.info("Keyboard interface created successfully")
         
         # Get kinfer path from client/user
         kinfer_path = await launchInterface.get_kinfer_path()
         if not kinfer_path:
-            print("No kinfer selected or aborted")
+            logger.warning("No kinfer selected or aborted")
             return
         
         policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
+        
+        logger.info(f"Selected policy: {policy_name}", extra_data={"kinfer_path": kinfer_path, "log_dir": log_dir})
 
         try:
             await runner(kinfer_path, log_dir, launchInterface)
         except KeyboardInterrupt:
-            print("\n👋 Shutting down...")
+            logger.info("Shutting down due to keyboard interrupt")
             shutdown_requested = True
     
     except Exception as e:
+        logger.error(f"Fatal error: {str(e)}", extra_data={"error_type": type(e).__name__})
         print(f"❌ Error: {e}")
         import traceback
         traceback.print_exc()
