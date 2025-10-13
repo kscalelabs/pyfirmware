@@ -57,7 +57,4 @@ def get_imu_reader() -> Any:
         return BNO055()
     except Exception:
         pass
-    try:
-        return DummyIMU()
-    except Exception:
-        pass
+    return None

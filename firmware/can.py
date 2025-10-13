@@ -278,8 +278,9 @@ class MotorDriver:
         if any(state["fault_flags"] > 0 for state in states.values()):
             print("\033[1;33mWARNING: Actuator faults detected\033[0m")
 
-        print("Press Enter to enable motors...")
-        input()  # wait for user to enable motors
+    def enable_and_home(self) -> None:
+        """Enable motors and home them to their bias positions."""
+        print("Enabling motors...")
         self.can.enable_motors()
         print("✅ Motors enabled")
 
@@ -293,6 +294,31 @@ class MotorDriver:
             self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=scale)
             time.sleep(0.1)
         print("✅ Homing complete")
+    
+    def get_actuator_info(self) -> dict:
+        """Get stored actuator information (actuator IDs organized by canbus socket)."""
+        return self.can.actuators
+        
+    def ramp_down_motors(self) -> None:
+        """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
+        print("\n🔽 Ramping down motors...")
+        try:
+            # Get current positions as targets
+            home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            
+            # Ramp down from current scaling to 0 (reverse of ramp up)
+            for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
+                if scale > self.max_scaling:
+                    continue
+                print(f"PD ramp down: {scale:.3f}")
+                self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=scale)
+                time.sleep(0.1)  # Slower ramp down for safety
+            
+            # Final zero torque command
+            self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=0.0)
+            print("✅ Motors ramped down")
+        except Exception as e:
+            print(f"⚠️  Error during motor ramp down: {e}")
 
     def sine_wave(self) -> None:
         """Run a sine wave motion on all actuators."""
