@@ -13,9 +13,9 @@ from firmware.logger_general import Logger
 class KeyboardLaunchInterface:
     """Simple launch interface for keyboard control without network connection."""
     
-    def __init__(self):
+    def __init__(self, logger: Logger):
         """Initialize keyboard launch interface."""
-        self.logger = Logger()
+        self.logger = logger
         self.logger.info("Using keyboard launch interface")
     
     async def get_command_source(self) -> str:

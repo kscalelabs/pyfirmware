@@ -88,10 +88,11 @@ class CANInterface:
         self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
 
         if parsed_frame["mux"] != mux:
-            self.logger.warning(f"Unexpected mux 0x{parsed_frame['mux']:02X} in feedback response")
             if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
                 self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
                 return self._receive_can_frame(sock, mux)  # call again recursively
+            else:
+                self.logger.warning(f"Unexpected mux 0x{parsed_frame['mux']:02X} in feedback response")
         else:
             return parsed_frame
 

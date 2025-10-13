@@ -17,17 +17,16 @@ from firmware.logger_general import Logger
 class WebSocketInterface:
     """WebSocket interface that waits for a client connection before proceeding."""
     
-    def __init__(self, websocket: WebSocketServerProtocol, server):
+    def __init__(self, websocket: WebSocketServerProtocol, server, logger):
         """Initialize with an established WebSocket connection."""
         self.websocket = websocket
         self.server = server
-        self.logger = Logger()
+        self.logger = logger
         self.logger.info(f"🔌 Client connected from {websocket.remote_address}")
     
     @classmethod
-    async def create(cls, host: str = "0.0.0.0", port: int = 8760):
+    async def create(cls, logger: Logger, host: str = "0.0.0.0", port: int = 8760):
         """Create a WebSocketInterface and wait for a client to connect."""
-        logger = Logger()
         logger.info(f"🚀 Starting WebSocket server on {host}:{port}")
         
         # Create a future that will be resolved when a client connects

@@ -201,11 +201,11 @@ async def main(use_websocket: bool = False):
     launchInterface = None
     try:
         if use_websocket:
-            launchInterface = await WebSocketInterface.create()
+            launchInterface = await WebSocketInterface.create(logger)
             launch_interface_ref = launchInterface  # Store global reference for signal handler
             logger.info("WebSocket interface created successfully")
         else:
-            launchInterface = KeyboardLaunchInterface()
+            launchInterface = KeyboardLaunchInterface(logger)
             launch_interface_ref = launchInterface
             logger.info("Keyboard interface created successfully")
         
