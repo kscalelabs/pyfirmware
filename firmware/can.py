@@ -290,7 +290,6 @@ class MotorDriver:
             scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29)
             if scale > self.max_scaling:
                 break
-            print(f"PD ramp: {scale:.3f}")
             self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=scale)
             time.sleep(0.1)
         print("✅ Homing complete")
@@ -310,7 +309,6 @@ class MotorDriver:
             for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
                 if scale > self.max_scaling:
                     continue
-                print(f"PD ramp down: {scale:.3f}")
                 self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=scale)
                 time.sleep(0.1)  # Slower ramp down for safety
             

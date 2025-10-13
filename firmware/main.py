@@ -23,26 +23,37 @@ from firmware.utils import DummyIMU
 # Global shutdown flag and interface reference
 shutdown_requested = False
 launch_interface_ref = None
+motor_driver_ref = None
+motors_enabled = False
+
+
+def end_policy():
+    """Emergency cleanup function that can be called from signal handlers."""
+    global motor_driver_ref, motors_enabled
+    try:
+        if motor_driver_ref is not None and motors_enabled:
+            print("Ramping down motors...")
+            motor_driver_ref.ramp_down_motors()
+                
+    except Exception as e:
+        print(f"Error in end_policy: {e}")
+    finally:
+        # Clear global references
+        motor_driver_ref = None
+        motors_enabled = False
 
 
 def signal_handler(signum, frame):
-    """Handle shutdown signals."""
-    global shutdown_requested, launch_interface_ref
-    print(f"\n⚠️  Received signal {signum}, initiating shutdown...")
+    """Handle shutdown signals with immediate motor safety."""
+    global shutdown_requested, launch_interface_ref, motor_driver_ref, motors_enabled
+    print(f"\n Received signal {signum}, initiating emergency shutdown...")
     shutdown_requested = True
-    
-    # Immediately close the server if it exists
-    if launch_interface_ref is not None:
-        try:
-            # Close the server synchronously
-            if hasattr(launch_interface_ref, 'server') and launch_interface_ref.server:
-                print("🛑 Force closing WebSocket server...")
-                launch_interface_ref.server.close()
-        except Exception as e:
-            print(f"⚠️  Error in signal handler cleanup: {e}")
+
+    end_policy()
+    sys.exit(0)
 
 async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
-    global shutdown_requested
+    global shutdown_requested, motor_driver_ref, motors_enabled
     
     logger = Logger(log_dir)
     motor_driver = None
@@ -70,6 +81,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
             imu_reader = DummyIMU()
         
         motor_driver = MotorDriver()
+        motor_driver_ref = motor_driver  # Store global reference for signal handler
         
         actuator_info = motor_driver.get_actuator_info()
         start_motors = await launchInterface.ask_motor_permission(actuator_info)
@@ -77,6 +89,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
             print("Start Actuators- User Aborted")
             return
         motor_driver.enable_and_home()
+        motors_enabled = True  # Mark motors as enabled
         
         launchPolicy = await launchInterface.launch_policy_permission()
         if not launchPolicy:
@@ -146,13 +159,9 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
             step_id += 1
             time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
     
-    finally:
+    except:
         # Always cleanup motors on exit
-        if motor_driver is not None:
-            print("\n🛑 Cleaning up...")
-            motor_driver.ramp_down_motors()
-            print("✅ Cleanup complete")
-
+        end_policy()
 
 async def main(use_websocket: bool = False):
     """Main entry point that sets up launch interface and runs the policy."""
@@ -166,11 +175,9 @@ async def main(use_websocket: bool = False):
     launchInterface = None
     try:
         if use_websocket:
-            print("🌐 Using WebSocket interface...")
             launchInterface = await WebSocketInterface.create()
             launch_interface_ref = launchInterface  # Store global reference for signal handler
         else:
-            print("⌨️  Using keyboard interface...")
             launchInterface = KeyboardLaunchInterface()
             launch_interface_ref = launchInterface
         
