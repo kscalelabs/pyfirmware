@@ -111,7 +111,6 @@ class CANInterface:
     def _find_actuators(self) -> None:
         self.logger.info("🔍 Scanning CAN buses for actuators...")
         for canbus in self.CANBUS_RANGE:
-            self.logger.info(f"Scanning bus {canbus}: ", end="")
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
@@ -119,9 +118,9 @@ class CANInterface:
                 sock.send(self._build_can_frame(0, Mux.PING))  # test message
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = []
-                self.logger.info("\033[92mSuccess\033[0m")
+                self.logger.info(f"Bus {canbus} successfully found")
             except Exception:
-                self.logger.error("\033[91mFailed\033[0m")
+                self.logger.warning(f"Bus {canbus} failed to find")
                 continue
 
             for actuator_id in self.ACTUATOR_RANGE:
@@ -281,11 +280,11 @@ class MotorDriver:
 
     def enable_and_home(self) -> None:
         """Enable motors and home them to their bias positions."""
-        self.logger.info("Enabling motors...")
+        self.logger.debug("Enabling motors...")
         self.can.enable_motors()
-        self.logger.info("✅ Motors enabled")
+        self.logger.debug("✅ Motors enabled")
 
-        self.logger.info("Homing...")
+        self.logger.debug("Homing...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for i in range(30):
             scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29)

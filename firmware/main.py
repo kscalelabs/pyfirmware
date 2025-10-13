@@ -59,12 +59,9 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> Non
     logger_run = Logger_run(logdir=log_dir)
     motor_driver = None
 
-    try:
-        logger.info("Starting robot policy execution", 
-                   extra_data={"kinfer_path": kinfer_path, "log_dir": log_dir})
-        
+    try
         # Set up command interface
-        init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
+        init_session, step_session, metadata = get_onnx_sessions(kinfer_path, logger)
         joint_order = metadata["joint_names"]
         command_names = metadata["command_names"]
         carry = init_session.run(None, {})[0]
@@ -107,7 +104,6 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> Non
             return
         motor_driver.enable_and_home()
         motors_enabled = True  # Mark motors as enabled
-        logger.info("Motors enabled and homed successfully")
         
         launchPolicy = await launchInterface.launch_policy_permission()
         if not launchPolicy:
@@ -223,7 +219,7 @@ async def main(use_websocket: bool = False):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
         
-        logger.info(f"Selected policy: {policy_name}", extra_data={"kinfer_path": kinfer_path, "log_dir": log_dir})
+        logger.info(f"Selected policy: {policy_name}")
 
         try:
             await runner(kinfer_path, log_dir, launchInterface, logger)

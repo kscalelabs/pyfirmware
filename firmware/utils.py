@@ -12,8 +12,8 @@ from firmware.imu.dummy import DummyIMU
 from firmware.imu.hiwonder import Hiwonder
 
 
-def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
-    print("Loading kinfer model from", kinfer_path)
+def get_onnx_sessions(kinfer_path: str, logger: Logger) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
+    logger.debug("Loading kinfer model from", kinfer_path)
     if not kinfer_path or not kinfer_path.endswith(".kinfer"):  # .tar.gz really
         raise ValueError("Model path must be provided and end with .kinfer")
 
@@ -23,9 +23,9 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
         init_model_bytes = tar.extractfile("init_fn.onnx").read()
         step_model_bytes = tar.extractfile("step_fn.onnx").read()
         metadata = json.load(tar.extractfile("metadata.json"))
-        print("kinfer model metadata:", metadata)
+        logger.debug("kinfer model metadata:", metadata)
 
-    print("Creating ONNX inference sessions...")
+    logger.debug("Creating ONNX inference sessions...")
     init_session = ort.InferenceSession(init_model_bytes)
     step_session = ort.InferenceSession(step_model_bytes)
 
@@ -34,8 +34,8 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
     step_inputs = step_session.get_inputs()
     step_outputs = step_session.get_outputs()
 
-    print(f"\nInit fn - Inputs: {[inp.name for inp in init_inputs]}, Outputs: {[out.name for out in init_outputs]}")
-    print(f"Step fn - Inputs: {[inp.name for inp in step_inputs]}, Outputs: {[out.name for out in step_outputs]}")
+    logger.debug(f"\nInit fn - Inputs: {[inp.name for inp in init_inputs]}, Outputs: {[out.name for out in init_outputs]}")
+    logger.debug(f"Step fn - Inputs: {[inp.name for inp in step_inputs]}, Outputs: {[out.name for out in step_outputs]}")
 
     # warm up step function
     step_dummy_inputs = {}
