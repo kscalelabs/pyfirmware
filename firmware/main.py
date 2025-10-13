@@ -52,11 +52,10 @@ def signal_handler(signum, frame):
     end_policy()
     sys.exit(0)
 
-async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
+async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> None:
     global shutdown_requested, motor_driver_ref, motors_enabled
     
     # Create logger
-    logger = Logger()
     logger_run = Logger_run(logdir=log_dir)
     motor_driver = None
 
@@ -200,8 +199,7 @@ async def main(use_websocket: bool = False):
     signal.signal(signal.SIGINT, signal_handler)
     print("✅ Signal handlers registered (SIGTERM, SIGINT)")
     
-    # Create a temporary logger for startup messages
-    logger = Logger("/tmp", console_level="INFO")
+    logger = Logger()
     logger.info(f"Starting robot firmware", extra_data={"use_websocket": use_websocket})
     
     launchInterface = None
@@ -228,7 +226,7 @@ async def main(use_websocket: bool = False):
         logger.info(f"Selected policy: {policy_name}", extra_data={"kinfer_path": kinfer_path, "log_dir": log_dir})
 
         try:
-            await runner(kinfer_path, log_dir, launchInterface)
+            await runner(kinfer_path, log_dir, launchInterface, logger)
         except KeyboardInterrupt:
             logger.info("Shutting down due to keyboard interrupt")
             shutdown_requested = True
