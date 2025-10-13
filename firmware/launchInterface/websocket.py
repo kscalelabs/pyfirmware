@@ -11,6 +11,8 @@ from typing import Optional
 import websockets
 from websockets.server import WebSocketServerProtocol
 
+from firmware.logger_general import Logger
+
 
 class WebSocketInterface:
     """WebSocket interface that waits for a client connection before proceeding."""
@@ -19,12 +21,14 @@ class WebSocketInterface:
         """Initialize with an established WebSocket connection."""
         self.websocket = websocket
         self.server = server
-        print(f"🔌 Client connected from {websocket.remote_address}")
+        self.logger = Logger()
+        self.logger.info(f"🔌 Client connected from {websocket.remote_address}")
     
     @classmethod
     async def create(cls, host: str = "0.0.0.0", port: int = 8760):
         """Create a WebSocketInterface and wait for a client to connect."""
-        print(f"🚀 Starting WebSocket server on {host}:{port}")
+        logger = Logger()
+        logger.info(f"🚀 Starting WebSocket server on {host}:{port}")
         
         # Create a future that will be resolved when a client connects
         connection_future = asyncio.Future()
@@ -54,8 +58,8 @@ class WebSocketInterface:
             handle_connection,
             sock=sock
         )
-        print(f"✅ WebSocket server running on ws://{host}:{port}")
-        print(f"⏳ Waiting for client connection...")
+        logger.info(f"✅ WebSocket server running on ws://{host}:{port}")
+        logger.info(f"⏳ Waiting for client connection...")
         
         # Wait for a client to connect
         websocket = await connection_future
@@ -96,7 +100,7 @@ class WebSocketInterface:
         
     async def ask_imu_permission(self, imu_reader) -> bool:
         """Ask permission to continue without IMU. Returns True if should continue, False to abort."""
-        print(f"IMU reader: {imu_reader}")
+        self.logger.debug(f"IMU reader: {imu_reader}")
         if imu_reader is not None:
             await self.send_message("imu_success")
             return True
@@ -234,19 +238,19 @@ class WebSocketInterface:
     
     async def close(self):
         """Close the WebSocket connection and server."""
-        print("🔌 Closing WebSocket connection...")
+        self.logger.info("🔌 Closing WebSocket connection...")
         try:
             if self.websocket:
                 await self.websocket.close()
-                print("✅ WebSocket connection closed")
+                self.logger.info("✅ WebSocket connection closed")
         except Exception as e:
-            print(f"⚠️  Error closing websocket: {e}")
+            self.logger.error(f"Error closing websocket: {e}")
         
         if self.server:
-            print("🛑 Stopping WebSocket server...")
+            self.logger.info("🛑 Stopping WebSocket server...")
             try:
                 self.server.close()
                 await self.server.wait_closed()
-                print("✅ WebSocket server stopped")
+                self.logger.info("✅ WebSocket server stopped")
             except Exception as e:
-                print(f"⚠️  Error stopping server: {e}")
+                self.logger.error(f"Error stopping server: {e}")

@@ -14,6 +14,7 @@ class LogLevel(Enum):
     WARNING = 30
     ERROR = 40
     CRITICAL = 50
+    USER_ACTION = 60
 
 
 class Logger:
@@ -38,6 +39,12 @@ class Logger:
     def log(self, level: LogLevel, message: str, extra_data: Optional[Dict[str, Any]] = None) -> None:
         """Log message to console with appropriate formatting."""
         if not self._should_log_to_console(level):
+            return
+        
+        # Special handling for USER_ACTION level
+        if level == LogLevel.USER_ACTION:
+            print("----------")
+            print(message)  # Plain white text, no timestamp or level
             return
             
         # Color coding for console output
@@ -80,3 +87,7 @@ class Logger:
     def critical(self, message: str, extra_data: Optional[Dict[str, Any]] = None) -> None:
         """Log critical message."""
         self.log(LogLevel.CRITICAL, message, extra_data)
+
+    def user_action(self, message: str) -> None:
+        """Log user action message with separator line."""
+        self.log(LogLevel.USER_ACTION, message)

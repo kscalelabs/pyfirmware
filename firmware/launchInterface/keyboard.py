@@ -7,17 +7,20 @@ import tty
 from pathlib import Path
 from typing import Optional
 
+from firmware.logger_general import Logger
+
 
 class KeyboardLaunchInterface:
     """Simple launch interface for keyboard control without network connection."""
     
     def __init__(self):
         """Initialize keyboard launch interface."""
-        print("Using keyboard launch interface")
+        self.logger = Logger()
+        self.logger.info("Using keyboard launch interface")
     
     async def get_command_source(self) -> str:
         """Return the command source type."""
-        print("Select command source: (K) Keyboard, (U) UDP")
+        self.logger.user_action("Select command source: (K) Keyboard, (U) UDP")
         
         # Temporarily restore normal terminal mode for input echo
         import termios, tty, sys
@@ -39,23 +42,24 @@ class KeyboardLaunchInterface:
         elif response == 'u':
             return "udp"
         else:
-            print("❌ Invalid choice. Please enter K or U")
+            self.logger.error("Invalid choice. Please enter K or U")
             return None
     
     async def ask_imu_permission(self, imu_reader) -> bool:
         """Ask permission to continue without IMU. Returns True if should continue, False to abort."""
         if imu_reader is not None:
-            print("✅ IMU detected")
+            self.logger.info("✅ IMU detected")
             return True
         
-        print("⚠️  No IMU hardware detected.")
-        response = input("Continue without IMU? (y/n): ").lower()
+        self.logger.warning("No IMU hardware detected.")
+        self.logger.user_action("Continue without IMU? (y/n): ")
+        response = input("").lower()
         
         if response == 'y':
-            print("✅ Continuing without IMU")
+            self.logger.info("✅ Continuing without IMU")
             return True
         else:
-            print("❌ Aborted by user")
+            self.logger.warning("Aborted by user")
             return False
     
     async def ask_motor_permission(self, actuator_info) -> bool:
@@ -74,18 +78,19 @@ class KeyboardLaunchInterface:
         except:
             pass
         
-        response = input("Enable motors? (y/n): ").lower()
+        self.logger.user_action("Enable motors? (y/n): ")
+        response = input("").lower()
         
         if response == 'y':
-            print("✅ Enabling motors...")
+            self.logger.info("✅ Enabling motors...")
             return True
         else:
-            print("❌ Aborted by user")
+            self.logger.warning("Aborted by user")
             return False
     
     async def launch_policy_permission(self) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
-        print("🚀 Ready to start policy")
+        self.logger.info("🚀 Ready to start policy")
         
         # Temporarily restore normal terminal mode for input echo
         import termios, tty, sys
@@ -101,13 +106,14 @@ class KeyboardLaunchInterface:
         except:
             pass
         
-        response = input("Start policy? (y/n): ").lower()
+        self.logger.user_action("Start policy? (y/n): ")
+        response = input("").lower()
         
         if response == 'y':
-            print("✅ Starting policy...")
+            self.logger.info("✅ Starting policy...")
             return True
         else:
-            print("❌ Aborted by user")
+            self.logger.warning("Aborted by user")
             return False
     
     async def get_kinfer_path(self) -> Optional[str]:
@@ -116,13 +122,13 @@ class KeyboardLaunchInterface:
         policy_dir = Path.home() / ".policies"
         
         if not policy_dir.exists():
-            print(f"❌ Policy directory not found: {policy_dir}")
+            self.logger.error(f"Policy directory not found: {policy_dir}")
             return None
         
         kinfer_files = list(policy_dir.glob("*.kinfer"))
         
         if not kinfer_files:
-            print(f"❌ No kinfer files found in {policy_dir}")
+            self.logger.error(f"No kinfer files found in {policy_dir}")
             return None
         
         # Sort by modification time (newest first)
@@ -146,7 +152,7 @@ class KeyboardLaunchInterface:
             except (ValueError, KeyboardInterrupt):
                 print("\n❌ Aborted by user")
                 return None
-   
-async def close(self):
+    
+    async def close(self):
         """Close the interface (no-op for keyboard)."""
-        print("👋 Keyboard interface closed")
+        self.logger.info("👋 Keyboard interface closed")
