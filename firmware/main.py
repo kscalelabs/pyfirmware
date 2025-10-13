@@ -57,7 +57,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 
         motor_driver.take_action(action, joint_order)
         t5 = time.perf_counter()
-        motor_driver.receive_missing_responses()
+        motor_driver.flush_can_busses()
         t6 = time.perf_counter()
 
         dt = time.perf_counter() - t
@@ -73,7 +73,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "dt_keyboard_ms": (t3 - t2) * 1000,
                 "dt_step_ms": (t4 - t3) * 1000,
                 "dt_action_ms": (t5 - t4) * 1000,
-                "dt_missing_responses_ms": (t6 - t5) * 1000,
+                "dt_flush_can_busses_ms": (t6 - t5) * 1000,
                 "joint_angles": joint_angles,
                 "joint_velocities": joint_vels,
                 # "joint_amps": [],  # TODO add

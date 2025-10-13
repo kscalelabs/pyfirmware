@@ -22,7 +22,7 @@ class CANInterface:
     FRAME_SIZE = struct.calcsize(FRAME_FMT)
     EFF = 0x8000_0000
     HOST_ID = 0xFD
-    CAN_TIMEOUT = 0.005
+    CAN_TIMEOUT = 0.002
     CANBUS_RANGE = range(0, 7)
     ACTUATOR_RANGE = range(10, 50)
 
@@ -51,7 +51,6 @@ class CANInterface:
         self.sockets = {}
         self.actuators = {}
         self._find_actuators()
-        self.missing_responses = {sock: [] for sock in self.sockets.values()}
 
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
@@ -75,14 +74,13 @@ class CANInterface:
             "payload": payload,
         }
 
-    def _receive_can_frame(self, sock: socket.socket, mux: int, track_missed_responses: bool = True) -> Dict[str, int]:
+    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
         """Recursively receive can frames until the mux is the expected value."""
         try:
             frame = sock.recv(self.FRAME_SIZE)
         except Exception as e:
-            if mux != Mux.PING and track_missed_responses:
+            if mux != Mux.PING:
                 print(f"\033[1;33mWARNING: error receiving can frame for mux 0x{mux:02X}: {e}\033[0m")
-                self.missing_responses[sock].append(time.time())
             return -1
         parsed_frame = self._parse_can_frame(frame)
         self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
@@ -223,26 +221,15 @@ class CANInterface:
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
-    def receive_missing_responses(self) -> None:
-        """Single-pass drain of late responses."""
-        # Prune messages that have been lost for more than 200ms
-        now_s = time.time()
-        self.missing_responses = {
-            sock: [t for t in timestamps if (now_s - t) < 0.2] for sock, timestamps in self.missing_responses.items()
-        }
-        total_missing_responses = sum(len(timestamps) for timestamps in self.missing_responses.values())
-        if not total_missing_responses:
-            return
-        print(f"Total missing responses: {total_missing_responses}")
+    def flush_can_busses(self) -> None:
+        """Try to drain 1 message from each CAN bus.
 
-        # Process any readable sockets
-        for sock, missing_responses in self.missing_responses.items():
-            if missing_responses:
-                print("try receive..")
-                result = self._receive_can_frame(sock, Mux.FEEDBACK, track_missed_responses=False)
-                if result != -1:
-                    print("\treceived")
-                    missing_responses.remove(missing_responses[0])  # Remove the oldest missing response
+        Actuators sometimes send late or extra messages that we need to get rid of.
+        """
+        for canbus, sock in self.sockets.items():
+            result = self._receive_can_frame(sock, Mux.FEEDBACK)
+            if result != -1:
+                print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
 
 
 class MotorDriver:
@@ -254,8 +241,7 @@ class MotorDriver:
         self.can = CANInterface()
         # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {
-            id: {"angle": 0.0, "velocity": 0.0, "torque": 0.0, "temperature": 0.0}
-            for id in self.robot.actuators.keys()
+            id: {"angle": 0.0, "velocity": 0.0, "torque": 0.0, "temperature": 0.0} for id in self.robot.actuators.keys()
         }
         self.startup_sequence()
 
@@ -320,15 +306,15 @@ class MotorDriver:
             t2 = time.perf_counter()
             self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
             t3 = time.perf_counter()
-            self.can.receive_missing_responses()
+            self.can.flush_can_busses()
             t4 = time.perf_counter()
             print(
                 f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us"
             )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
-    def receive_missing_responses(self) -> None:
-        self.can.receive_missing_responses()
+    def flush_can_busses(self) -> None:
+        self.can.flush_can_busses()
 
     def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
         fb = self.can.get_actuator_feedback()
@@ -340,7 +326,7 @@ class MotorDriver:
                 joint_vels[id] = self.robot.actuators[id].can_to_physical_velocity(fb[id]["angular_velocity_raw"])
                 torques[id] = self.robot.actuators[id].can_to_physical_torque(fb[id]["torque_raw"])
                 temps[id] = self.robot.actuators[id].can_to_physical_temperature(fb[id]["temperature_raw"])
-                
+
                 self.last_known_feedback[id]["angle"] = joint_angles[id]
                 self.last_known_feedback[id]["velocity"] = joint_vels[id]
                 self.last_known_feedback[id]["torque"] = torques[id]
@@ -381,4 +367,3 @@ if __name__ == "__main__":
 # TODO reset all act upons startup
 # # TODO dont die on critical faults?
 # upd listener .clip ccmds
-# dont remember missing messages, just try to receive always
