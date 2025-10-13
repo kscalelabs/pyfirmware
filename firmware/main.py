@@ -59,7 +59,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> Non
     logger_run = Logger_run(logdir=log_dir)
     motor_driver = None
 
-    try
+    try:
         # Set up command interface
         init_session, step_session, metadata = get_onnx_sessions(kinfer_path, logger)
         joint_order = metadata["joint_names"]
