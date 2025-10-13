@@ -56,7 +56,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface) -> None:
     global shutdown_requested, motor_driver_ref, motors_enabled
     
     # Create logger
-    logger = Logger(logdir=log_dir, console_level="INFO")
+    logger = Logger()
     logger_run = Logger_run(logdir=log_dir)
     motor_driver = None
 

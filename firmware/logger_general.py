@@ -21,17 +21,14 @@ class Logger:
     
     def __init__(
         self, 
-        logdir: str,
         console_level: LogLevel = LogLevel.INFO
     ):
         """
         Initialize logger.
         
         Args:
-            logdir: Directory to store log files (unused, kept for compatibility)
             console_level: Minimum level for console output
         """
-        self.logdir = logdir
         self.console_level = console_level
 
     def _should_log_to_console(self, level: LogLevel) -> bool:
@@ -83,44 +80,3 @@ class Logger:
     def critical(self, message: str, extra_data: Optional[Dict[str, Any]] = None) -> None:
         """Log critical message."""
         self.log(LogLevel.CRITICAL, message, extra_data)
-
-
-# Factory function for easy logger creation
-def create_logger(
-    logdir: str,
-    console_level: str = "INFO"
-) -> Logger:
-    """
-    Factory function to create a logger.
-    
-    Args:
-        logdir: Directory to store log files (unused, kept for compatibility)
-        console_level: Console log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    
-    Returns:
-        Logger instance
-    """
-    # Convert string level to LogLevel enum
-    level_map = {
-        "DEBUG": LogLevel.DEBUG,
-        "INFO": LogLevel.INFO,
-        "WARNING": LogLevel.WARNING,
-        "ERROR": LogLevel.ERROR,
-        "CRITICAL": LogLevel.CRITICAL
-    }
-    
-    return Logger(
-        logdir=logdir,
-        console_level=level_map.get(console_level.upper(), LogLevel.INFO)
-    )
-
-
-if __name__ == "__main__":
-    # Test the logger
-    logger = create_logger("/tmp", console_level="DEBUG")
-    
-    logger.info("Test info message")
-    logger.warning("Test warning message", extra_data={"test": True})
-    logger.error("Test error message")
-    
-    print("Logger test completed")
