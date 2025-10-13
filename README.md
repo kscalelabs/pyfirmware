@@ -22,7 +22,7 @@ pip install .
 ```
 
 ## Usage
-You can test the actuators with a simple sinewave test at low pd gains by runing:
+You can test the actuators with a simple sinewave test at low pd gains by running:
 ```bash
 kbot-sine
 ```
@@ -66,5 +66,4 @@ pip install -e .[dev]
 ```
 
 ## Known bugs
-- occasionally a timeout on the can bus will crash the firmware
 - critical faults raise an error, stopping the firmware, rather than gracefully handling
