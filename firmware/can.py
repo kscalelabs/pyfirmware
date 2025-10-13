@@ -78,13 +78,11 @@ class CANInterface:
         """Recursively receive can frames until the mux is the expected value."""
         try:
             frame = sock.recv(self.FRAME_SIZE)
-        except Exception as e:
-            if mux != Mux.PING:
-                print(f"\033[1;33mWARNING: error receiving can frame for mux 0x{mux:02X}: {e}\033[0m")
+            parsed_frame = self._parse_can_frame(frame)
+        except Exception:
             return -1
-        parsed_frame = self._parse_can_frame(frame)
-        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
 
+        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
         if parsed_frame["mux"] != mux:
             print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
             if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
