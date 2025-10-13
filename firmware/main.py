@@ -75,8 +75,8 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
                 "dt_action_ms": (t5 - t4) * 1000,
                 "dt_missing_responses_ms": (t6 - t5) * 1000,
                 "joint_angles": joint_angles,
-                "joint_vels": joint_vels,
-                "joint_amps": [],  # TODO add
+                "joint_velocities": joint_vels,
+                # "joint_amps": [],  # TODO add
                 "joint_torques": torques,
                 "joint_temps": temps,
                 "projected_gravity": projected_gravity,
