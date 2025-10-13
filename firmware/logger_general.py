@@ -22,15 +22,21 @@ class Logger:
     
     def __init__(
         self, 
-        console_level: LogLevel = LogLevel.INFO
+        console_level = LogLevel.INFO
     ):
         """
         Initialize logger.
         
         Args:
-            console_level: Minimum level for console output
+            console_level: Minimum level for console output (LogLevel enum or string)
         """
-        self.console_level = console_level
+        # Handle string inputs by converting to LogLevel enum
+        if isinstance(console_level, str):
+            self.console_level = LogLevel[console_level.upper()]
+        else:
+            self.console_level = console_level
+        self.last_message = None
+        self.repeat_count = 0
 
     def _should_log_to_console(self, level: LogLevel) -> bool:
         """Check if message should be logged to console."""
@@ -45,8 +51,40 @@ class Logger:
         if level == LogLevel.USER_ACTION:
             print("----------")
             print(message)  # Plain white text, no timestamp or level
+            self.last_message = None  # Reset deduplication for user actions
+            self.repeat_count = 0
             return
+        
+        # Create message key for deduplication (exclude timestamp)
+        message_key = f"{level.name}|{message}"
+        if extra_data:
+            message_key += f"|{json.dumps(extra_data, separators=(',', ':'))}"
+        
+        # Check for message deduplication
+        if message_key == self.last_message:
+            self.repeat_count += 1
+            # Update the previous line with repeat count
+            print(f"\033[F\033[K", end="")  # Move up one line and clear it
+            if self.repeat_count == 1:
+                repeat_str = " x2"
+            else:
+                repeat_str = f" x{self.repeat_count + 1}"
+            print(f"{self._format_message(level, message, extra_data)}{repeat_str}")
+            return
+        else:
+            # New message - reset repeat count
+            if self.repeat_count > 0:
+                # Clear any previous repeat indicators
+                print(f"\033[F\033[K", end="")  # Move up one line and clear it
+                print(self._format_message(level, message, extra_data))
+            else:
+                print(self._format_message(level, message, extra_data))
             
+            self.last_message = message_key
+            self.repeat_count = 0
+
+    def _format_message(self, level: LogLevel, message: str, extra_data: Optional[Dict[str, Any]] = None) -> str:
+        """Format a log message with colors and timestamp."""
         # Color coding for console output
         colors = {
             LogLevel.DEBUG: "\033[36m",      # Cyan
@@ -65,7 +103,7 @@ class Logger:
         if extra_data:
             extra_str = f" | {json.dumps(extra_data, separators=(',', ':'))}"
         
-        print(f"{color}[{timestamp}] {level.name:8} | {message}{extra_str}{reset_color}")
+        return f"{color}[{timestamp}] {level.name:8} | {message}{extra_str}{reset_color}"
 
     # Convenience methods for different log levels
     def debug(self, message: str, extra_data: Optional[Dict[str, Any]] = None) -> None:
