@@ -1,6 +1,7 @@
 """CAN communication and motor driver interfaces for actuators."""
 
 import math
+import signal
 import socket
 import struct
 import sys
@@ -259,7 +260,7 @@ class MotorDriver:
             num_steps = 50
             for i in range(num_steps):
                 progress = i / (num_steps - 1) 
-                scale = self.max_scaling / 2 * (1.0 - progress) ** 2  # Quadratic decay for smoothness
+                scale = self.max_scaling * (1.0 - progress) ** 2  # Quadratic decay for smoothness
                 self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
                 time.sleep(0.03) 
             
@@ -366,10 +367,36 @@ class MotorDriver:
         self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
 
 
+motor_driver_ref = None
+
+def signal_handler(signum, frame):
+    """Handle Ctrl+C by ramping down motors before exit"""
+    global motor_driver_ref
+    print(f"\n⚠️  Received signal {signum}, shutting down...")
+    if motor_driver_ref is not None:
+        motor_driver_ref.ramp_down_motors()
+    sys.exit(0)
+
 def main() -> None:
+    global motor_driver_ref
+    
+    # Register signal handler for Ctrl+C
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     driver = MotorDriver(max_scaling=0.1)
+    motor_driver_ref = driver  # Store reference for signal handler
+    
     input("Press Enter to run sine wave on all actuators...")
-    driver.sine_wave()
+    
+    try:
+        driver.sine_wave()
+    except KeyboardInterrupt:
+        pass  # Signal handler will handle cleanup
+    finally:
+        # Clean shutdown
+        if motor_driver_ref is not None:
+            motor_driver_ref.ramp_down_motors()
 
 
 if __name__ == "__main__":
