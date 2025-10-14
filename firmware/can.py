@@ -248,10 +248,6 @@ class MotorDriver:
             sys.exit(1)
 
         joint_data_array= self.get_joint_angles_and_velocities()
-        
-        if any(abs(data["angle"]) > 2.0 for data in joint_data_array.values()):
-            print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
-            sys.exit(1)
 
         print("\nActuator states:")
         print("ID  | Name | Angle | Velocity | Torque | Temp  | Faults")
@@ -264,7 +260,9 @@ class MotorDriver:
             )
             if data["fault_flags"] > 0:
                 print("\033[1;33mWARNING: Actuator faults detected\033[0m")
-
+        if any(abs(data["angle"]) > 2.0 for data in joint_data_array.values()):
+            print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
+            sys.exit(1)
         print("Press Enter to enable motors...")
         input()  # wait for user to enable motors
         self.can.enable_motors()
