@@ -313,14 +313,14 @@ class MotorDriver:
             
             self.logger.info(f"Ramping down {len(joint_angles)} actuators")
             # Ramp down from current scaling to 0 (reverse of ramp up)
-            for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
+            for scale in reversed([math.exp(math.log(0) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
                 if scale > self.max_scaling:
                     continue
                 self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
-                time.sleep(0.1)  # Slower ramp down for safety
+                time.sleep(0.05)  # Slower ramp down for safety
             
             # Final zero torque command
-            self.can.set_pd_targets(current_targets, robotcfg=self.robot, scaling=0.0)
+            self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
             self.logger.info("✅ Motors ramped down")
         except Exception as e:
             self.logger.error(f"Error during motor ramp down: {e}")
