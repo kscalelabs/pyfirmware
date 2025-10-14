@@ -80,13 +80,11 @@ class CANInterface:
         """Recursively receive can frames until the mux is the expected value."""
         try:
             frame = sock.recv(self.FRAME_SIZE)
-        except Exception as e:
-            if mux != Mux.PING:
-                self.logger.warning(f"Error receiving can frame for mux 0x{mux:02X}: {e}")
+            parsed_frame = self._parse_can_frame(frame)
+        except Exception:
             return -1
-        parsed_frame = self._parse_can_frame(frame)
-        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
 
+        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
         if parsed_frame["mux"] != mux:
             if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
                 self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
@@ -117,27 +115,27 @@ class CANInterface:
                 sock.bind((f"can{canbus}",))
                 sock.settimeout(self.CAN_TIMEOUT)
                 sock.send(self._build_can_frame(0, Mux.PING))  # test message
-                self.sockets[canbus] = sock
-                self.actuators[canbus] = []
-                self.logger.info(f"Bus {canbus} successfully found")
             except Exception:
-                self.logger.warning(f"Bus {canbus} failed to find")
                 continue
 
+            self.logger.info(f"Scanning bus {canbus}...")
+            actuators = []
             for actuator_id in self.ACTUATOR_RANGE:
-                if self._ping_actuator(canbus, actuator_id) != -1:
-                    self.actuators[canbus].append(actuator_id)
-            self.actuators[canbus] = sorted(list(set(self.actuators[canbus])))
+                if self._ping_actuator(sock, actuator_id) != -1:
+                    actuators.append(actuator_id)
+            if actuators:
+                self.sockets[canbus] = sock
+                self.actuators[canbus] = sorted(list(set(actuators)))
 
         total_actuators = sum(len(actuators) for actuators in self.actuators.values())
         self.logger.info(f"Found {total_actuators} actuators on {len(self.sockets)} sockets")
         for canbus, actuators in self.actuators.items():
             self.logger.info(f"{canbus}: {actuators}")
 
-    def _ping_actuator(self, canbus: str, actuator_can_id: int) -> bool:
+    def _ping_actuator(self, sock: socket.socket, actuator_can_id: int) -> bool:
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
-        self.sockets[canbus].send(frame)
-        response = self._receive_can_frame(self.sockets[canbus], Mux.PING)
+        sock.send(frame)
+        response = self._receive_can_frame(sock, Mux.PING)
         if response == -1:
             return -1
         return response["actuator_can_id"]
@@ -247,13 +245,13 @@ class MotorDriver:
         self.startup_sequence()
 
     def startup_sequence(self) -> None:
-        states = self.can.get_actuator_feedback()
-
-        if not states:
-            self.logger.error("No actuators detected")
+        if not self.can.actuators:
+            print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
-        self.logger.info("Actuator states:")
+        states = self.can.get_actuator_feedback()
+
+        self.logger.info("\nActuator states:")
         self.logger.info("ID  | Name | Angle | Velocity | Torque | Temp  | Faults")
         self.logger.info("----|------|-------|----------|--------|-------|-------")
         for act_id, state in states.items():
