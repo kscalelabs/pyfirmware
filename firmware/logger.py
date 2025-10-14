@@ -50,11 +50,10 @@ class Logger:
         if self.file_logging_enabled:
             self.logpath = os.path.join(logdir, "kinfer_log.ndjson")
             self.running = True
-            self.queue = queue.Queue()
+            self.queue: queue.Queue[Dict[str, Any]] = queue.Queue()
             self.thread = threading.Thread(target=self._log_worker, args=(self.queue, self.logpath), daemon=True)
             self.thread.start()
             self._register_shutdown_handlers()
-
 
     def _register_shutdown_handlers(self) -> None:
         """Register shutdown handlers for graceful file logging cleanup."""

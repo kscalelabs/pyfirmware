@@ -2,7 +2,7 @@
 
 import threading
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 
 CMD_NAMES = [
     "xvel",
@@ -37,7 +37,7 @@ class CommandInterface(ABC):
                 print(f"Warning: Policy command name '{name}' not supported by firmware")
 
         self._running = True
-        self._thread = None
+        self._thread: Optional[threading.Thread] = None
 
     @abstractmethod
     def _read_input(self) -> None:
@@ -49,7 +49,8 @@ class CommandInterface(ABC):
         if self._thread is None or not self._thread.is_alive():
             self._running = True
             self._thread = threading.Thread(target=self._read_input, daemon=True)
-            self._thread.start()
+            if self._thread is not None:
+                self._thread.start()
 
     def stop(self) -> None:
         """Stop the input reading thread."""
