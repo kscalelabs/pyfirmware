@@ -280,7 +280,7 @@ class MotorDriver:
         for act_id, data in joint_data_dict.items():
             fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
             print(
-                f"{act_id:3d} | {data['name']:4s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
+                f"{act_id:3d} | {data['name']:14s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
                 f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
             )
             if data["fault_flags"] > 0:
