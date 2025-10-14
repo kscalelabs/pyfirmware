@@ -33,7 +33,6 @@ class RobstrideActuatorType(Enum):
 @dataclass
 class ActuatorConfig:
     can_id: int
-    name: str
     full_name: str
     actuator_type: RobstrideActuatorType
     joint_bias: float
@@ -56,7 +55,7 @@ class ActuatorConfig:
 
     def can_to_physical_data(self, fb) -> dict[str, float]:
         actuator_data = {
-            "name": self.name,
+            "name": self.full_name,
             "fault_flags": fb["fault_flags"],
             "angle": self.can_to_physical_angle(fb["angle_raw"]),
             "velocity": self.can_to_physical_velocity(fb["angular_velocity_raw"]),
@@ -115,6 +114,10 @@ class ActuatorConfig:
     @property
     def raw_kd(self) -> float:
         return self.physical_to_can_kd(self.kd)
+
+    @property
+    def name(self) -> str:
+        return self.full_name.replace("dof_", "").split("_")[0]
 
 
 def actuator_ranges(actuator_type: RobstrideActuatorType) -> dict[str, float]:
@@ -190,7 +193,6 @@ class RobotConfig:
         # Left arm
         11: ActuatorConfig(
             can_id=11,
-            name="lsp",
             full_name="dof_left_shoulder_pitch_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -200,7 +202,6 @@ class RobotConfig:
         ),
         12: ActuatorConfig(
             can_id=12,
-            name="lsr",
             full_name="dof_left_shoulder_roll_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -210,7 +211,6 @@ class RobotConfig:
         ),
         13: ActuatorConfig(
             can_id=13,
-            name="lsy",
             full_name="dof_left_shoulder_yaw_02",
             actuator_type=RobstrideActuatorType.Robstride02,
             **actuator_ranges(RobstrideActuatorType.Robstride02),
@@ -220,7 +220,6 @@ class RobotConfig:
         ),
         14: ActuatorConfig(
             can_id=14,
-            name="lep",
             full_name="dof_left_elbow_02",
             actuator_type=RobstrideActuatorType.Robstride02,
             **actuator_ranges(RobstrideActuatorType.Robstride02),
@@ -230,7 +229,6 @@ class RobotConfig:
         ),
         15: ActuatorConfig(
             can_id=15,
-            name="lwr",
             full_name="dof_left_wrist_00",
             actuator_type=RobstrideActuatorType.Robstride00,
             **actuator_ranges(RobstrideActuatorType.Robstride00),
@@ -240,7 +238,6 @@ class RobotConfig:
         ),
         16: ActuatorConfig(
             can_id=16,
-            name="lgp",
             full_name="dof_left_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride00,
             **actuator_ranges(RobstrideActuatorType.Robstride00),
@@ -251,7 +248,6 @@ class RobotConfig:
         # Right arm
         21: ActuatorConfig(
             can_id=21,
-            name="rsp",
             full_name="dof_right_shoulder_pitch_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -261,7 +257,6 @@ class RobotConfig:
         ),
         22: ActuatorConfig(
             can_id=22,
-            name="rsr",
             full_name="dof_right_shoulder_roll_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -271,7 +266,6 @@ class RobotConfig:
         ),
         23: ActuatorConfig(
             can_id=23,
-            name="rsy",
             full_name="dof_right_shoulder_yaw_02",
             actuator_type=RobstrideActuatorType.Robstride02,
             **actuator_ranges(RobstrideActuatorType.Robstride02),
@@ -281,7 +275,6 @@ class RobotConfig:
         ),
         24: ActuatorConfig(
             can_id=24,
-            name="rep",
             full_name="dof_right_elbow_02",
             actuator_type=RobstrideActuatorType.Robstride02,
             **actuator_ranges(RobstrideActuatorType.Robstride02),
@@ -291,7 +284,6 @@ class RobotConfig:
         ),
         25: ActuatorConfig(
             can_id=25,
-            name="rwr",
             full_name="dof_right_wrist_00",
             actuator_type=RobstrideActuatorType.Robstride00,
             **actuator_ranges(RobstrideActuatorType.Robstride00),
@@ -301,7 +293,6 @@ class RobotConfig:
         ),
         26: ActuatorConfig(
             can_id=26,
-            name="rgp",
             full_name="dof_right_wrist_gripper_05",
             actuator_type=RobstrideActuatorType.Robstride00,
             **actuator_ranges(RobstrideActuatorType.Robstride00),
@@ -312,7 +303,6 @@ class RobotConfig:
         # Left leg
         31: ActuatorConfig(
             can_id=31,
-            name="lhp",
             full_name="dof_left_hip_pitch_04",
             actuator_type=RobstrideActuatorType.Robstride04,
             **actuator_ranges(RobstrideActuatorType.Robstride04),
@@ -322,7 +312,6 @@ class RobotConfig:
         ),
         32: ActuatorConfig(
             can_id=32,
-            name="lhr",
             full_name="dof_left_hip_roll_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -332,7 +321,6 @@ class RobotConfig:
         ),
         33: ActuatorConfig(
             can_id=33,
-            name="lhy",
             full_name="dof_left_hip_yaw_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -342,7 +330,6 @@ class RobotConfig:
         ),
         34: ActuatorConfig(
             can_id=34,
-            name="lkp",
             full_name="dof_left_knee_04",
             actuator_type=RobstrideActuatorType.Robstride04,
             **actuator_ranges(RobstrideActuatorType.Robstride04),
@@ -352,7 +339,6 @@ class RobotConfig:
         ),
         35: ActuatorConfig(
             can_id=35,
-            name="lap",
             full_name="dof_left_ankle_02",
             actuator_type=RobstrideActuatorType.Robstride02,
             **actuator_ranges(RobstrideActuatorType.Robstride02),
@@ -363,7 +349,6 @@ class RobotConfig:
         # Right leg
         41: ActuatorConfig(
             can_id=41,
-            name="rhp",
             full_name="dof_right_hip_pitch_04",
             actuator_type=RobstrideActuatorType.Robstride04,
             **actuator_ranges(RobstrideActuatorType.Robstride04),
@@ -373,7 +358,6 @@ class RobotConfig:
         ),
         42: ActuatorConfig(
             can_id=42,
-            name="rhr",
             full_name="dof_right_hip_roll_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -383,7 +367,6 @@ class RobotConfig:
         ),
         43: ActuatorConfig(
             can_id=43,
-            name="rhy",
             full_name="dof_right_hip_yaw_03",
             actuator_type=RobstrideActuatorType.Robstride03,
             **actuator_ranges(RobstrideActuatorType.Robstride03),
@@ -393,7 +376,6 @@ class RobotConfig:
         ),
         44: ActuatorConfig(
             can_id=44,
-            name="rkp",
             full_name="dof_right_knee_04",
             actuator_type=RobstrideActuatorType.Robstride04,
             **actuator_ranges(RobstrideActuatorType.Robstride04),
@@ -403,7 +385,6 @@ class RobotConfig:
         ),
         45: ActuatorConfig(
             can_id=45,
-            name="rap",
             full_name="dof_right_ankle_02",
             actuator_type=RobstrideActuatorType.Robstride02,
             **actuator_ranges(RobstrideActuatorType.Robstride02),

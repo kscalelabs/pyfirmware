@@ -333,7 +333,7 @@ class MotorDriver:
         answer = {}
         for id in self.robot.actuators.keys():
             if id in fb:
-                answer[id] = self.robot.actuators[id].can_to_physical(fb[id])
+                answer[id] = self.robot.actuators[id].can_to_physical_data(fb[id])
                 self.last_known_feedback[id] = answer[id].copy()
                 
             elif id in self.last_known_feedback:
