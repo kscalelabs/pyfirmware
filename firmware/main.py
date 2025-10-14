@@ -3,6 +3,8 @@
 import argparse
 import datetime
 import os
+import signal
+import sys
 import time
 
 import numpy as np
@@ -12,19 +14,18 @@ from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.logger import Logger
 from firmware.utils import get_imu_reader, get_onnx_sessions
-import signal
-import sys
 
 motor_driver_ref = None
 motors_enabled = False
 command_interface_ref = None
 
 
-def signal_handler(signum, frame):
+def signal_handler(signum: int, frame: object) -> None:
+    """Handle shutdown signals."""
     end_policy()
     sys.exit(0)
 
-def end_policy():
+def end_policy() -> None:
     """Cleanup function that should be called to safely shutdown the policy."""
     global motor_driver_ref, motors_enabled, command_interface_ref
     try:
@@ -40,14 +41,14 @@ def end_policy():
         motor_driver_ref = None
         motors_enabled = False
         command_interface_ref = None
-        
+
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     global motor_driver_ref, motors_enabled, command_interface_ref
-    
+
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    
+
     logger = Logger(log_dir)
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -60,7 +61,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     motor_driver = MotorDriver()
     motor_driver_ref = motor_driver
     motors_enabled = True
-    
+
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")

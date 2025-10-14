@@ -6,7 +6,7 @@ import socket
 import struct
 import sys
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
 
@@ -255,15 +255,15 @@ class MotorDriver:
             if len(joint_data) == 0:
                 print("No actuators responding, skipping ramp down")
                 return
-            
+
             print(f"Ramping down {len(joint_data)} actuators")
             num_steps = 50
             for i in range(num_steps):
-                progress = i / (num_steps - 1) 
+                progress = i / (num_steps - 1)
                 scale = self.max_scaling * (1.0 - progress)
                 self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
-                time.sleep(0.03) 
-            
+                time.sleep(0.03)
+
             # Final zero torque command
             self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
             print("Motors ramped down to zero")
@@ -338,7 +338,7 @@ class MotorDriver:
             if id in fb:
                 answer[id] = self.robot.actuators[id].can_to_physical_data(fb[id])
                 self.last_known_feedback[id] = answer[id].copy()
-                
+
             elif id in self.last_known_feedback:
                 # Fall back to last known good values
                 answer[id] = self.last_known_feedback[id].copy()
@@ -347,7 +347,9 @@ class MotorDriver:
                 answer[id] = self.robot.actuators[id].dummy_data()
         return answer
 
-    def get_ordered_joint_data(self, joint_order: list[str]) -> tuple[list[float], list[float], list[float], list[float]]:
+    def get_ordered_joint_data(
+        self, joint_order: list[str]
+    ) -> tuple[list[float], list[float], list[float], list[float]]:
         joint_data_dict= self.get_joint_angles_and_velocities()
 
         joint_angles_order, joint_vels_order, torques_order, temps_order = [], [], [], []
@@ -367,11 +369,11 @@ class MotorDriver:
         self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
 
 
-motor_driver_ref = None
+motor_driver_ref: Optional["MotorDriver"] = None
 
-def signal_handler(signum, frame):
-    """Handle Ctrl+C by ramping down motors before exit"""
-    global motor_driver_ref
+
+def signal_handler(signum: int, frame: object) -> None:
+    """Handle Ctrl+C by ramping down motors before exit."""
     print(f"\n⚠️  Received signal {signum}, shutting down...")
     if motor_driver_ref is not None:
         motor_driver_ref.ramp_down_motors()
@@ -379,16 +381,16 @@ def signal_handler(signum, frame):
 
 def main() -> None:
     global motor_driver_ref
-    
+
     # Register signal handler for Ctrl+C
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     driver = MotorDriver(max_scaling=0.1)
     motor_driver_ref = driver  # Store reference for signal handler
-    
+
     input("Press Enter to run sine wave on all actuators...")
-    
+
     try:
         driver.sine_wave()
     except KeyboardInterrupt:
