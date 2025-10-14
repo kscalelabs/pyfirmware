@@ -260,7 +260,8 @@ class MotorDriver:
             temp = self.robot.actuators[act_id].can_to_physical_temperature(state["temperature_raw"])
             fault_color = "\033[1;31m" if state["fault_flags"] > 0 else "\033[1;32m"
             print(
-                f"{act_id:3d} | {name:4s} | {angle:5.2f} | {velocity:8.2f} | {torque:6.2f} | {temp:5.1f} | {fault_color}{state['fault_flags']:3d}\033[0m"
+                f"{act_id:3d} | {name:4s} | {angle:5.2f} | {velocity:8.2f} | "
+                f"{torque:6.2f} | {temp:5.1f} | {fault_color}{state['fault_flags']:3d}\033[0m"
             )
 
         # Check for issues
@@ -306,7 +307,9 @@ class MotorDriver:
             self.can.flush_can_busses()
             t4 = time.perf_counter()
             print(
-                f"get feedback={(t1 - t) * 1e6:.0f}us, set targets={(t3 - t2) * 1e6:.0f}us, receive missing responses={(t4 - t3) * 1e6:.0f}us"
+                f"get feedback={(t1 - t) * 1e6:.0f}us, "
+                f"set targets={(t3 - t2) * 1e6:.0f}us, "
+                f"receive missing responses={(t4 - t3) * 1e6:.0f}us"
             )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
