@@ -12,8 +12,8 @@ from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.logger import Logger
 from firmware.utils import get_imu_reader, get_onnx_sessions
-import sys
 import signal
+
 shutdown_requested = False
 motor_driver_ref = None
 motors_enabled = False
@@ -25,7 +25,6 @@ def signal_handler(signum, frame):
     global shutdown_requested
     print(f"\nReceived signal {signum}, initiating shutdown...")
     shutdown_requested = True
-
 
 def end_policy():
     """Cleanup function that should be called to safely shutdown the policy."""

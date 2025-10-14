@@ -272,12 +272,12 @@ class MotorDriver:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
-        joint_data_array= self.get_joint_angles_and_velocities()
+        joint_data_dict= self.get_joint_angles_and_velocities()
 
         print("\nActuator states:")
         print("ID  | Name | Angle | Velocity | Torque | Temp  | Faults")
         print("----|------|-------|----------|--------|-------|-------")
-        for act_id, data in joint_data_array.items():
+        for act_id, data in joint_data_dict.items():
             fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
             print(
                 f"{act_id:3d} | {data['name']:4s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
@@ -285,7 +285,7 @@ class MotorDriver:
             )
             if data["fault_flags"] > 0:
                 print("\033[1;33mWARNING: Actuator faults detected\033[0m")
-        if any(abs(data["angle"]) > 2.0 for data in joint_data_array.values()):
+        if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
         print("Press Enter to enable motors...")
@@ -345,13 +345,13 @@ class MotorDriver:
         return answer
 
     def get_ordered_joint_data(self, joint_order: list[str]) -> tuple[list[float], list[float], list[float], list[float]]:
-        joint_data_array= self.get_joint_angles_and_velocities(joint_order)
+        joint_data_dict= self.get_joint_angles_and_velocities(joint_order)
 
         joint_angles_order, joint_vels_order, torques_order, temps_order = [], [], [], []
 
         for name in joint_order:
             id = self.robot.full_name_to_actuator_id[name]
-            joint_data = joint_data_array[id]
+            joint_data = joint_data_dict[id]
             joint_angles_order.append(joint_data["angle"])
             joint_vels_order.append(joint_data["velocity"])
             torques_order.append(joint_data["torque"])
