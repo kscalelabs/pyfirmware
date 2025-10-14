@@ -260,7 +260,7 @@ class MotorDriver:
             num_steps = 50
             for i in range(num_steps):
                 progress = i / (num_steps - 1) 
-                scale = self.max_scaling * (1.0 - progress) ** 2  # Quadratic decay for smoothness
+                scale = self.max_scaling * (1.0 - progress)
                 self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
                 time.sleep(0.03) 
             
