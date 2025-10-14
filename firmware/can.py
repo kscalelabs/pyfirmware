@@ -265,7 +265,7 @@ class MotorDriver:
             
             # Final zero torque command
             self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
-            print("✅ Motors ramped down")
+            print("Motors ramped down to zero")
         except Exception as e:
             print(f"Error during motor ramp down: {e}")
 
@@ -277,8 +277,8 @@ class MotorDriver:
         joint_data_dict= self.get_joint_angles_and_velocities()
 
         print("\nActuator states:")
-        print("ID  | Name | Angle | Velocity | Torque | Temp  | Faults")
-        print("----|------|-------|----------|--------|-------|-------")
+        print("ID  | Name           | Angle | Velocity | Torque | Temp  | Faults")
+        print("----|----------------|-------|----------|--------|-------|-------")
         for act_id, data in joint_data_dict.items():
             fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
             print(

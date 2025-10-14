@@ -31,11 +31,8 @@ def end_policy():
         # Stop command interface
         if command_interface_ref is not None:
             command_interface_ref.stop()
-            print("✅ Command interface stopped")
         if motors_enabled and motor_driver_ref is not None:
             motor_driver_ref.ramp_down_motors()
-            print("✅ Motors ramped down")
-
     except Exception as e:
         print(f"❌ Error in end_policy: {e}")
     finally:
