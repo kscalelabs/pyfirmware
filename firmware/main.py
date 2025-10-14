@@ -12,9 +12,41 @@ from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.logger import Logger
 from firmware.utils import get_imu_reader, get_onnx_sessions
+import sys
+import signal
+shutdown_requested = False
+motor_driver_ref = None
+motors_enabled = False
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    global shutdown_requested
+    print(f"\n Received signal {signum}, initiating emergency shutdown...")
+    shutdown_requested = True
 
+    end_policy()
+    sys.exit(0)
+
+def end_policy():
+    """Cleanup function that should be called to safely shutdown the policy."""
+    global motor_driver_ref, motors_enabled
+    try:
+        if motor_driver_ref is not None and motors_enabled:
+            motor_driver_ref.ramp_down_motors()
+                
+    except Exception as e:
+        print(f"Error in end_policy: {e}")
+    finally:
+        # Clear global references
+        motor_driver_ref = None
+        motors_enabled = False
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
+    global shutdown_requested, motor_driver_ref, motors_enabled
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     logger = Logger(log_dir)
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -25,6 +57,8 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     imu_reader = get_imu_reader()
 
     motor_driver = MotorDriver()
+    motor_driver_ref = motor_driver
+    motors_enabled = True
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
@@ -33,7 +67,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
 
     t0 = time.perf_counter()
     step_id = 0
-    while True:
+    while not shutdown_requested:
         t, tt = time.perf_counter(), time.time()
         joint_angles, joint_vels, torques, temps = motor_driver.get_ordered_joint_data(joint_order)
         t1 = time.perf_counter()
@@ -95,7 +129,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
-
+    end_policy()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
