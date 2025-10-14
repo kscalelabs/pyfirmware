@@ -51,6 +51,27 @@ class ActuatorConfig:
     kd_can_min: float
     kd_can_max: float
 
+    def dummy_data(self) -> dict[str, float]:
+        return {
+            "name": self.name,
+            "fault_flags": 0,
+            "angle": 0.0,
+            "velocity": 0.0,
+            "torque": 0.0,
+            "temperature": 0.0,
+        }
+
+    def can_to_physical_data(self, fb) -> dict[str, float]:
+        actuator_data = {
+            "name": self.name,
+            "fault_flags": fb["fault_flags"],
+            "angle": self.can_to_physical_angle(fb["angle_raw"]),
+            "velocity": self.can_to_physical_velocity(fb["angular_velocity_raw"]),
+            "torque": self.can_to_physical_torque(fb["torque_raw"]),
+            "temperature": self.can_to_physical_temperature(fb["temperature_raw"]),
+        }
+        return actuator_data
+
     def can_to_physical_angle(self, can_value: float) -> float:
         proportion = (can_value - 0.0) / (65535.0 - 0.0)
         return self.angle_can_min + proportion * (self.angle_can_max - self.angle_can_min)

@@ -35,7 +35,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     step_id = 0
     while True:
         t, tt = time.perf_counter(), time.time()
-        joint_angles, joint_vels, torques, temps = motor_driver.get_joint_angles_and_velocities(joint_order)
+        joint_angles, joint_vels, torques, temps = motor_driver.get_ordered_joint_data(joint_order)
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
