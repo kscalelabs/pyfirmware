@@ -248,7 +248,7 @@ class MotorDriver:
         try:
             # Get CURRENT positions as targets (not home positions!)
             # This prevents the robot from violently snapping to home position
-            joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities([])
+            joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities()
             joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}
             # Safety check: only proceed if we have at least one actuator responding
             if len(joint_data) == 0:
@@ -257,7 +257,7 @@ class MotorDriver:
             
             print(f"Ramping down {len(joint_data)} actuators")
             # Ramp down from current scaling to 0 (reverse of ramp up)
-            for scale in reversed([math.exp(math.log(0) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
+            for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
                 self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
                 time.sleep(0.05)  # Slower ramp down for safety
             
