@@ -51,6 +51,9 @@ class WebRTCServer:
         self.flip_video = flip_video
 
     def connect_audio(self, webrtc: GstWebRTC.WebRTCBin) -> None:
+        if self.pipe is None:
+            print("Error: Pipeline not initialized")
+            return
         audio_src = Gst.ElementFactory.make("alsasrc", "audio_src")
         audio_conv = Gst.ElementFactory.make("audioconvert", "audio_conv")
         audio_resample = Gst.ElementFactory.make("audioresample", "audio_resample")
@@ -178,7 +181,8 @@ class WebRTCServer:
         t = message.type
         if t == Gst.MessageType.LATENCY:
             print("Received a LATENCY message. Recalculating latency.")
-            self.pipe.recalculate_latency()
+            if self.pipe is not None:
+                self.pipe.recalculate_latency()
 
         return GLib.SOURCE_CONTINUE
 
@@ -244,7 +248,8 @@ class WebRTCServer:
             # Add elements to pipeline
             elements = [vp8depay, vp8dec, queue2, videoconvert, videoscale, scale_capsfilter, autovideosink]
             for element in elements:
-                self.pipe.add(element)
+                    if self.pipe is not None:
+                        self.pipe.add(element)
                 element.sync_state_with_parent()
 
             # Link elements in order: depay -> dec -> queue -> convert -> scale -> scale_caps -> sink
@@ -277,7 +282,8 @@ class WebRTCServer:
             # Add elements to pipeline
             elements = [opusdepay, opusdec, audioconvert, audioresample, autoaudiosink]
             for element in elements:
-                self.pipe.add(element)
+                    if self.pipe is not None:
+                        self.pipe.add(element)
                 element.sync_state_with_parent()
 
             # Link elements
@@ -319,13 +325,17 @@ class WebRTCServer:
             print("Data channel already added")
             return
         self.added_data_channel = True
+        if self.webrtc is None:
+            print("Error: WebRTC not initialized")
+            return
         self.data_channel = self.webrtc.emit("create-data-channel", "chat", None)
         if self.data_channel:
             print("Data channel created on robot")
             self.data_channel.connect("on-message-string", self.on_message_string)
 
         promise = Gst.Promise.new_with_change_func(self.on_offer_created, element, None)
-        self.webrtc.emit("create-offer", None, promise)
+        if self.webrtc is not None:
+            self.webrtc.emit("create-offer", None, promise)
 
     def on_offer_created(self, promise: Gst.Promise, _: GstWebRTC.WebRTCBin, __: None) -> None:
         print("on offer created")
@@ -333,15 +343,18 @@ class WebRTCServer:
         reply = promise.get_reply()
         offer = reply.get_value("offer")
         print("offer:", offer)
-        self.webrtc.emit("set-local-description", offer, Gst.Promise.new())
+        if self.webrtc is not None:
+            self.webrtc.emit("set-local-description", offer, Gst.Promise.new())
         text = offer.sdp.as_text()
         print("offertext:", text)
         message = json.dumps({"sdp": {"type": "offer", "sdp": text}})
-        asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
+        if self.ws is not None:
+            asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
     def send_ice_candidate_message(self, _: GstWebRTC.WebRTCBin, mlineindex: int, candidate: str) -> None:
         message = json.dumps({"ice": {"candidate": candidate, "sdpMLineIndex": mlineindex}})
-        asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
+        if self.ws is not None:
+            asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
     def handle_client_message(self, message: str) -> None:
         print("Handling client message")
@@ -356,10 +369,12 @@ class WebRTCServer:
             res, sdpmsg = GstSdp.SDPMessage.new()
             GstSdp.sdp_message_parse_buffer(sdp.encode(), sdpmsg)
             answer = GstWebRTC.WebRTCSessionDescription.new(GstWebRTC.WebRTCSDPType.ANSWER, sdpmsg)
-            self.webrtc.emit("set-remote-description", answer, Gst.Promise.new())
+            if self.webrtc is not None:
+                self.webrtc.emit("set-remote-description", answer, Gst.Promise.new())
         elif "ice" in msg:
             ice = msg["ice"]
-            self.webrtc.emit("add-ice-candidate", ice["sdpMLineIndex"], ice["candidate"])
+            if self.webrtc is not None:
+                self.webrtc.emit("add-ice-candidate", ice["sdpMLineIndex"], ice["candidate"])
         elif msg_type == "HELLO":
             if self.pipe:
                 self.close_pipeline()
