@@ -3,7 +3,7 @@
 import json
 import socket
 import time
-from typing import List
+from typing import List, Optional
 
 from firmware.commands.command_interface import CMD_NAMES, CommandInterface
 
@@ -17,7 +17,7 @@ class UDPListener(CommandInterface):
 
         self.port = port
         self.host = host
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock: Optional[socket.socket] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
         self.sock.settimeout(0.1)
 
