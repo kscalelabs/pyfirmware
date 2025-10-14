@@ -49,7 +49,7 @@ def _quat_to_gravity(q: tuple[float, float, float, float]) -> tuple[float, float
     return (gx, gy, gz)
 
 
-def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running: mp.Event, lock: mp.Lock) -> None:
+def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running: mp.synchronize.Event, lock: mp.synchronize.Lock) -> None:
     try:
         ser = serial.Serial(device, baudrate, timeout=0)
         shm = _open_mmap(shm_path, shm_size)

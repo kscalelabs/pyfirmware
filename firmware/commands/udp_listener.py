@@ -26,22 +26,25 @@ class UDPListener(CommandInterface):
     def _read_input(self) -> None:
         """Read UDP packets and update command vector."""
         while self._running:
-            try:
-                data, addr = self.sock.recvfrom(1024)
-                command_data = json.loads(data.decode("utf-8"))
+            if self.sock:
+                try:
+                    data, addr = self.sock.recvfrom(1024)
+                    command_data = json.loads(data.decode("utf-8"))
 
-                if command_data.get("type") == "reset":
-                    self.reset_cmd()
+                    if command_data.get("type") == "reset":
+                        self.reset_cmd()
+                        continue
+
+                    payload = command_data.get("commands", command_data)
+                    for name, value in payload.items():
+                        self.cmd[str(name).lower()] = float(value)
+
+                except socket.timeout:
                     continue
-
-                payload = command_data.get("commands", command_data)
-                for name, value in payload.items():
-                    self.cmd[str(name).lower()] = float(value)
-
-            except socket.timeout:
-                continue
-            except Exception:
-                continue
+                except Exception:
+                    continue
+            else:
+                time.sleep(0.1)
 
     def stop(self) -> None:
         """Stop UDP listening."""

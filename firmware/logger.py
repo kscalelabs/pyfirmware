@@ -15,7 +15,7 @@ class Logger:
         # Start background threads for processing logs
         self._register_shutdown_handlers()
         self.running = True
-        self.queue = queue.Queue()
+        self.queue: queue.Queue[Dict[str, Any]] = queue.Queue()
         self.thread = threading.Thread(target=self._log_worker, args=(self.queue, self.logpath), daemon=True)
         self.thread.start()
 
