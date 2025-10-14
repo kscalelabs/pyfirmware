@@ -13,6 +13,7 @@ from firmware.commands.udp_listener import UDPListener
 from firmware.logger import Logger
 from firmware.utils import get_imu_reader, get_onnx_sessions
 import signal
+import sys
 
 shutdown_requested = False
 motor_driver_ref = None
@@ -23,8 +24,10 @@ command_interface_ref = None
 def signal_handler(signum, frame):
     """Handle shutdown signals"""
     global shutdown_requested
-    print(f"\nReceived signal {signum}, initiating shutdown...")
+    print(f"\nReceived signal {signum}, waiting 5 seconds for hard shutdown")
     shutdown_requested = True
+    time.sleep(5)
+    sys.exit(0)
 
 def end_policy():
     """Cleanup function that should be called to safely shutdown the policy."""
