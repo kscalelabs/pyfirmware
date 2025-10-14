@@ -10,7 +10,7 @@ import onnxruntime as ort
 from firmware.imu.bno055 import BNO055
 from firmware.imu.dummy import DummyIMU
 from firmware.imu.hiwonder import Hiwonder
-from firmware.logger_general import Logger
+from firmware.logger import Logger
 
 def get_onnx_sessions(kinfer_path: str, logger: Logger) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
     logger.debug("Loading kinfer model from", kinfer_path)

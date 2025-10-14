@@ -11,7 +11,7 @@ from typing import Optional
 import websockets
 from websockets.server import WebSocketServerProtocol
 
-from firmware.logger_general import Logger
+from firmware.logger import Logger
 
 
 class WebSocketInterface:

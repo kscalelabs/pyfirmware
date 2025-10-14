@@ -27,7 +27,6 @@ class Logger:
     
     def __init__(
         self, 
-        logdir: str,
         console_level = LogLevel.INFO
     ):
         """
@@ -45,7 +44,7 @@ class Logger:
         self.last_message = None
         self.repeat_count = 0
         
-        # Initialize file logging if logdir is provided
+    def set_logdir(self, logdir: str) -> None:
         self.logdir = logdir
         self.file_logging_enabled = logdir is not None
         if self.file_logging_enabled:
@@ -55,6 +54,7 @@ class Logger:
             self.thread = threading.Thread(target=self._log_worker, args=(self.queue, self.logpath), daemon=True)
             self.thread.start()
             self._register_shutdown_handlers()
+
 
     def _register_shutdown_handlers(self) -> None:
         """Register shutdown handlers for graceful file logging cleanup."""

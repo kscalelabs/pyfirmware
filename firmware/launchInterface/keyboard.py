@@ -7,7 +7,7 @@ import tty
 from pathlib import Path
 from typing import Optional
 
-from firmware.logger_general import Logger
+from firmware.logger import Logger
 
 
 class KeyboardLaunchInterface:

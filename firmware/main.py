@@ -25,11 +25,8 @@ launch_interface_ref = None
 motor_driver_ref = None
 motors_enabled = False
 
-async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> None:
+async def runner(kinfer_path: str, launchInterface, logger) -> None:
     global shutdown_requested, motor_driver_ref, motors_enabled
-    
-    # Create logger
-    logger = Logger(log_dir)
     motor_driver = None
 
     try:
@@ -217,11 +214,11 @@ async def main(use_websocket: bool = False):
         policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
-        
+        logger.set_logdir(log_dir)
         logger.info(f"Selected policy: {policy_name}")
 
         try:
-            await runner(kinfer_path, log_dir, launchInterface, logger)
+            await runner(kinfer_path, launchInterface, logger)
         except KeyboardInterrupt:
             logger.info("Shutting down due to keyboard interrupt")
             shutdown_requested = True
