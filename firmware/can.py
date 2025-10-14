@@ -250,17 +250,17 @@ class MotorDriver:
         states = self.can.get_actuator_feedback()
 
         print("\nActuator states:")
-        print("ID  | Name | Angle | Velocity | Torque | Temp  | Faults")
-        print("----|------|-------|----------|--------|-------|-------")
+        print("ID  | Name           | Angle | Velocity | Torque | Temp  | Faults")
+        print("----|----------------|-------|----------|--------|-------|-------")
         for act_id, state in states.items():
-            name = self.robot.actuators[act_id].name[:3]
+            name = self.robot.actuators[act_id].name[:16]
             angle = self.robot.actuators[act_id].can_to_physical_angle(state["angle_raw"])
             velocity = self.robot.actuators[act_id].can_to_physical_velocity(state["angular_velocity_raw"])
             torque = self.robot.actuators[act_id].can_to_physical_torque(state["torque_raw"])
             temp = self.robot.actuators[act_id].can_to_physical_temperature(state["temperature_raw"])
             fault_color = "\033[1;31m" if state["fault_flags"] > 0 else "\033[1;32m"
             print(
-                f"{act_id:3d} | {name:4s} | {angle:5.2f} | {velocity:8.2f} | "
+                f"{act_id:3d} | {name:14s} | {angle:5.2f} | {velocity:8.2f} | "
                 f"{torque:6.2f} | {temp:5.1f} | {fault_color}{state['fault_flags']:3d}\033[0m"
             )
 
