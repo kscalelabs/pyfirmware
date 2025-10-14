@@ -72,14 +72,7 @@ class Logger:
             print(f"{self._format_message(level, message, extra_data)}{repeat_str}")
             return
         else:
-            # New message - reset repeat count
-            if self.repeat_count > 0:
-                # Clear any previous repeat indicators
-                print(f"\033[F\033[K", end="")  # Move up one line and clear it
-                print(self._format_message(level, message, extra_data))
-            else:
-                print(self._format_message(level, message, extra_data))
-            
+            print(self._format_message(level, message, extra_data))
             self.last_message = message_key
             self.repeat_count = 0
 

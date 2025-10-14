@@ -26,32 +26,6 @@ launch_interface_ref = None
 motor_driver_ref = None
 motors_enabled = False
 
-
-def end_policy():
-    """Emergency cleanup function that can be called from signal handlers."""
-    global motor_driver_ref, motors_enabled
-    try:
-        if motor_driver_ref is not None and motors_enabled:
-            print("Ramping down motors...")
-            motor_driver_ref.ramp_down_motors()
-                
-    except Exception as e:
-        print(f"Error in end_policy: {e}")
-    finally:
-        # Clear global references
-        motor_driver_ref = None
-        motors_enabled = False
-
-
-def signal_handler(signum, frame):
-    """Handle shutdown signals with immediate motor safety."""
-    global shutdown_requested, launch_interface_ref, motor_driver_ref, motors_enabled
-    print(f"\n Received signal {signum}, initiating emergency shutdown...")
-    shutdown_requested = True
-
-    end_policy()
-    sys.exit(0)
-
 async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> None:
     global shutdown_requested, motor_driver_ref, motors_enabled
     
@@ -185,6 +159,32 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> Non
         )
         # Always cleanup motors on exit
         end_policy()
+
+
+def end_policy():
+    """Emergency cleanup function that can be called from signal handlers."""
+    global motor_driver_ref, motors_enabled
+    try:
+        if motor_driver_ref is not None and motors_enabled:
+            print("Ramping down motors...")
+            motor_driver_ref.ramp_down_motors()
+                
+    except Exception as e:
+        print(f"Error in end_policy: {e}")
+    finally:
+        # Clear global references
+        motor_driver_ref = None
+        motors_enabled = False
+
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals with immediate motor safety."""
+    global shutdown_requested, launch_interface_ref, motor_driver_ref, motors_enabled
+    print(f"\n Received signal {signum}, initiating emergency shutdown...")
+    shutdown_requested = True
+
+    end_policy()
+    sys.exit(0)
 
 async def main(use_websocket: bool = False):
     """Main entry point that sets up launch interface and runs the policy."""
