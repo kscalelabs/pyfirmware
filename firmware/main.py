@@ -15,10 +15,9 @@ from firmware.can import MotorDriver
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.launchInterface import KeyboardLaunchInterface, WebSocketInterface
-from firmware.logger_general import Logger
+from firmware.logger import Logger
 from firmware.utils import get_imu_reader, get_onnx_sessions
 from firmware.utils import DummyIMU
-from firmware.logger import Logger as Logger_run
 
 # Global shutdown flag and interface reference
 shutdown_requested = False
@@ -30,7 +29,7 @@ async def runner(kinfer_path: str, log_dir: str, launchInterface, logger) -> Non
     global shutdown_requested, motor_driver_ref, motors_enabled
     
     # Create logger
-    logger_run = Logger_run(logdir=log_dir)
+    logger = Logger(log_dir)
     motor_driver = None
 
     try:
