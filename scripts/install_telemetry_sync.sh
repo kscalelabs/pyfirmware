@@ -48,10 +48,11 @@ Description=Kinfer Log Sync Service
 After=network.target
 
 [Service]
-ExecStart=/bin/bash -c 'inotifywait -m $LOCAL_LOGS_DIR -e create,modify,close_write | while read path action file; do rsync -avz $LOCAL_LOGS_DIR/ $REMOTE_USER@$REMOTE_HOST:$REMOTE_LOGS_DIR/; done'
+ExecStart=/bin/bash -c 'inotifywait -m $LOCAL_LOGS_DIR -e close_write,moved_to --format "%w%f" | while read file; do sleep 1; rsync -avz $LOCAL_LOGS_DIR/ $REMOTE_USER@$REMOTE_HOST:$REMOTE_LOGS_DIR/ && echo "Synced: $file"; done'
 User=$USER
 Group=$USER
 Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -62,6 +63,7 @@ echo -e "\n${YELLOW}Enabling and starting service...${NC}"
 sudo systemctl daemon-reload
 sudo systemctl enable kinfer-logs-sync
 sudo systemctl start kinfer-logs-sync
+sudo systemctl status kinfer-logs-sync
 
 # Test the connection and initial sync
 echo -e "\n${YELLOW}Testing initial sync...${NC}"
