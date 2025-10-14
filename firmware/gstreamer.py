@@ -4,10 +4,11 @@ import argparse
 import asyncio
 import json
 import os
+from typing import Optional
 
-import gi
-import websockets
-from gi.repository import GLib, Gst, GstSdp, GstWebRTC
+import gi  # type: ignore
+import websockets  # type: ignore
+from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
@@ -41,9 +42,9 @@ async def glib_main_loop_iteration() -> None:
 
 class WebRTCServer:
     def __init__(self, loop: asyncio.AbstractEventLoop, flip_video: bool = False) -> None:
-        self.pipe = None
-        self.webrtc = None
-        self.ws = None  # active client connection
+        self.pipe: Optional[Gst.Pipeline] = None
+        self.webrtc: Optional[GstWebRTC.WebRTCBin] = None
+        self.ws: Optional[websockets.WebSocketServerProtocol] = None  # active client connection
         self.loop = loop
         self.added_data_channel = False
         self.added_streams = 0
