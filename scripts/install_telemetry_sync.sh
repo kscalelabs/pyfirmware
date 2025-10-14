@@ -88,7 +88,7 @@ sudo chmod +x "$SYNC_SCRIPT"
 
 # Create systemd service file
 echo -e "\n${YELLOW}Creating systemd service...${NC}"
-sudo tee /etc/systemd/system/kinfer-logs-sync.service > /dev/null << EOF
+sudo tee /etc/systemd/system/kinfer-logs-sync.service > /dev/null << 'EOF'
 [Unit]
 Description=Kinfer Log Sync Service
 After=network.target
