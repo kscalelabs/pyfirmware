@@ -2,7 +2,7 @@
 
 import atexit
 import mmap
-import multiprocessing as mp
+from multiprocessing import Process, Event, Lock
 import os
 import struct
 import time
@@ -50,7 +50,7 @@ def _quat_to_gravity(q: tuple[float, float, float, float]) -> tuple[float, float
 
 
 def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int,
-               running: mp.synchronize.Event, lock: mp.synchronize.Lock) -> None:
+               running: Event, lock: Lock) -> None:
     try:
         ser = serial.Serial(device, baudrate, timeout=0)
         shm = _open_mmap(shm_path, shm_size)
@@ -81,11 +81,11 @@ class Hiwonder:
         self, device: str = "/dev/ttyUSB0", baudrate: int = 230400, shm_path: str = "/dev/shm/imu_shm"
     ) -> None:
         self.shm = _open_mmap(shm_path, RECORD_STRUCT.size)
-        self.lock = mp.Lock()
-        self.running = mp.Event()
+        self.lock = Lock()
+        self.running = Event()
         self.running.set()
 
-        self.proc = mp.Process(
+        self.proc = Process(
             target=_read_loop,
             args=(device, baudrate, shm_path, RECORD_STRUCT.size, self.running, self.lock),
             daemon=True,
