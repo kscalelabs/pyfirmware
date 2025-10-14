@@ -345,7 +345,7 @@ class MotorDriver:
         return answer
 
     def get_ordered_joint_data(self, joint_order: list[str]) -> tuple[list[float], list[float], list[float], list[float]]:
-        joint_data_dict= self.get_joint_angles_and_velocities(joint_order)
+        joint_data_dict= self.get_joint_angles_and_velocities()
 
         joint_angles_order, joint_vels_order, torques_order, temps_order = [], [], [], []
 
