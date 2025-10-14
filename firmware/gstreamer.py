@@ -248,8 +248,8 @@ class WebRTCServer:
             # Add elements to pipeline
             elements = [vp8depay, vp8dec, queue2, videoconvert, videoscale, scale_capsfilter, autovideosink]
             for element in elements:
-                    if self.pipe is not None:
-                        self.pipe.add(element)
+                if self.pipe is not None:
+                    self.pipe.add(element)
                 element.sync_state_with_parent()
 
             # Link elements in order: depay -> dec -> queue -> convert -> scale -> scale_caps -> sink
@@ -282,8 +282,8 @@ class WebRTCServer:
             # Add elements to pipeline
             elements = [opusdepay, opusdec, audioconvert, audioresample, autoaudiosink]
             for element in elements:
-                    if self.pipe is not None:
-                        self.pipe.add(element)
+                if self.pipe is not None:
+                    self.pipe.add(element)
                 element.sync_state_with_parent()
 
             # Link elements
