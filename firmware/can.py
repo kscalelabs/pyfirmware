@@ -255,7 +255,7 @@ class MotorDriver:
                 print("No actuators responding, skipping ramp down")
                 return
             
-            print(f"Ramping down {len(joint_data)} actuators from scaling={self.max_scaling:.3f}")
+            print(f"Ramping down {len(joint_data)} actuators")
             num_steps = 50
             for i in range(num_steps):
                 progress = i / (num_steps - 1) 
@@ -277,12 +277,12 @@ class MotorDriver:
         joint_data_dict= self.get_joint_angles_and_velocities()
 
         print("\nActuator states:")
-        print("ID  | Name           | Angle | Velocity | Torque | Temp  | Faults")
-        print("----|----------------|-------|----------|--------|-------|-------")
+        print("ID  | Name             | Angle | Velocity | Torque | Temp  | Faults")
+        print("----|------------------|-------|----------|--------|-------|-------")
         for act_id, data in joint_data_dict.items():
             fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
             print(
-                f"{act_id:3d} | {data['name']:14s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
+                f"{act_id:3d} | {data['name'][:16]:14s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
                 f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
             )
             if data["fault_flags"] > 0:
