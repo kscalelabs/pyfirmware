@@ -2,10 +2,11 @@
 
 import atexit
 import mmap
-from multiprocessing import Process, Event, Lock
 import os
 import struct
 import time
+from multiprocessing import Event, Lock, Process
+
 import serial
 
 # record layout: timestamp (double) + gyro (3 floats) + quaternion (4 floats)
