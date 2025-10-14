@@ -40,6 +40,52 @@ ssh-copy-id "$REMOTE_USER@$REMOTE_HOST"
 echo -e "\n${YELLOW}Creating remote directory...${NC}"
 ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_LOGS_DIR"
 
+# Create sync script with debouncing
+echo -e "\n${YELLOW}Creating sync script...${NC}"
+SYNC_SCRIPT="/usr/local/bin/kinfer-logs-sync.sh"
+sudo tee "$SYNC_SCRIPT" > /dev/null << 'SCRIPT_EOF'
+#!/bin/bash
+
+LOCAL_LOGS_DIR="$1"
+REMOTE_USER="$2"
+REMOTE_HOST="$3"
+REMOTE_LOGS_DIR="$4"
+
+LAST_SYNC=0
+DEBOUNCE_SECONDS=3
+
+sync_now() {
+    local sync_num=$1
+    local current_time=$(date +%s)
+    local time_since_last=$((current_time - LAST_SYNC))
+    
+    if [ $time_since_last -ge $DEBOUNCE_SECONDS ]; then
+        echo "$(date): Starting sync $sync_num..."
+        if rsync -avz --exclude='*.swp' --exclude='*.swx' --exclude='*.tmp' --exclude='*~' "$LOCAL_LOGS_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_LOGS_DIR/"; then
+            echo "$(date): Sync $sync_num completed successfully"
+            LAST_SYNC=$(date +%s)
+        else
+            echo "$(date): Sync $sync_num failed"
+        fi
+    fi
+}
+
+# Watch for file changes and sync 3 times to handle asynchronous operations
+inotifywait -m "$LOCAL_LOGS_DIR" -e close_write,moved_to,move,modify --format '%e %w%f' | while read event file; do
+    echo "$(date): Detected $event on $file"
+    # Wait a moment for any related operations to complete
+    sleep 1
+    sync_now 1
+    sleep 5 
+    sync_now 2
+    sleep 10
+    sync_now 3
+
+done
+SCRIPT_EOF
+
+sudo chmod +x "$SYNC_SCRIPT"
+
 # Create systemd service file
 echo -e "\n${YELLOW}Creating systemd service...${NC}"
 sudo tee /etc/systemd/system/kinfer-logs-sync.service > /dev/null << EOF
@@ -48,7 +94,7 @@ Description=Kinfer Log Sync Service
 After=network.target
 
 [Service]
-ExecStart=/bin/bash -c 'inotifywait -m $LOCAL_LOGS_DIR -e close_write,moved_to --format "%w%f" | while read file; do sleep 1; rsync -avz $LOCAL_LOGS_DIR/ $REMOTE_USER@$REMOTE_HOST:$REMOTE_LOGS_DIR/ && echo "Synced: $file"; done'
+ExecStart=$SYNC_SCRIPT $LOCAL_LOGS_DIR $REMOTE_USER $REMOTE_HOST $REMOTE_LOGS_DIR
 User=$USER
 Group=$USER
 Restart=always
