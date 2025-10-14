@@ -17,31 +17,41 @@ import signal
 shutdown_requested = False
 motor_driver_ref = None
 motors_enabled = False
+command_interface_ref = None
+
 
 def signal_handler(signum, frame):
     """Handle shutdown signals"""
     global shutdown_requested
-    print(f"\n Received signal {signum}, initiating emergency shutdown...")
+    print(f"\nReceived signal {signum}, initiating shutdown...")
     shutdown_requested = True
 
-    end_policy()
-    sys.exit(0)
 
 def end_policy():
     """Cleanup function that should be called to safely shutdown the policy."""
-    global motor_driver_ref, motors_enabled
+    global motor_driver_ref, motors_enabled, command_interface_ref
     try:
+        # Stop command interface first to prevent new commands
+        if command_interface_ref is not None:
+            command_interface_ref.stop()
+            print("✅ Command interface stopped")
+
+        # Ramp down motors
         if motor_driver_ref is not None and motors_enabled:
+            print("Ramping down motors...")
             motor_driver_ref.ramp_down_motors()
-                
+            print("✅ Motors ramped down")
+
     except Exception as e:
-        print(f"Error in end_policy: {e}")
+        print(f"❌ Error in end_policy: {e}")
     finally:
         # Clear global references
         motor_driver_ref = None
         motors_enabled = False
+        command_interface_ref = None
+        
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
-    global shutdown_requested, motor_driver_ref, motors_enabled
+    global shutdown_requested, motor_driver_ref, motors_enabled, command_interface_ref
     
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
@@ -59,77 +69,82 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     motor_driver = MotorDriver()
     motor_driver_ref = motor_driver
     motors_enabled = True
+    
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
     print("🤖 Running policy...")
 
     command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
+    command_interface_ref = command_interface
 
-    t0 = time.perf_counter()
-    step_id = 0
-    while not shutdown_requested:
-        t, tt = time.perf_counter(), time.time()
-        joint_angles, joint_vels, torques, temps = motor_driver.get_ordered_joint_data(joint_order)
-        t1 = time.perf_counter()
-        projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
-        t2 = time.perf_counter()
-        command = command_interface.get_cmd()
-        t3 = time.perf_counter()
+    try:
+        t0 = time.perf_counter()
+        step_id = 0
+        while not shutdown_requested:
+            t, tt = time.perf_counter(), time.time()
+            joint_angles, joint_vels, torques, temps = motor_driver.get_ordered_joint_data(joint_order)
+            t1 = time.perf_counter()
+            projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
+            t2 = time.perf_counter()
+            command = command_interface.get_cmd()
+            t3 = time.perf_counter()
 
-        action, carry = step_session.run(
-            None,
-            {
-                "joint_angles": np.array(joint_angles, dtype=np.float32),
-                "joint_angular_velocities": np.array(joint_vels, dtype=np.float32),
-                "projected_gravity": np.array(projected_gravity, dtype=np.float32),
-                "gyroscope": np.array(gyroscope, dtype=np.float32),
-                "command": np.array(command, dtype=np.float32),
-                "carry": carry,
-            },
-        )
-        t4 = time.perf_counter()
+            action, carry = step_session.run(
+                None,
+                {
+                    "joint_angles": np.array(joint_angles, dtype=np.float32),
+                    "joint_angular_velocities": np.array(joint_vels, dtype=np.float32),
+                    "projected_gravity": np.array(projected_gravity, dtype=np.float32),
+                    "gyroscope": np.array(gyroscope, dtype=np.float32),
+                    "command": np.array(command, dtype=np.float32),
+                    "carry": carry,
+                },
+            )
+            t4 = time.perf_counter()
 
-        motor_driver.take_action(action, joint_order)
-        t5 = time.perf_counter()
-        motor_driver.flush_can_busses()
-        t6 = time.perf_counter()
+            motor_driver.take_action(action, joint_order)
+            t5 = time.perf_counter()
+            motor_driver.flush_can_busses()
+            t6 = time.perf_counter()
 
-        dt = time.perf_counter() - t
-        logger.log(
-            t - t0,
-            {
-                "step_id": step_id,
-                "timestamp": tt,
-                "dt_ms": dt * 1000,
-                "dt_roundtrip_ms": (t5 - t) * 1000,
-                "dt_joints_ms": (t1 - t) * 1000,
-                "dt_imu_ms": (t2 - t1) * 1000,
-                "dt_keyboard_ms": (t3 - t2) * 1000,
-                "dt_step_ms": (t4 - t3) * 1000,
-                "dt_action_ms": (t5 - t4) * 1000,
-                "dt_flush_can_busses_ms": (t6 - t5) * 1000,
-                "joint_angles": joint_angles,
-                "joint_velocities": joint_vels,
-                # "joint_amps": [],  # TODO add
-                "joint_torques": torques,
-                "joint_temps": temps,
-                "projected_gravity": projected_gravity,
-                "gyroscope": gyroscope,
-                "command": command,
-                "action": action.tolist(),
-                "joint_order": joint_order,
-            },
-        )
-        print(
-            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, "
-            f"get imu={(t2 - t1) * 1000:.2f} ms, "
-            f".step()={(t4 - t3) * 1000:.2f} ms, "
-            f"take action={(t5 - t4) * 1000:.2f} ms, "
-            f"missing responses={(t6 - t5) * 1000:.2f} ms"
-        )
-        step_id += 1
-        time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
-    end_policy()
+            dt = time.perf_counter() - t
+            logger.log(
+                t - t0,
+                {
+                    "step_id": step_id,
+                    "timestamp": tt,
+                    "dt_ms": dt * 1000,
+                    "dt_roundtrip_ms": (t5 - t) * 1000,
+                    "dt_joints_ms": (t1 - t) * 1000,
+                    "dt_imu_ms": (t2 - t1) * 1000,
+                    "dt_keyboard_ms": (t3 - t2) * 1000,
+                    "dt_step_ms": (t4 - t3) * 1000,
+                    "dt_action_ms": (t5 - t4) * 1000,
+                    "dt_flush_can_busses_ms": (t6 - t5) * 1000,
+                    "joint_angles": joint_angles,
+                    "joint_velocities": joint_vels,
+                    # "joint_amps": [],  # TODO add
+                    "joint_torques": torques,
+                    "joint_temps": temps,
+                    "projected_gravity": projected_gravity,
+                    "gyroscope": gyroscope,
+                    "command": command,
+                    "action": action.tolist(),
+                    "joint_order": joint_order,
+                },
+            )
+            print(
+                f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, "
+                f"get imu={(t2 - t1) * 1000:.2f} ms, "
+                f".step()={(t4 - t3) * 1000:.2f} ms, "
+                f"take action={(t5 - t4) * 1000:.2f} ms, "
+                f"missing responses={(t6 - t5) * 1000:.2f} ms"
+            )
+            step_id += 1
+            time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
+    finally:
+        # Always run cleanup, even on exceptions
+        end_policy()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
