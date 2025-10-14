@@ -301,18 +301,26 @@ class MotorDriver:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
         self.logger.info("Ramping down motors...")
         try:
-            # Get current positions as targets
-            home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            # Get CURRENT positions as targets (not home positions!)
+            # This prevents the robot from violently snapping to home position
+            joint_angles, joint_vels, torques, temps = self.get_joint_angles_and_velocities([])
+            self.logger.info(f"current_positions: {joint_angles}")
             
+            # Safety check: only proceed if we have at least one actuator responding
+            if not joint_angles:
+                self.logger.warning("No actuators responding, skipping ramp down")
+                return
+            
+            self.logger.info(f"Ramping down {len(joint_angles)} actuators")
             # Ramp down from current scaling to 0 (reverse of ramp up)
             for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
                 if scale > self.max_scaling:
                     continue
-                self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=scale)
+                self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
                 time.sleep(0.1)  # Slower ramp down for safety
             
             # Final zero torque command
-            self.can.set_pd_targets(home_targets, robotcfg=self.robot, scaling=0.0)
+            self.can.set_pd_targets(current_targets, robotcfg=self.robot, scaling=0.0)
             self.logger.info("✅ Motors ramped down")
         except Exception as e:
             self.logger.error(f"Error during motor ramp down: {e}")
@@ -339,10 +347,11 @@ class MotorDriver:
     def flush_can_busses(self) -> None:
         self.can.flush_can_busses()
 
-    def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
+    def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float] or dict[int, float]]:
         fb = self.can.get_actuator_feedback()
         joint_angles, joint_vels, torques, temps = {}, {}, {}, {}
         for id in self.robot.actuators.keys():
+            self.logger.info(f"id: {id}")
             if id in fb:
                 # Update cache with new values
                 joint_angles[id] = self.robot.actuators[id].can_to_physical_angle(fb[id]["angle_raw"])
@@ -363,6 +372,8 @@ class MotorDriver:
             else:
                 # Ultimate fallback to zeros for unknown actuators
                 joint_angles[id], joint_vels[id], torques[id], temps[id] = 0.0, 0.0, 0.0, 0.0
+        if len(joint_order) == 0:
+            return joint_angles, joint_vels, torques, temps
 
         joint_angles_ordered = [joint_angles[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
         joint_vels_ordered = [joint_vels[self.robot.full_name_to_actuator_id[name]] for name in joint_order]

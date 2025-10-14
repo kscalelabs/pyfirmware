@@ -113,7 +113,7 @@ async def runner(kinfer_path: str, launchInterface, logger) -> None:
 
             dt = time.perf_counter() - t
             
-            logger_run.log(
+            logger.write(
                 t - t0,
                 {
                     "step_id": step_id,
@@ -162,7 +162,6 @@ def end_policy():
     global motor_driver_ref, motors_enabled
     try:
         if motor_driver_ref is not None and motors_enabled:
-            print("Ramping down motors...")
             motor_driver_ref.ramp_down_motors()
                 
     except Exception as e:
@@ -231,7 +230,6 @@ async def main(use_websocket: bool = False):
     
     finally:
         if launchInterface is not None:
-            print("Closing interface...")
             try:
                 await launchInterface.close()
                 print("✅ Interface closed")
