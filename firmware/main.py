@@ -26,15 +26,17 @@ def signal_handler(signum, frame):
     global shutdown_requested
     print(f"\nReceived signal {signum}, waiting 5 seconds for hard shutdown")
     shutdown_requested = True
+    if command_interface_ref is not None:
+        command_interface_ref.stop()
     time.sleep(5)
     sys.exit(0)
 
 def end_policy():
     """Cleanup function that should be called to safely shutdown the policy."""
-    global motor_driver_ref, motors_enabled, command_interface_ref
+    global motor_driver_ref, motors_enabled, command_interface_ref, shutdown_requested
     try:
         # Stop command interface first to prevent new commands
-        if command_interface_ref is not None:
+        if not shutdown_requested and command_interface_ref is not None:
             command_interface_ref.stop()
             print("✅ Command interface stopped")
 
