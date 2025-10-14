@@ -1,22 +1,18 @@
 """WebRTC server using GStreamer and websockets for streaming video/audio."""
 
+import argparse
 import asyncio
 import json
 import os
 
 import gi
 import websockets
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# Enable GstShark tracers and debug level
+from gi.repository import GLib, Gst, GstSdp, GstWebRTC
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
 gi.require_version("GstSdp", "1.0")
-from gi.repository import GLib, Gst, GstSdp, GstWebRTC
+
 
 Gst.init(None)
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
@@ -53,7 +49,7 @@ class WebRTCServer:
         self.added_streams = 0
         self.flip_video = flip_video
 
-    def connect_audio(self, webrtc) -> None:
+    def connect_audio(self, webrtc: GstWebRTC.WebRTCBin) -> None:
         audio_src = Gst.ElementFactory.make("alsasrc", "audio_src")
         audio_conv = Gst.ElementFactory.make("audioconvert", "audio_conv")
         audio_resample = Gst.ElementFactory.make("audioresample", "audio_resample")
@@ -173,11 +169,10 @@ class WebRTCServer:
         self.pipe.set_state(Gst.State.PLAYING)
         Gst.debug_bin_to_dot_file(self.pipe, Gst.DebugGraphDetails.ALL, "pipeline_graph")
 
-        # os.environ["GST_DEBUG"] = "GST_TRACER:7"
-        # os.environ["GST_TRACERS"] = "cpuusage;queuelevel;interlatency;proctime;bitrate;framerate;buffer;scheduling;graphic"
+
         print("Pipeline started")
 
-    def on_bus_message(self, bus, message) -> int:
+    def on_bus_message(self, bus: Gst.Bus, message: Gst.Message) -> int:
         """Handle messages from the GStreamer bus, specifically for latency."""
         t = message.type
         if t == Gst.MessageType.LATENCY:
@@ -193,14 +188,14 @@ class WebRTCServer:
             self.webrtc = None
             self.added_data_channel = False
 
-    def on_message_string(self, channel, message) -> None:
+    def on_message_string(self, channel: GstWebRTC.WebRTCDataChannel, message: str) -> None:
         print("Received:", message)
 
-    def on_data_channel(self, webrtc, channel) -> None:
+    def on_data_channel(self, webrtc: GstWebRTC.WebRTCBin, channel: GstWebRTC.WebRTCDataChannel) -> None:
         print("New data channel:", channel.props.label)
         channel.connect("on-message-string", self.on_message_string)
 
-    def on_incoming_stream(self, _, pad) -> None:
+    def on_incoming_stream(self, _: GstWebRTC.WebRTCBin, pad: Gst.Pad) -> None:
         if pad.direction != Gst.PadDirection.SRC:
             return
 
@@ -303,7 +298,7 @@ class WebRTCServer:
 
         Gst.debug_bin_to_dot_file(self.pipe, Gst.DebugGraphDetails.ALL, f"pipeline_graph_{self.added_streams}")
 
-        async def delayed_snapshot(pipe, name, delay: float = 5.0) -> None:
+        async def delayed_snapshot(pipe: Gst.Pipeline, name: str, delay: float = 5.0) -> None:
             await asyncio.sleep(delay)
             print("Taking DELAYEDsnapshot")
             Gst.debug_bin_to_dot_file(pipe, Gst.DebugGraphDetails.ALL, name)
@@ -317,7 +312,7 @@ class WebRTCServer:
         # Force latency recalculation after adding new stream
         # GLib.timeout_add(100, lambda: self.pipe.recalculate_latency() or False)
 
-    def on_negotiation_needed(self, element) -> None:
+    def on_negotiation_needed(self, element: GstWebRTC.WebRTCBin) -> None:
         print("Negotiation needed")
         if self.added_data_channel:
             print("Data channel already added")
@@ -331,7 +326,7 @@ class WebRTCServer:
         promise = Gst.Promise.new_with_change_func(self.on_offer_created, element, None)
         self.webrtc.emit("create-offer", None, promise)
 
-    def on_offer_created(self, promise, _, __) -> None:
+    def on_offer_created(self, promise: Gst.Promise, _: GstWebRTC.WebRTCBin, __: None) -> None:
         print("on offer created")
         promise.wait()
         reply = promise.get_reply()
@@ -343,7 +338,7 @@ class WebRTCServer:
         message = json.dumps({"sdp": {"type": "offer", "sdp": text}})
         asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
-    def send_ice_candidate_message(self, _, mlineindex, candidate) -> None:
+    def send_ice_candidate_message(self, _: GstWebRTC.WebRTCBin, mlineindex: int, candidate: str) -> None:
         message = json.dumps({"ice": {"candidate": candidate, "sdpMLineIndex": mlineindex}})
         asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
@@ -372,7 +367,7 @@ class WebRTCServer:
 
             return
 
-    async def websocket_handler(self, ws) -> None:
+    async def websocket_handler(self, ws: websockets.WebSocketServerProtocol) -> None:
         print("Client connected")
         self.ws = ws
         async for msg in ws:
@@ -384,8 +379,6 @@ class WebRTCServer:
 
 async def main() -> None:
     # Parse command line arguments
-    import argparse
-
     parser = argparse.ArgumentParser(description="WebRTC Video Streaming Server")
     parser.add_argument("--flip", action="store_true", help="Vertically flip the video stream")
     args = parser.parse_args()
@@ -393,7 +386,7 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     server = WebRTCServer(loop, flip_video=args.flip)
 
-    async def handler(websocket):
+    async def handler(websocket: websockets.WebSocketServerProtocol) -> None:
         await server.websocket_handler(websocket)
 
     asyncio.create_task(glib_main_loop_iteration())
