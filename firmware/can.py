@@ -255,11 +255,13 @@ class MotorDriver:
                 print("No actuators responding, skipping ramp down")
                 return
             
-            print(f"Ramping down {len(joint_data)} actuators")
-            # Ramp down from current scaling to 0 (reverse of ramp up)
-            for scale in reversed([math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 49) for i in range(50)]):
+            print(f"Ramping down {len(joint_data)} actuators from scaling={self.max_scaling:.3f}")
+            num_steps = 50
+            for i in range(num_steps):
+                progress = i / (num_steps - 1) 
+                scale = self.max_scaling / 2 * (1.0 - progress) ** 2  # Quadratic decay for smoothness
                 self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
-                time.sleep(0.05)  # Slower ramp down for safety
+                time.sleep(0.03) 
             
             # Final zero torque command
             self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
