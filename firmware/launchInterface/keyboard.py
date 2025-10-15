@@ -11,7 +11,7 @@ class KeyboardLaunchInterface:
         """Initialize keyboard launch interface."""
         print("Using keyboard launch interface")
 
-    async def get_command_source(self) -> str:
+    def get_command_source(self) -> str:
         """Return the command source type."""
         print("=================")
         print("Select command source: (K) Keyboard, (U) UDP")
@@ -26,7 +26,7 @@ class KeyboardLaunchInterface:
             print("Invalid choice. Please enter K or U")
             return None
 
-    async def ask_motor_permission(self, robot_config: Dict[str, Any]) -> bool:
+    def ask_motor_permission(self, robot_config: Dict[str, Any]) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
         imu_reader = robot_config.get("imu_reader")
         imu_name = imu_reader.__class__.__name__ if imu_reader is not None else "None"
@@ -44,7 +44,7 @@ class KeyboardLaunchInterface:
         print("=================")
         return True
 
-    async def launch_policy_permission(self) -> bool:
+    def launch_policy_permission(self) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
         print("=================")
         print("🚀 Ready to start policy")
@@ -59,7 +59,7 @@ class KeyboardLaunchInterface:
             print("Aborted by user")
             return False
 
-    async def get_kinfer_path(self) -> Optional[str]:
+    def get_kinfer_path(self) -> Optional[str]:
         """List available kinfer files and get user selection."""
         # Find all .kinfer files in ~/.policies
         print("=================")
@@ -97,6 +97,6 @@ class KeyboardLaunchInterface:
                 print("\n❌ Aborted by user")
                 return None
 
-    async def close(self) -> None:
+    def close(self) -> None:
         """Close the interface (no-op for keyboard)."""
         print("👋 Keyboard interface closed")
