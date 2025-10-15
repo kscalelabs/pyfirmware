@@ -17,6 +17,17 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}Installing Kinfer Telemetry Sync Service${NC}"
 
+# Stop and disable existing service if it exists
+if systemctl is-active --quiet kinfer-logs-sync; then
+    echo -e "\n${YELLOW}Stopping existing service...${NC}"
+    sudo systemctl stop kinfer-logs-sync
+fi
+
+if systemctl is-enabled --quiet kinfer-logs-sync 2>/dev/null; then
+    echo -e "${YELLOW}Disabling existing service...${NC}"
+    sudo systemctl disable kinfer-logs-sync
+fi
+
 # Install required packages
 echo -e "\n${YELLOW}Installing required packages...${NC}"
 sudo apt-get update
@@ -40,9 +51,15 @@ ssh-copy-id "$REMOTE_USER@$REMOTE_HOST"
 echo -e "\n${YELLOW}Creating remote directory...${NC}"
 ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_LOGS_DIR"
 
-# Create sync script with debouncing
-echo -e "\n${YELLOW}Creating sync script...${NC}"
+# Remove old sync script if it exists
 SYNC_SCRIPT="/usr/local/bin/kinfer-logs-sync.sh"
+if [ -f "$SYNC_SCRIPT" ]; then
+    echo -e "\n${YELLOW}Removing old sync script...${NC}"
+    sudo rm -f "$SYNC_SCRIPT"
+fi
+
+# Create sync script
+echo -e "\n${YELLOW}Creating sync script...${NC}"
 sudo tee "$SYNC_SCRIPT" > /dev/null << 'SCRIPT_EOF'
 #!/bin/bash
 
@@ -69,7 +86,7 @@ sudo chmod +x "$SYNC_SCRIPT"
 
 # Create systemd service file
 echo -e "\n${YELLOW}Creating systemd service...${NC}"
-sudo tee /etc/systemd/system/kinfer-logs-sync.service > /dev/null << 'EOF'
+sudo tee /etc/systemd/system/kinfer-logs-sync.service > /dev/null << EOF
 [Unit]
 Description=Kinfer Log Sync Service
 After=network.target
