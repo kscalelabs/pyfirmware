@@ -17,9 +17,11 @@ class KeyboardLaunchInterface:
     
     async def get_command_source(self) -> str:
         """Return the command source type."""
+        print("=================")
         print("Select command source: (K) Keyboard, (U) UDP")
         
         response = input("Enter choice: ").lower()
+        print("=================")
         if response == 'k':
             return "keyboard"
         elif response == 'u':
@@ -30,22 +32,28 @@ class KeyboardLaunchInterface:
     
     async def ask_motor_permission(self, robot_config) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""        
+        imu_name = robot_config.get("imu_reader").__class__.__name__ if robot_config.get("imu_reader") is not None else "None"
+        print("=================")
+        print("Imu:", imu_name)   
         print("Enable motors? (y/n): ")
         response = input("").lower()
         if robot_config.get("imu_reader") is None:
             print("Are you sure? There is no IMU detected.")
             response = input("").lower()
             if response == 'n':
+                print("=================")
                 return False
+        print("=================")
         return True
     
     async def launch_policy_permission(self) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
+        print("=================")
         print("🚀 Ready to start policy")
         
         print("Start policy? (y/n): ")
         response = input("").lower()
-        
+        print("=================")
         if response == 'y':
             print("✅ Starting policy...")
             return True
@@ -56,6 +64,7 @@ class KeyboardLaunchInterface:
     async def get_kinfer_path(self) -> Optional[str]:
         """List available kinfer files and get user selection."""
         # Find all .kinfer files in ~/.policies
+        print("=================")
         policy_dir = Path.home() / ".policies"
         
         if not policy_dir.exists():
@@ -75,7 +84,7 @@ class KeyboardLaunchInterface:
         for i, filepath in enumerate(kinfer_files, 1):
             size_mb = filepath.stat().st_size / (1024 * 1024)
             print(f"  {i}. {filepath.name} ({size_mb:.2f} MB)")
-        
+        print("=================")
         while True:
             try:
                 choice = input(f"\nSelect policy (1-{len(kinfer_files)}): ").strip()
