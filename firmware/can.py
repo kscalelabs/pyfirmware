@@ -250,11 +250,10 @@ class MotorDriver:
         # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self._motors_enabled = False
-
-        # Register cleanup with shutdown manager
+        
         shutdown_mgr = get_shutdown_manager()
-        shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)
-        shutdown_mgr.register_cleanup("CAN sockets", self.can.close)
+        shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
+        shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
         self.startup_sequence()
 
@@ -277,6 +276,7 @@ class MotorDriver:
         # Safety check: only proceed if we have at least one actuator responding
         if len(joint_data) == 0:
             print("No actuators responding, skipping ramp down")
+            self._motors_enabled = False
             return
 
         print(f"Ramping down {len(joint_data)} actuators")

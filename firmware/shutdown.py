@@ -6,8 +6,8 @@ interrupted with Ctrl+C.
 """
 
 import atexit
+import os
 import signal
-import sys
 import threading
 from typing import Callable, List, Optional
 
@@ -72,7 +72,7 @@ class ShutdownManager:
         signal_name = signal.Signals(signum).name
         print(f"\n⚠️  Received signal {signal_name}, initiating shutdown...")
         self._execute_shutdown()
-        sys.exit(0)
+        os._exit(0)
 
     def _execute_shutdown(self) -> None:
         """Execute all registered cleanup callbacks in reverse order."""
