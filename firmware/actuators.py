@@ -118,7 +118,7 @@ class ActuatorConfig:
     @property
     def name(self) -> str:
         parts = self.full_name.replace("dof_", "").split("_")
-        return "_".join(parts[:-1]) 
+        return "_".join(parts[:-1])
 
 
 def actuator_ranges(actuator_type: RobstrideActuatorType) -> dict[str, float]:

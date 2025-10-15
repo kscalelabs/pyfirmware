@@ -1,14 +1,14 @@
 """CAN communication and motor driver interfaces for actuators."""
 
 import math
-import signal
 import socket
 import struct
 import sys
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
+from firmware.shutdown import get_shutdown_manager
 
 
 class CriticalFaultError(Exception):
@@ -229,6 +229,16 @@ class CANInterface:
             if result != -1:
                 print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
 
+    def close(self) -> None:
+        """Close all CAN sockets."""
+        for canbus, sock in self.sockets.items():
+            try:
+                sock.close()
+            except Exception as e:
+                print(f"Error closing socket for CAN bus {canbus}: {e}")
+        self.sockets.clear()
+        self.actuators.clear()
+
 
 class MotorDriver:
     """Driver logic."""
@@ -239,34 +249,48 @@ class MotorDriver:
         self.can = CANInterface()
         # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
+        self._motors_enabled = False
+
+        # Register cleanup with shutdown manager
+        shutdown_mgr = get_shutdown_manager()
+        shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)
+        shutdown_mgr.register_cleanup("CAN sockets", self.can.close)
+
         self.startup_sequence()
+
+    def _safe_ramp_down(self) -> None:
+        """Safely ramp down motors (for cleanup callback)."""
+        if not self._motors_enabled:
+            return
+        try:
+            self.ramp_down_motors()
+        except Exception as e:
+            print(f"Error during safe ramp down: {e}")
 
     def ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
         print("Ramping down motors...")
-        try:
-            # Get CURRENT positions as targets (not home positions!)
-            # This prevents the robot from violently snapping to home position
-            joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities()
-            joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}
-            # Safety check: only proceed if we have at least one actuator responding
-            if len(joint_data) == 0:
-                print("No actuators responding, skipping ramp down")
-                return
+        # Get CURRENT positions as targets (not home positions!)
+        # This prevents the robot from violently snapping to home position
+        joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities()
+        joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}
+        # Safety check: only proceed if we have at least one actuator responding
+        if len(joint_data) == 0:
+            print("No actuators responding, skipping ramp down")
+            return
 
-            print(f"Ramping down {len(joint_data)} actuators")
-            num_steps = 50
-            for i in range(num_steps):
-                progress = i / (num_steps - 1)
-                scale = self.max_scaling * (1.0 - progress)
-                self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
-                time.sleep(0.03)
+        print(f"Ramping down {len(joint_data)} actuators")
+        num_steps = 50
+        for i in range(num_steps):
+            progress = i / (num_steps - 1)
+            scale = self.max_scaling * (1.0 - progress)
+            self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
+            time.sleep(0.03)
 
-            # Final zero torque command
-            self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
-            print("Motors ramped down to zero")
-        except Exception as e:
-            print(f"Error during motor ramp down: {e}")
+        # Final zero torque command
+        self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
+        self._motors_enabled = False
+        print("Motors ramped down to zero")
 
     def startup_sequence(self) -> None:
         if not self.can.actuators:
@@ -286,12 +310,15 @@ class MotorDriver:
             )
             if data["fault_flags"] > 0:
                 print("\033[1;33mWARNING: Actuator faults detected\033[0m")
+
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
+
         print("Press Enter to enable motors...")
         input()  # wait for user to enable motors
         self.can.enable_motors()
+        self._motors_enabled = True
         print("✅ Motors enabled")
 
         print("\nHoming...")
@@ -367,37 +394,11 @@ class MotorDriver:
         self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
 
 
-motor_driver_ref: Optional["MotorDriver"] = None
-
-
-def signal_handler(signum: int, frame: object) -> None:
-    """Handle Ctrl+C by ramping down motors before exit."""
-    print(f"\n⚠️  Received signal {signum}, shutting down...")
-    if motor_driver_ref is not None:
-        motor_driver_ref.ramp_down_motors()
-    sys.exit(0)
-
-
 def main() -> None:
-    global motor_driver_ref
-
-    # Register signal handler for Ctrl+C
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
+    """Run sine wave test on all actuators."""
     driver = MotorDriver(max_scaling=0.1)
-    motor_driver_ref = driver  # Store reference for signal handler
-
     input("Press Enter to run sine wave on all actuators...")
-
-    try:
-        driver.sine_wave()
-    except KeyboardInterrupt:
-        pass  # Signal handler will handle cleanup
-    finally:
-        # Clean shutdown
-        if motor_driver_ref is not None:
-            motor_driver_ref.ramp_down_motors()
+    driver.sine_wave()
 
 
 if __name__ == "__main__":
