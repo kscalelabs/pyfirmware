@@ -258,9 +258,9 @@ class MotorDriver:
             }
 
         self.can = CANInterface()
-        # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self._motors_enabled = False
+        self._last_scaling = 0.0
 
         shutdown_mgr = get_shutdown_manager()
         shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
@@ -274,33 +274,30 @@ class MotorDriver:
             return
         try:
             self.flush_can_busses()
-            self.ramp_down_motors()
+            self._ramp_down_motors()
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
 
-    def ramp_down_motors(self) -> None:
+    def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
         print("Ramping down motors...")
-        # Get CURRENT positions as targets (not home positions!)
-        # This prevents the robot from violently snapping to home position
         joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities()
         joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}
-        # Safety check: only proceed if we have at least one actuator responding
         if len(joint_data) == 0:
             print("No actuators responding, skipping ramp down")
             self._motors_enabled = False
             return
 
         print(f"Ramping down {len(joint_data)} actuators")
-        num_steps = 50
+        num_steps = 75
         for i in range(num_steps):
             progress = i / (num_steps - 1)
-            scale = self.max_scaling * (1.0 - progress)
-            self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
+            scale = self._last_scaling * (1.0 - progress) ** 2
+            self.set_pd_targets(joint_angles, scaling=scale)
             time.sleep(0.03)
 
         # Final zero torque command
-        self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
+        self.set_pd_targets(joint_angles, scaling=0.0)
         self._motors_enabled = False
         print("Motors ramped down to zero")
 
@@ -327,8 +324,7 @@ class MotorDriver:
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
 
-        print("Press Enter to enable motors...")
-        input()  # wait for user to enable motors
+    def enable_and_home_motors(self) -> None:
         self.can.enable_motors()
         self._motors_enabled = True
         print("✅ Motors enabled")
@@ -339,7 +335,7 @@ class MotorDriver:
             if scale > self.max_scaling:
                 break
             print(f"PD ramp: {scale:.3f}")
-            self.can.set_pd_targets(self.home_position, robotcfg=self.robot, scaling=scale)
+            self.set_pd_targets(self.home_position, scaling=scale)
             time.sleep(0.1)
         print("✅ Homing complete")
 
@@ -353,7 +349,7 @@ class MotorDriver:
             angle = 0.3 * math.sin(2 * math.pi * 0.5 * (t - t0))
             action = {id: angle + self.home_position[id] for id in self.robot.actuators.keys()}
             t2 = time.perf_counter()
-            self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
+            self.set_pd_targets(action, scaling=self.max_scaling)
             t3 = time.perf_counter()
             self.can.flush_can_busses()
             t4 = time.perf_counter()
@@ -363,6 +359,10 @@ class MotorDriver:
                 f"receive missing responses={(t4 - t3) * 1e6:.0f}us"
             )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
+
+    def set_pd_targets(self, actions: dict[int, float], scaling: float) -> None:
+        self._last_scaling = scaling
+        self.can.set_pd_targets(actions, robotcfg=self.robot, scaling=scaling)
 
     def flush_can_busses(self) -> None:
         self.can.flush_can_busses()
@@ -402,12 +402,16 @@ class MotorDriver:
 
     def take_action(self, action: list[float], joint_order: list[str]) -> None:
         action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
-        self.can.set_pd_targets(action, robotcfg=self.robot, scaling=self.max_scaling)
+        self.set_pd_targets(action, scaling=self.max_scaling)
 
 
 def main() -> None:
     """Run sine wave test on all actuators."""
     driver = MotorDriver(dict(),max_scaling=0.1)
+
+    input("Press Enter to enable motors...")
+    driver.enable_and_home_motors()
+    
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 

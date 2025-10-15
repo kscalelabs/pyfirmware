@@ -2,6 +2,5 @@
 
 __all__ = [
     "bno055",
-    "dummy",
     "hiwonder",
 ]

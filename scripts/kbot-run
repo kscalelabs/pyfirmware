@@ -2,13 +2,13 @@
 
 set -euo pipefail
 
-policy=""
+# ---------------------------
+# Policy directory handling
+# ---------------------------
 
-# Parse positional args
-policy="${1:-}"
-
-if [ -z "$policy" ]; then
-    echo "Usage: kbot-run <path-to-policy.kinfer>"
+if [ -z "${POLICY_DIR:-}" ]; then
+    echo "Error: POLICY_DIR environment variable is required"
+    echo "Example: POLICY_DIR=/path/to/policies kbot-run"
     exit 1
 fi
 
@@ -20,6 +20,6 @@ _set_can_and_max_torques.sh
 # ---------------------------
 # Run firmware policy loop
 # ---------------------------
-echo "Running firmware with policy: $policy"
+echo "Running firmware with policy directory: $POLICY_DIR"
 PY="$(command -v python)"
-sudo -E chrt 30 "$PY" -m firmware.main "$policy"
+sudo -E chrt 30 "$PY" -m firmware.main "$POLICY_DIR"
