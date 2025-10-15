@@ -3,6 +3,18 @@
 set -euo pipefail
 
 # ---------------------------
+# Policy directory handling
+# ---------------------------
+# Policy directory path is required and must be specified via environment variable:
+# POLICY_DIR=<policy_dir_path> ./kbot-run
+
+if [ -z "${POLICY_DIR:-}" ]; then
+    echo "Error: POLICY_DIR environment variable is required"
+    echo "Usage: POLICY_DIR=<policy_dir_path> $0"
+    exit 1
+fi
+
+# ---------------------------
 # Bring up CAN and set torques
 # ---------------------------
 _set_can_and_max_torques.sh
@@ -10,6 +22,6 @@ _set_can_and_max_torques.sh
 # ---------------------------
 # Run firmware policy loop
 # ---------------------------
-echo "Running firmware with policy: $policy"
+echo "Running firmware with policy directory: $POLICY_DIR"
 PY="$(command -v python)"
-sudo -E chrt 30 "$PY" -m firmware.main "$policy"
+sudo -E chrt 30 "$PY" -m firmware.main "$POLICY_DIR"

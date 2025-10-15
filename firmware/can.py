@@ -281,10 +281,10 @@ class MotorDriver:
             return
 
         print(f"Ramping down {len(joint_data)} actuators")
-        num_steps = 50
+        num_steps = 75
         for i in range(num_steps):
             progress = i / (num_steps - 1)
-            scale = self.max_scaling * (1.0 - progress)
+            scale = self.max_scaling * (1.0 - progress) ** 2
             self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
             time.sleep(0.03)
 
@@ -397,6 +397,8 @@ class MotorDriver:
 def main() -> None:
     """Run sine wave test on all actuators."""
     driver = MotorDriver(max_scaling=0.1)
+    input("Press Enter to enable motors...")
+    driver.enable_and_home_motors()
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 

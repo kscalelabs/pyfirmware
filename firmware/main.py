@@ -1,5 +1,6 @@
 """Main loop to run policy inference and control motors."""
 
+import argparse
 import datetime
 import os
 import time
@@ -115,8 +116,14 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run policy inference and control motors")
+    parser.add_argument("policy_dir", help="Policy directory path (required)")
+    args = parser.parse_args()
+
     launch_interface = KeyboardLaunchInterface()
-    kinfer_path = launch_interface.get_kinfer_path()
+    
+    kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
+    
     if not kinfer_path:
         print("No kinfer selected or aborted")
         exit(0)

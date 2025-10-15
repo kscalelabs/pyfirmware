@@ -39,13 +39,13 @@ if [ "$gstreamer" = "true" ]; then
     gstreamer_pid=$!
 
     echo "Running firmware..."
-    sudo -E chrt 30 "$PY" -m firmware.main
+    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
 
     echo "Stopping GStreamer (PID: $gstreamer_pid)"
     kill "$gstreamer_pid" 2>/dev/null || true
 else
     echo "Running firmware..."
-    sudo -E chrt 30 "$PY" -m firmware.main
+    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
 fi
 
 
