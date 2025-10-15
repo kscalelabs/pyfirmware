@@ -38,9 +38,6 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
         print("Motor permission denied, aborting execution")
         return
 
-    if imu_reader is None:
-        imu_reader = DummyIMU()
-
     motor_driver.enable_and_home_motors()
 
     launch_policy = await launch_interface.launch_policy_permission()
