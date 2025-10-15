@@ -4,6 +4,7 @@ import curses
 from pathlib import Path
 from typing import Dict, List, Optional
 
+
 def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Optional[Path]:
     curses.curs_set(1)
     stdscr.nodelay(False)
