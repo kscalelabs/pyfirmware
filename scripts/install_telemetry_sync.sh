@@ -51,36 +51,17 @@ REMOTE_USER="$2"
 REMOTE_HOST="$3"
 REMOTE_LOGS_DIR="$4"
 
-LAST_SYNC=0
-DEBOUNCE_SECONDS=3
-
-sync_now() {
-    local sync_num=$1
-    local current_time=$(date +%s)
-    local time_since_last=$((current_time - LAST_SYNC))
-    
-    if [ $time_since_last -ge $DEBOUNCE_SECONDS ]; then
-        echo "$(date): Starting sync $sync_num..."
-        if rsync -avz --exclude='*.swp' --exclude='*.swx' --exclude='*.tmp' --exclude='*~' "$LOCAL_LOGS_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_LOGS_DIR/"; then
-            echo "$(date): Sync $sync_num completed successfully"
-            LAST_SYNC=$(date +%s)
-        else
-            echo "$(date): Sync $sync_num failed"
-        fi
-    fi
-}
-
-# Watch for file changes and sync 3 times to handle asynchronous operations
+# Watch for file changes
 inotifywait -m "$LOCAL_LOGS_DIR" -e close_write,moved_to,move,modify --format '%e %w%f' | while read event file; do
     echo "$(date): Detected $event on $file"
-    # Wait a moment for any related operations to complete
-    sleep 1
-    sync_now 1
-    sleep 5 
-    sync_now 2
-    sleep 10
-    sync_now 3
-
+    # Brief wait to ensure flush completes (logger uses f.flush() so data should be immediate)
+    sleep 0.1
+    echo "$(date): Starting sync..."
+    if rsync -avz --exclude='*.swp' --exclude='*.swx' --exclude='*.tmp' --exclude='*~' "$LOCAL_LOGS_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_LOGS_DIR/"; then
+        echo "$(date): Sync completed successfully"
+    else
+        echo "$(date): Sync failed"
+    fi
 done
 SCRIPT_EOF
 
