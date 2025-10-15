@@ -68,8 +68,8 @@ REMOTE_USER="$2"
 REMOTE_HOST="$3"
 REMOTE_LOGS_DIR="$4"
 
-# Watch for file changes
-inotifywait -m "$LOCAL_LOGS_DIR" -e close_write,moved_to,move,modify --format '%e %w%f' | while read event file; do
+# Watch for file changes (recursive to catch subdirectories)
+inotifywait -m -r "$LOCAL_LOGS_DIR" -e close_write,moved_to,move,modify --format '%e %w%f' | while read event file; do
     echo "$(date): Detected $event on $file"
     # Brief wait to ensure flush completes (logger uses f.flush() so data should be immediate)
     sleep 0.1
