@@ -250,7 +250,7 @@ class MotorDriver:
         # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self._motors_enabled = False
-        
+
         shutdown_mgr = get_shutdown_manager()
         shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first

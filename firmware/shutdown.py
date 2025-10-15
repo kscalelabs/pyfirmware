@@ -39,14 +39,14 @@ class ShutdownManager:
         """Initialize the shutdown manager."""
         if self._initialized:
             return
-            
+
         self._initialized = True
         self._cleanup_callbacks: List[tuple[str, Callable[[], None]]] = []
         self._shutdown_done = False
-        
+
         # Register atexit handler (catches crashes and normal exits)
         atexit.register(self._execute_shutdown)
-        
+
         # Register signal handlers (catches Ctrl+C and kill signals)
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -78,9 +78,9 @@ class ShutdownManager:
             if self._shutdown_done:
                 return
             self._shutdown_done = True
-        
+
         print("\n🛑 Shutting down...")
-        
+
         # Execute callbacks in reverse order (LIFO)
         for name, callback in reversed(self._cleanup_callbacks):
             try:
@@ -88,7 +88,7 @@ class ShutdownManager:
                 callback()
             except Exception as e:
                 print(f"  ❌ Error in {name}: {e}")
-        
+
         print("✅ Shutdown complete\n")
 
     def is_shutting_down(self) -> bool:
