@@ -6,8 +6,6 @@ interrupted with Ctrl+C.
 """
 
 import atexit
-import os
-import signal
 import threading
 from typing import Callable, List, Optional
 
@@ -47,10 +45,6 @@ class ShutdownManager:
         # Register atexit handler (catches crashes and normal exits)
         atexit.register(self._execute_shutdown)
 
-        # Register signal handlers (catches Ctrl+C and kill signals)
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
-
     def register_cleanup(self, name: str, callback: Callable[[], None]) -> None:
         """Register a cleanup callback to be called during shutdown.
 
@@ -65,11 +59,6 @@ class ShutdownManager:
         with self._lock:
             self._cleanup_callbacks.append((name, callback))
             print(f"🔧 Registered cleanup: {name}")
-
-    def _signal_handler(self, signum: int, frame: object) -> None:
-        """Handle shutdown signals (SIGINT, SIGTERM)."""
-        self._execute_shutdown()
-        os._exit(0)
 
     def _execute_shutdown(self) -> None:
         """Execute all registered cleanup callbacks in reverse order."""

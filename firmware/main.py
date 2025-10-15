@@ -29,9 +29,6 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
     command_source = await launch_interface.get_command_source()
     print(f"Command source selected: {command_source}")
 
-    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
-    shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
-
     motor_driver = MotorDriver()
     actuator_info = motor_driver.can.actuators
 
@@ -50,6 +47,11 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
     if not launch_policy:
         print("Policy launch permission denied, aborting execution")
         return
+
+    # Create command interface AFTER all launch prompts are complete
+    # This prevents the keyboard interface from interfering with input() calls
+    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
+    shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
 
     print("Starting policy execution")
 
