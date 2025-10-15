@@ -8,6 +8,7 @@ import time
 from typing import Dict
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
+from firmware.shutdown import get_shutdown_manager
 
 
 class CriticalFaultError(Exception):
@@ -228,6 +229,16 @@ class CANInterface:
             if result != -1:
                 print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
 
+    def close(self) -> None:
+        """Close all CAN sockets."""
+        for canbus, sock in self.sockets.items():
+            try:
+                sock.close()
+            except Exception as e:
+                print(f"Error closing socket for CAN bus {canbus}: {e}")
+        self.sockets.clear()
+        self.actuators.clear()
+
 
 class MotorDriver:
     """Driver logic."""
@@ -237,48 +248,78 @@ class MotorDriver:
         self.robot = RobotConfig()
         self.can = CANInterface()
         # Cache for last known good values (initialized to zeros)
-        self.last_known_feedback = {
-            id: {"angle": 0.0, "velocity": 0.0, "torque": 0.0, "temperature": 0.0} for id in self.robot.actuators.keys()
-        }
+        self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
+        self._motors_enabled = False
+        
+        shutdown_mgr = get_shutdown_manager()
+        shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
+        shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
+
         self.startup_sequence()
+
+    def _safe_ramp_down(self) -> None:
+        """Safely ramp down motors (for cleanup callback)."""
+        if not self._motors_enabled:
+            return
+        try:
+            self.flush_can_busses()
+            self.ramp_down_motors()
+        except Exception as e:
+            print(f"Error during safe ramp down: {e}")
+
+    def ramp_down_motors(self) -> None:
+        """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
+        print("Ramping down motors...")
+        # Get CURRENT positions as targets (not home positions!)
+        # This prevents the robot from violently snapping to home position
+        joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities()
+        joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}
+        # Safety check: only proceed if we have at least one actuator responding
+        if len(joint_data) == 0:
+            print("No actuators responding, skipping ramp down")
+            self._motors_enabled = False
+            return
+
+        print(f"Ramping down {len(joint_data)} actuators")
+        num_steps = 50
+        for i in range(num_steps):
+            progress = i / (num_steps - 1)
+            scale = self.max_scaling * (1.0 - progress)
+            self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=scale)
+            time.sleep(0.03)
+
+        # Final zero torque command
+        self.can.set_pd_targets(joint_angles, robotcfg=self.robot, scaling=0.0)
+        self._motors_enabled = False
+        print("Motors ramped down to zero")
 
     def startup_sequence(self) -> None:
         if not self.can.actuators:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
-        states = self.can.get_actuator_feedback()
+        joint_data_dict = self.get_joint_angles_and_velocities()
 
         print("\nActuator states:")
-        print("ID  | Name           | Angle | Velocity | Torque | Temp  | Faults")
-        print("----|----------------|-------|----------|--------|-------|-------")
-        for act_id, state in states.items():
-            name = self.robot.actuators[act_id].name[:16]
-            angle = self.robot.actuators[act_id].can_to_physical_angle(state["angle_raw"])
-            velocity = self.robot.actuators[act_id].can_to_physical_velocity(state["angular_velocity_raw"])
-            torque = self.robot.actuators[act_id].can_to_physical_torque(state["torque_raw"])
-            temp = self.robot.actuators[act_id].can_to_physical_temperature(state["temperature_raw"])
-            fault_color = "\033[1;31m" if state["fault_flags"] > 0 else "\033[1;32m"
+        print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
+        print("----|--------------------------|-------|----------|--------|-------|-------")
+        for act_id, data in joint_data_dict.items():
+            fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
             print(
-                f"{act_id:3d} | {name:14s} | {angle:5.2f} | {velocity:8.2f} | "
-                f"{torque:6.2f} | {temp:5.1f} | {fault_color}{state['fault_flags']:3d}\033[0m"
+                f"{act_id:3d} | {data['name']:24s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
+                f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
             )
+            if data["fault_flags"] > 0:
+                print("\033[1;33mWARNING: Actuator faults detected\033[0m")
 
-        # Check for issues
-        angles = {
-            act_id: self.robot.actuators[act_id].can_to_physical_angle(state["angle_raw"])
-            for act_id, state in states.items()
-        }
-        if any(abs(angle) > 2.0 for angle in angles.values()):
+        if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
-
-        if any(state["fault_flags"] > 0 for state in states.values()):
-            print("\033[1;33mWARNING: Actuator faults detected\033[0m")
 
         print("Press Enter to enable motors...")
         input()  # wait for user to enable motors
         self.can.enable_motors()
+        self._motors_enabled = True
         print("✅ Motors enabled")
 
         print("\nHoming...")
@@ -316,36 +357,38 @@ class MotorDriver:
     def flush_can_busses(self) -> None:
         self.can.flush_can_busses()
 
-    def get_joint_angles_and_velocities(self, joint_order: list[str]) -> tuple[list[float], list[float]]:
+    def get_joint_angles_and_velocities(self) -> dict[int, dict[str, float]]:
         fb = self.can.get_actuator_feedback()
-        joint_angles, joint_vels, torques, temps = {}, {}, {}, {}
+        answer = {}
         for id in self.robot.actuators.keys():
             if id in fb:
-                # Update cache with new values
-                joint_angles[id] = self.robot.actuators[id].can_to_physical_angle(fb[id]["angle_raw"])
-                joint_vels[id] = self.robot.actuators[id].can_to_physical_velocity(fb[id]["angular_velocity_raw"])
-                torques[id] = self.robot.actuators[id].can_to_physical_torque(fb[id]["torque_raw"])
-                temps[id] = self.robot.actuators[id].can_to_physical_temperature(fb[id]["temperature_raw"])
+                answer[id] = self.robot.actuators[id].can_to_physical_data(fb[id])
+                self.last_known_feedback[id] = answer[id].copy()
 
-                self.last_known_feedback[id]["angle"] = joint_angles[id]
-                self.last_known_feedback[id]["velocity"] = joint_vels[id]
-                self.last_known_feedback[id]["torque"] = torques[id]
-                self.last_known_feedback[id]["temperature"] = temps[id]
             elif id in self.last_known_feedback:
                 # Fall back to last known good values
-                joint_angles[id] = self.last_known_feedback[id]["angle"]
-                joint_vels[id] = self.last_known_feedback[id]["velocity"]
-                torques[id] = self.last_known_feedback[id]["torque"]
-                temps[id] = self.last_known_feedback[id]["temperature"]
+                answer[id] = self.last_known_feedback[id].copy()
             else:
                 # Ultimate fallback to zeros for unknown actuators
-                joint_angles[id], joint_vels[id], torques[id], temps[id] = 0.0, 0.0, 0.0, 0.0
+                answer[id] = self.robot.actuators[id].dummy_data()
+        return answer
 
-        joint_angles_ordered = [joint_angles[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
-        joint_vels_ordered = [joint_vels[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
-        torques_ordered = [torques[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
-        temps_ordered = [temps[self.robot.full_name_to_actuator_id[name]] for name in joint_order]
-        return joint_angles_ordered, joint_vels_ordered, torques_ordered, temps_ordered
+    def get_ordered_joint_data(
+        self, joint_order: list[str]
+    ) -> tuple[list[float], list[float], list[float], list[float]]:
+        joint_data_dict = self.get_joint_angles_and_velocities()
+
+        joint_angles_order, joint_vels_order, torques_order, temps_order = [], [], [], []
+
+        for name in joint_order:
+            id = self.robot.full_name_to_actuator_id[name]
+            joint_data = joint_data_dict[id]
+            joint_angles_order.append(joint_data["angle"])
+            joint_vels_order.append(joint_data["velocity"])
+            torques_order.append(joint_data["torque"])
+            temps_order.append(joint_data["temperature"])
+
+        return joint_angles_order, joint_vels_order, torques_order, temps_order
 
     def take_action(self, action: list[float], joint_order: list[str]) -> None:
         action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
@@ -353,6 +396,7 @@ class MotorDriver:
 
 
 def main() -> None:
+    """Run sine wave test on all actuators."""
     driver = MotorDriver(max_scaling=0.1)
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()

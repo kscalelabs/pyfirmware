@@ -1,11 +1,12 @@
 """Asynchronous structured NDJSON logger with background flushing."""
 
-import atexit
 import json
 import os
 import queue
 import threading
 from typing import Any, Dict
+
+from firmware.shutdown import get_shutdown_manager
 
 
 class Logger:
@@ -13,20 +14,14 @@ class Logger:
         self.logpath = os.path.join(logdir, "kinfer_log.ndjson")
 
         # Start background threads for processing logs
-        self._register_shutdown_handlers()
         self.running = True
         self.queue: queue.Queue[Dict[str, Any]] = queue.Queue()
         self.thread = threading.Thread(target=self._log_worker, args=(self.queue, self.logpath), daemon=True)
         self.thread.start()
 
-    def _register_shutdown_handlers(self) -> None:
-        def _safe_shutdown() -> None:
-            try:
-                self._shutdown()
-            except Exception:
-                pass
-
-        atexit.register(_safe_shutdown)
+        # Register cleanup with shutdown manager
+        shutdown_mgr = get_shutdown_manager()
+        shutdown_mgr.register_cleanup("Logger", self._shutdown)
 
     def _log_worker(self, q: queue.Queue, filepath: str) -> None:
         """Background worker that processes logs from the queue in batches."""
@@ -47,9 +42,12 @@ class Logger:
                     threading.Event().wait(1.0)
 
     def _shutdown(self) -> None:
+        """Shutdown the logger thread and flush remaining logs."""
+        if not self.running:
+            return  # Already shut down
         self.running = False
         self.queue.join()
-        self.thread.join()
+        self.thread.join(timeout=2.0)
 
     def log(self, timestamp: float, data: Dict[str, Any]) -> None:
         self.queue.put({"timestamp": timestamp, **data})

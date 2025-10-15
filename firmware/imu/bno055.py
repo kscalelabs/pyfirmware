@@ -5,6 +5,8 @@ import time
 
 from periphery import I2C
 
+from firmware.shutdown import get_shutdown_manager
+
 
 class BNO055:
     NDOF_MODE = 0x0C  # for some reason this is faster than ACCGYRO_MODE
@@ -25,9 +27,18 @@ class BNO055:
         self._write_register(self.MODE_REGISTER, bytes([self.NDOF_MODE]))
         time.sleep(0.01)
 
-    def __del__(self) -> None:
-        if hasattr(self, "i2c"):
-            self.i2c.close()
+        # Register cleanup with shutdown manager
+        shutdown_mgr = get_shutdown_manager()
+        shutdown_mgr.register_cleanup("BNO055 IMU", self.close)
+
+    def close(self) -> None:
+        """Close the I2C connection."""
+        if hasattr(self, "i2c") and self.i2c is not None:
+            try:
+                self.i2c.close()
+                self.i2c = None
+            except Exception as e:
+                print(f"Error closing BNO055 I2C: {e}")
 
     def _write_register(self, register: int, data: bytes) -> None:
         msgs = [I2C.Message(bytes([register]) + data)]

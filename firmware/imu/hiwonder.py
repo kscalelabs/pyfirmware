@@ -1,6 +1,5 @@
 """Hiwonder IMU reader using a background process and shared memory."""
 
-import atexit
 import mmap
 import os
 import struct
@@ -8,6 +7,8 @@ import time
 from multiprocessing import Event, Lock, Process
 
 import serial
+
+from firmware.shutdown import get_shutdown_manager
 
 # record layout: timestamp (double) + gyro (3 floats) + quaternion (4 floats)
 RECORD_STRUCT = struct.Struct("<dfffffff")
@@ -49,8 +50,7 @@ def _quat_to_gravity(q: tuple[float, float, float, float]) -> tuple[float, float
     return (gx, gy, gz)
 
 
-def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int,
-               running: Event, lock: Lock) -> None:
+def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running: Event, lock: Lock) -> None:
     try:
         ser = serial.Serial(device, baudrate, timeout=0)
         shm = _open_mmap(shm_path, shm_size)
@@ -96,7 +96,9 @@ class Hiwonder:
         if not self.proc.is_alive():
             raise serial.SerialException(f"Failed to connect to {device}")
 
-        atexit.register(self._cleanup)
+        # Register cleanup with shutdown manager
+        shutdown_mgr = get_shutdown_manager()
+        shutdown_mgr.register_cleanup("Hiwonder IMU", self._cleanup)
 
     def _cleanup(self) -> None:
         try:
