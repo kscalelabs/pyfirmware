@@ -21,13 +21,22 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     logger = Logger(log_dir)
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
-    joint_order = metadata["joint_names"]
-    command_names = metadata["command_names"]
+
+    #full name of joints to order joint data and deconstruct actions
+    joint_order = metadata.get("joint_names", None)
+    if joint_order is None:
+        raise ValueError("Joint names not found in metadata")
+
+    #command_names in order for command interface
+    command_names = metadata.get("command_names", [])
+
+    home_positions = metadata.get("home_position", None)
+
     carry = init_session.run(None, {})[0]
 
     imu_reader = get_imu_reader()
 
-    motor_driver = MotorDriver()
+    motor_driver = MotorDriver(home_positions)
 
     print("Press Enter to start policy...")
     input()  # wait for user to start policy
