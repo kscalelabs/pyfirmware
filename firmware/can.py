@@ -10,6 +10,7 @@ from typing import Dict
 from firmware.actuators import FaultCode, Mux, RobotConfig
 from firmware.shutdown import get_shutdown_manager
 
+
 class CriticalFaultError(Exception):
     pass
 
@@ -247,12 +248,15 @@ class MotorDriver:
 
         if not home_position:
             self.home_position = {
-                actuator.can_id: actuator.default_home 
+                actuator.can_id: actuator.default_home
                 for actuator in self.robot.actuators.values()
             }
         else:
-            self.home_position = {id: home_position[self.robot.full_name_to_actuator_id[full_name]] for full_name in home_position.keys()}
-        
+            self.home_position = {
+                id: home_position[self.robot.full_name_to_actuator_id[full_name]]
+                for full_name in home_position.keys()
+            }
+
         self.can = CANInterface()
         # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
