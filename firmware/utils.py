@@ -7,7 +7,6 @@ import numpy as np
 import onnxruntime as ort
 
 from firmware.imu.bno055 import BNO055
-from firmware.imu.dummy import DummyIMU
 from firmware.imu.hiwonder import Hiwonder
 
 
@@ -46,14 +45,14 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
     return init_session, step_session, metadata
 
 
-def get_imu_reader() -> Hiwonder or BNO055 or DummyIMU:
-    """Get an IMU reader, falling back to dummy IMU if none found."""
+def get_imu_reader() -> Hiwonder | BNO055:
+    """Get an IMU reader, trying Hiwonder first then BNO055."""
     try:
         return Hiwonder()
-    except Exception:
-        pass
-    try:
-        return BNO055()
-    except Exception:
-        pass
-    return DummyIMU()
+    except Exception as hiwonder_error:
+        try:
+            return BNO055()
+        except Exception as bno055_error:
+            print(f"Failed to initialize Hiwonder IMU: {hiwonder_error}")
+            print(f"Failed to initialize BNO055 IMU: {bno055_error}")
+            raise RuntimeError("No IMU reader found - both Hiwonder and BNO055 failed to initialize")

@@ -4,6 +4,8 @@ import curses
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import sys
+
 
 def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Optional[Path]:
     curses.curs_set(1)
@@ -129,7 +131,6 @@ def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Opti
             clamp_sel()
             continue
 
-        # Ignore everything else
 
 class KeyboardLaunchInterface:
     """Simple launch interface for keyboard control without network connection."""
@@ -140,51 +141,44 @@ class KeyboardLaunchInterface:
 
     def get_command_source(self) -> str:
         """Return the command source type."""
-        print("=================")
-        print("Select command source: (K) Keyboard, (U) UDP")
-
-        response = input("Enter choice: ").lower()
-        print("=================")
-        if response == "k":
-            return "keyboard"
-        elif response == "u":
-            return "udp"
-        else:
-            print("Invalid choice. Please enter K or U")
-            return None
-
-    def ask_motor_permission(self, robot_config: Dict[str, object]) -> bool:
-        """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        imu_reader = robot_config.get("imu_reader")
-        imu_name = imu_reader.__class__.__name__ if imu_reader is not None else "None"
-        print("=================")
-        print("Imu:", imu_name)
-        response = input("Enable motors? (y/n): ").lower()
-        if response == "n":
+        while True:
             print("=================")
-            return False
-        if robot_config.get("imu_reader") is None:
-            imu_response = input("Are you sure? There is no IMU detected.").lower()
-            if imu_response == "n":
-                print("=================")
+            print("Select command source: (k) Keyboard, (u) UDP")
+            response = input("Enter choice: ").lower()
+            print("=================")
+            if response == "k":
+                return "keyboard"
+            elif response == "u":
+                return "udp"
+            print("Invalid choice. Please enter K or U")
+
+    def ask_motor_permission(self) -> bool:
+        """Ask permission to enable motors. Returns True if should enable, False to abort."""
+        while True:
+            print("=================")
+            print("Enable motors (y/n):")
+            response = input("Enter choice: ").lower()
+            print("=================")
+            if response == "n":
                 return False
-        print("=================")
-        return True
+            elif response == "y":
+                return True
+            print("Invalid input. Please enter 'y' or 'n'")
 
     def launch_policy_permission(self) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
-        print("=================")
-        print("🚀 Ready to start policy")
+        while True:
+            print("=================")
+            print("🚀 Ready to start policy")
 
-        print("Start policy? (y/n): ")
-        response = input("").lower()
-        print("=================")
-        if response == "y":
-            print("✅ Starting policy...")
-            return True
-        else:
-            print("Aborted by user")
-            return False
+            print("Start policy? (y/n): ")
+            response = input("Enter choice: ").lower()
+            print("=================")
+            if response == "y":
+                return True
+            elif response == "n":
+                return False
+            print("Invalid input. Please enter 'y' or 'n'")
 
     def get_kinfer_path(self, policy_dir_path: str) -> Optional[str]:
         """TUI: live-search + arrow-key selection for .kinfer files."""
@@ -192,21 +186,17 @@ class KeyboardLaunchInterface:
 
         if not policy_dir.exists():
             print(f"Policy directory not found: {policy_dir}")
-            return None
+            sys.exit(1)
         if not policy_dir.is_dir():
             print(f"Path is not a directory: {policy_dir}")
-            return None
+            sys.exit(1)
 
         kinfer_files = sorted(policy_dir.glob("*.kinfer"),
                             key=lambda x: x.stat().st_mtime,
                             reverse=True)
         if not kinfer_files:
             print(f"No .kinfer files found in {policy_dir}")
-            return None
+            sys.exit(1)
 
         selected = curses.wrapper(_curses_select_with_filter, kinfer_files)
         return str(selected) if selected else None
-
-    def close(self) -> None:
-        """Close the interface (no-op for keyboard)."""
-        print("👋 Keyboard interface closed")

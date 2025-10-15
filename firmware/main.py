@@ -26,14 +26,10 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
     carry = init_session.run(None, {})[0]
 
     command_source = launch_interface.get_command_source()
-    print(f"Command source selected: {command_source}")
-
     motor_driver = MotorDriver()
-    actuator_info = motor_driver.can.actuators
-
     imu_reader = get_imu_reader()
 
-    if not launch_interface.ask_motor_permission({"actuator_info": actuator_info, "imu_reader": imu_reader}):
+    if not launch_interface.ask_motor_permission():
         print("Motor permission denied, aborting execution")
         return
 
@@ -44,12 +40,11 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         print("Policy launch permission denied, aborting execution")
         return
 
-    # Create command interface AFTER all launch prompts are complete
-    # This prevents the keyboard interface from interfering with input() calls
+    # initialize command interface last because it can absorb stdin
     command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
 
-    print("Starting policy execution")
+    print("Starting policy...")
 
     t0 = time.perf_counter()
     step_id = 0
@@ -107,11 +102,12 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
             },
         )
         print(
-            f"dt={dt * 1000:.2f} ms: get joints={(t1 - t) * 1000:.2f} ms, "
+            f"dt={dt * 1000:.2f} ms: "
+            f"get joints={(t1 - t) * 1000:.2f} ms, "
             f"get imu={(t2 - t1) * 1000:.2f} ms, "
             f".step()={(t4 - t3) * 1000:.2f} ms, "
             f"take action={(t5 - t4) * 1000:.2f} ms, "
-            f"missing responses={(t6 - t5) * 1000:.2f} ms"
+            f"flush can={(t6 - t5) * 1000:.2f} ms"
         )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
@@ -122,12 +118,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     launch_interface = KeyboardLaunchInterface()
-
     kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
-
-    if not kinfer_path:
-        print("No kinfer selected or aborted")
-        sys.exit(0)
 
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
