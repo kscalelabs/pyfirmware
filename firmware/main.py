@@ -10,7 +10,6 @@ import numpy as np
 from firmware.can import MotorDriver
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
-from firmware.imu.dummy import DummyIMU
 from firmware.launchInterface import KeyboardLaunchInterface
 from firmware.logger import Logger
 from firmware.shutdown import get_shutdown_manager
@@ -19,7 +18,6 @@ from firmware.utils import get_imu_reader, get_onnx_sessions
 
 async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger) -> None:
     shutdown_mgr = get_shutdown_manager()
-
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
     joint_order = metadata.get("joint_names", None)
@@ -117,6 +115,7 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
+
 async def main() -> None:
     launch_interface = KeyboardLaunchInterface()
     kinfer_path = await launch_interface.get_kinfer_path()
@@ -131,6 +130,7 @@ async def main() -> None:
     print(f"Selected policy: {policy_name}")
     logger = Logger(log_dir)
     await runner(kinfer_path, launch_interface, logger)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

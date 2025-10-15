@@ -18,9 +18,9 @@ class KeyboardLaunchInterface:
 
         response = input("Enter choice: ").lower()
         print("=================")
-        if response == 'k':
+        if response == "k":
             return "keyboard"
-        elif response == 'u':
+        elif response == "u":
             return "udp"
         else:
             print("Invalid choice. Please enter K or U")
@@ -33,12 +33,12 @@ class KeyboardLaunchInterface:
         print("=================")
         print("Imu:", imu_name)
         response = input("Enable motors? (y/n): ").lower()
-        if response == 'n':
+        if response == "n":
             print("=================")
             return False
         if robot_config.get("imu_reader") is None:
             imu_response = input("Are you sure? There is no IMU detected.").lower()
-            if imu_response == 'n':
+            if imu_response == "n":
                 print("=================")
                 return False
         print("=================")
@@ -52,7 +52,7 @@ class KeyboardLaunchInterface:
         print("Start policy? (y/n): ")
         response = input("").lower()
         print("=================")
-        if response == 'y':
+        if response == "y":
             print("✅ Starting policy...")
             return True
         else:
