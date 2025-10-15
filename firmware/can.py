@@ -316,8 +316,11 @@ class MotorDriver:
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
 
-        print("Press Enter to enable motors...")
-        input()  # wait for user to enable motors
+    def get_actuator_info(self) -> dict:
+        """Get stored actuator information (actuator IDs organized by canbus socket)."""
+        return self.can.actuators
+        
+    def enable_and_home_motors(self) -> None:
         self.can.enable_motors()
         self._motors_enabled = True
         print("✅ Motors enabled")
