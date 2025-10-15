@@ -1,10 +1,9 @@
 """Keyboard-based launch interface for local robot control."""
 
 import curses
-from pathlib import Path
-from typing import Dict, List, Optional
-
 import sys
+from pathlib import Path
+from typing import List, Optional
 
 
 def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Optional[Path]:
@@ -191,9 +190,7 @@ class KeyboardLaunchInterface:
             print(f"Path is not a directory: {policy_dir}")
             sys.exit(1)
 
-        kinfer_files = sorted(policy_dir.glob("*.kinfer"),
-                            key=lambda x: x.stat().st_mtime,
-                            reverse=True)
+        kinfer_files = sorted(policy_dir.glob("*.kinfer"), key=lambda x: x.stat().st_mtime, reverse=True)
         if not kinfer_files:
             print(f"No .kinfer files found in {policy_dir}")
             sys.exit(1)

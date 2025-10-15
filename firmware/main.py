@@ -3,7 +3,6 @@
 import argparse
 import datetime
 import os
-import sys
 import time
 
 import numpy as np
@@ -111,6 +110,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run policy inference and control motors")
