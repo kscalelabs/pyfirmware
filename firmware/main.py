@@ -3,6 +3,7 @@
 import argparse
 import datetime
 import os
+import sys
 import time
 
 import numpy as np
@@ -121,12 +122,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     launch_interface = KeyboardLaunchInterface()
-    
+
     kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
-    
+
     if not kinfer_path:
         print("No kinfer selected or aborted")
-        exit(0)
+        sys.exit(0)
 
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

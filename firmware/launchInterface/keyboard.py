@@ -1,12 +1,11 @@
 """Keyboard-based launch interface for local robot control."""
 
-from pathlib import Path
-from typing import Any, Dict, Optional, List
 import curses
-import os
+from pathlib import Path
+from typing import Dict, List, Optional
 
-def _curses_select_with_filter(stdscr, items: List[Path]) -> Optional[Path]:
-    curses.curs_set(1) 
+def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Optional[Path]:
+    curses.curs_set(1)
     stdscr.nodelay(False)
     stdscr.keypad(True)
 
@@ -14,13 +13,13 @@ def _curses_select_with_filter(stdscr, items: List[Path]) -> Optional[Path]:
     sel_idx = 0
     scroll = 0
 
-    def filtered():
+    def filtered() -> List[Path]:
         q = query.lower()
         if not q:
             return items
         return [p for p in items if q in p.stem.lower()]
 
-    def clamp_sel():
+    def clamp_sel() -> None:
         nonlocal sel_idx, scroll
         f = filtered()
         if not f:
@@ -153,7 +152,7 @@ class KeyboardLaunchInterface:
             print("Invalid choice. Please enter K or U")
             return None
 
-    def ask_motor_permission(self, robot_config: Dict[str, Any]) -> bool:
+    def ask_motor_permission(self, robot_config: Dict[str, object]) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
         imu_reader = robot_config.get("imu_reader")
         imu_name = imu_reader.__class__.__name__ if imu_reader is not None else "None"
@@ -187,7 +186,7 @@ class KeyboardLaunchInterface:
             return False
 
     def get_kinfer_path(self, policy_dir_path: str) -> Optional[str]:
-        """Improved TUI: live-search + arrow-key selection for .kinfer files."""
+        """TUI: live-search + arrow-key selection for .kinfer files."""
         policy_dir = Path(policy_dir_path)
 
         if not policy_dir.exists():
@@ -204,29 +203,7 @@ class KeyboardLaunchInterface:
             print(f"No .kinfer files found in {policy_dir}")
             return None
 
-        # Fallback to simple CLI if curses is unavailable (e.g., on Windows without windows-curses)
-        def _fallback_select(files: List[Path]) -> Optional[Path]:
-            print("\nAvailable kinfer policies:")
-            for i, filepath in enumerate(files, 1):
-                size_mb = filepath.stat().st_size / (1024 * 1024)
-                print(f"  {i}. {filepath.stem} ({size_mb:.2f} MB)")
-            try:
-                choice = input(f"\nSelect policy (1-{len(files)}): ").strip()
-                idx = int(choice) - 1
-                if 0 <= idx < len(files):
-                    return files[idx]
-                print("Invalid choice.")
-                return None
-            except (ValueError, KeyboardInterrupt):
-                print("Aborted.")
-                return None
-
-        try:
-            selected = curses.wrapper(_curses_select_with_filter, kinfer_files)
-        except Exception:
-            # If curses fails (or not installed on Windows), gracefully fallback
-            selected = _fallback_select(kinfer_files)
-
+        selected = curses.wrapper(_curses_select_with_filter, kinfer_files)
         return str(selected) if selected else None
 
     def close(self) -> None:
