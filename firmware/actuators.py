@@ -55,7 +55,8 @@ class ActuatorConfig:
 
     def can_to_physical_data(self, fb: dict[str, int]) -> dict[str, float]:
         actuator_data = {
-            "name": self.full_name,
+            "name": self.name,
+            "full_name": self.full_name,
             "fault_flags": fb["fault_flags"],
             "angle": self.can_to_physical_angle(fb["angle_raw"]),
             "velocity": self.can_to_physical_velocity(fb["angular_velocity_raw"]),
