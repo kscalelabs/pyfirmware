@@ -315,10 +315,6 @@ class MotorDriver:
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
-
-    def get_actuator_info(self) -> dict:
-        """Get stored actuator information (actuator IDs organized by canbus socket)."""
-        return self.can.actuators
         
     def enable_and_home_motors(self) -> None:
         self.can.enable_motors()

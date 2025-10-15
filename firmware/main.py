@@ -32,7 +32,7 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
 
     motor_driver = MotorDriver()
-    actuator_info = motor_driver.get_actuator_info()
+    actuator_info = motor_driver.can.actuators
 
     imu_reader = get_imu_reader()
 
