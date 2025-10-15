@@ -1,12 +1,7 @@
 """Keyboard-based launch interface for local robot control."""
 
-import os
-import sys
-import termios
-import tty
 from pathlib import Path
 from typing import Optional
-
 
 class KeyboardLaunchInterface:
     """Simple launch interface for keyboard control without network connection."""
@@ -35,12 +30,13 @@ class KeyboardLaunchInterface:
         imu_name = robot_config.get("imu_reader").__class__.__name__ if robot_config.get("imu_reader") is not None else "None"
         print("=================")
         print("Imu:", imu_name)   
-        print("Enable motors? (y/n): ")
-        response = input("").lower()
+        response = input("Enable motors? (y/n): ").lower()
+        if response == 'n':
+            print("=================")
+            return False
         if robot_config.get("imu_reader") is None:
-            print("Are you sure? There is no IMU detected.")
-            response = input("").lower()
-            if response == 'n':
+            imu_response = input("Are you sure? There is no IMU detected.").lower()
+            if imu_response == 'n':
                 print("=================")
                 return False
         print("=================")

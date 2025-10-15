@@ -4,7 +4,7 @@ import argparse
 import datetime
 import os
 import time
-
+import asyncio
 import numpy as np
 
 from firmware.can import MotorDriver
@@ -36,14 +36,14 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
 
     imu_reader = get_imu_reader()
 
-    if not await launch_interface.ask_motor_permission({actuator_info, imu_reader}):
+    if not await launch_interface.ask_motor_permission({"actuator_info": actuator_info, "imu_reader": imu_reader}):
         print("Motor permission denied, aborting execution")
         return
         
     if imu_reader is None:
         imu_reader = DummyIMU()
     
-    motor_driver.enable_and_home()
+    motor_driver.enable_and_home_motors()
     
     launchPolicy = await launch_interface.launch_policy_permission()
     if not launchPolicy:
@@ -117,10 +117,9 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
-def main():
-    logger = Logger()
+async def main():
     launch_interface = KeyboardLaunchInterface()
-    kinfer_path = launch_interface.get_kinfer_path()
+    kinfer_path = await launch_interface.get_kinfer_path()
     if not kinfer_path:
         print("No kinfer selected or aborted")
         return
@@ -129,10 +128,9 @@ def main():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
 
-    logger.set_logdir(log_dir)
-    logger.info(f"Selected policy: {policy_name}")
-
-    runner(kinfer_path, launch_interface, logger)
+    print(f"Selected policy: {policy_name}")
+    logger = Logger(log_dir)
+    await runner(kinfer_path, launch_interface, logger)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
