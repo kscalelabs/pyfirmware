@@ -15,8 +15,7 @@ Loop:
 git clone https://www.github.com/kscalelabs/pyfirmware
 cd pyfirmware
 
-# install conda env
-make setup
+make setup # installs conda env
 conda activate firmware
 pip install .
 ```
