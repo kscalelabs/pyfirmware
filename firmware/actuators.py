@@ -245,7 +245,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=4,
             kd=0.06,
-            joint_bias=math.radians(8),
+            joint_bias=math.radians(0),
         ),
         # Right arm
         21: ActuatorConfig(
@@ -300,7 +300,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=4,
             kd=0.06,
-            joint_bias=math.radians(-25),
+            joint_bias=math.radians(0),
         ),
         # Left leg
         31: ActuatorConfig(
