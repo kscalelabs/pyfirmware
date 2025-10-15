@@ -411,7 +411,7 @@ def main() -> None:
 
     input("Press Enter to enable motors...")
     driver.enable_and_home_motors()
-    
+
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 
