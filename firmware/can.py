@@ -262,6 +262,7 @@ class MotorDriver:
         if not self._motors_enabled:
             return
         try:
+            self.flush_can_busses()
             self.ramp_down_motors()
         except Exception as e:
             print(f"Error during safe ramp down: {e}")

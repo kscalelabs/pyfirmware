@@ -39,15 +39,14 @@ class ShutdownManager:
         """Initialize the shutdown manager."""
         if self._initialized:
             return
-
+            
         self._initialized = True
         self._cleanup_callbacks: List[tuple[str, Callable[[], None]]] = []
-        self._shutdown_in_progress = False
-        self._shutdown_complete = False
-
+        self._shutdown_done = False
+        
         # Register atexit handler (catches crashes and normal exits)
         atexit.register(self._execute_shutdown)
-
+        
         # Register signal handlers (catches Ctrl+C and kill signals)
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -69,44 +68,33 @@ class ShutdownManager:
 
     def _signal_handler(self, signum: int, frame: object) -> None:
         """Handle shutdown signals (SIGINT, SIGTERM)."""
-        signal_name = signal.Signals(signum).name
-        print(f"\n⚠️  Received signal {signal_name}, initiating shutdown...")
         self._execute_shutdown()
         os._exit(0)
 
     def _execute_shutdown(self) -> None:
         """Execute all registered cleanup callbacks in reverse order."""
+        # Simple atomic check: only run once
         with self._lock:
-            if self._shutdown_complete:
-                return  # Already cleaned up
-
-            if self._shutdown_in_progress:
-                # Prevent recursive shutdown calls
-                print("⚠️  Shutdown already in progress, skipping duplicate call")
+            if self._shutdown_done:
                 return
-
-            self._shutdown_in_progress = True
-
-        print("\n🛑 Executing shutdown sequence...")
-
+            self._shutdown_done = True
+        
+        print("\n🛑 Shutting down...")
+        
         # Execute callbacks in reverse order (LIFO)
         for name, callback in reversed(self._cleanup_callbacks):
             try:
-                print(f"  ↳ Cleaning up: {name}")
+                print(f"  ↳ {name}")
                 callback()
             except Exception as e:
-                print(f"  ❌ Error during cleanup of {name}: {e}")
-                # Continue with other cleanups even if one fails
-
-        with self._lock:
-            self._shutdown_complete = True
-
+                print(f"  ❌ Error in {name}: {e}")
+        
         print("✅ Shutdown complete\n")
 
     def is_shutting_down(self) -> bool:
         """Check if shutdown is in progress."""
         with self._lock:
-            return self._shutdown_in_progress
+            return self._shutdown_done
 
 
 # Global singleton instance
