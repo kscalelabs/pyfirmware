@@ -1,0 +1,95 @@
+"""Keyboard-based launch interface for local robot control."""
+
+import os
+import sys
+import termios
+import tty
+from pathlib import Path
+from typing import Optional
+
+
+class KeyboardLaunchInterface:
+    """Simple launch interface for keyboard control without network connection."""
+    
+    def __init__(self):
+        """Initialize keyboard launch interface."""
+        print("Using keyboard launch interface")
+    
+    async def get_command_source(self) -> str:
+        """Return the command source type."""
+        print("Select command source: (K) Keyboard, (U) UDP")
+        
+        response = input("Enter choice: ").lower()
+        if response == 'k':
+            return "keyboard"
+        elif response == 'u':
+            return "udp"
+        else:
+            print("Invalid choice. Please enter K or U")
+            return None
+    
+    async def ask_motor_permission(self, robot_config) -> bool:
+        """Ask permission to enable motors. Returns True if should enable, False to abort."""        
+        print("Enable motors? (y/n): ")
+        response = input("").lower()
+        if robot_config.get("imu_reader") is None:
+            print("Are you sure? There is no IMU detected.")
+            response = input("").lower()
+            if response == 'n':
+                return False
+        return True
+    
+    async def launch_policy_permission(self) -> bool:
+        """Ask permission to start policy. Returns True if should start, False to abort."""
+        print("🚀 Ready to start policy")
+        
+        print("Start policy? (y/n): ")
+        response = input("").lower()
+        
+        if response == 'y':
+            print("✅ Starting policy...")
+            return True
+        else:
+            print("Aborted by user")
+            return False
+    
+    async def get_kinfer_path(self) -> Optional[str]:
+        """List available kinfer files and get user selection."""
+        # Find all .kinfer files in ~/.policies
+        policy_dir = Path.home() / ".policies"
+        
+        if not policy_dir.exists():
+            print(f"Policy directory not found: {policy_dir}")
+            return None
+        
+        kinfer_files = list(policy_dir.glob("*.kinfer"))
+        
+        if not kinfer_files:
+            print(f"No kinfer files found in {policy_dir}")
+            return None
+        
+        # Sort by modification time (newest first)
+        kinfer_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        
+        print("\nAvailable kinfer policies:")
+        for i, filepath in enumerate(kinfer_files, 1):
+            size_mb = filepath.stat().st_size / (1024 * 1024)
+            print(f"  {i}. {filepath.name} ({size_mb:.2f} MB)")
+        
+        while True:
+            try:
+                choice = input(f"\nSelect policy (1-{len(kinfer_files)}): ").strip()
+                idx = int(choice) - 1
+                
+                if 0 <= idx < len(kinfer_files):
+                    selected = kinfer_files[idx]
+                    return str(selected)
+                else:
+                    print(f"❌ Invalid choice. Please enter 1-{len(kinfer_files)}")
+            except (ValueError, KeyboardInterrupt):
+                print("\n❌ Aborted by user")
+                return None
+    
+    async def close(self):
+        """Close the interface (no-op for keyboard)."""
+        print("👋 Keyboard interface closed")

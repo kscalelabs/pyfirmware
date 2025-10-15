@@ -31,7 +31,10 @@ class CommandInterface(ABC):
 
     def __init__(self, policy_command_names: List[str]) -> None:
         self.cmd = {cmd: 0.0 for cmd in CMD_NAMES}
-        self.policy_command_names = [name.lower() for name in policy_command_names]
+        if len(policy_command_names) > 0:
+            self.cmd = {cmd: 0.0 for cmd in policy_command_names}
+
+        self.policy_command_names = [name.lower() for name in self.cmd.keys()]
         for name in self.policy_command_names:
             if name not in CMD_NAMES:
                 print(f"Warning: Policy command name '{name}' not supported by firmware")

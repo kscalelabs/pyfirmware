@@ -13,28 +13,44 @@ from firmware.commands.udp_listener import UDPListener
 from firmware.logger import Logger
 from firmware.shutdown import get_shutdown_manager
 from firmware.utils import get_imu_reader, get_onnx_sessions
+from firmware.launchInterface import KeyboardLaunchInterface
+from firmware.imu.dummy import DummyIMU
 
-
-def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
+async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger) -> None:
     shutdown_mgr = get_shutdown_manager()
 
-    logger = Logger(log_dir)
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
-    joint_order = metadata["joint_names"]
-    command_names = metadata["command_names"]
+    joint_order = metadata.get("joint_names", None)
+    command_names = metadata.get("command_names", [])
     carry = init_session.run(None, {})[0]
+
+    command_source = await launch_interface.get_command_source()
+    print(f"Command source selected: {command_source}")
+    
+    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
+    shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
+
+    motor_driver = MotorDriver()
+    actuator_info = motor_driver.get_actuator_info()
 
     imu_reader = get_imu_reader()
 
-    motor_driver = MotorDriver()
-
-    print("Press Enter to start policy...")
-    input()  # wait for user to start policy
-    print("🤖 Running policy...")
-
-    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
-    shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
+    if not await launch_interface.ask_motor_permission({actuator_info, imu_reader}):
+        print("Motor permission denied, aborting execution")
+        return
+        
+    if imu_reader is None:
+        imu_reader = DummyIMU()
+    
+    motor_driver.enable_and_home()
+    
+    launchPolicy = await launch_interface.launch_policy_permission()
+    if not launchPolicy:
+        print("Policy launch permission denied, aborting execution")
+        return
+        
+    print("Starting policy execution")
 
     t0 = time.perf_counter()
     step_id = 0
@@ -101,17 +117,22 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("kinfer_path", type=str, help="Path to saved model file")
-    parser.add_argument(
-        "--command-source", type=str, default="keyboard", choices=["keyboard", "udp"], help="Command input source"
-    )
-    args = parser.parse_args()
-
-    policy_name = os.path.splitext(os.path.basename(args.kinfer_path))[0]
+def main():
+    logger = Logger()
+    launch_interface = KeyboardLaunchInterface()
+    kinfer_path = launch_interface.get_kinfer_path()
+    if not kinfer_path:
+        print("No kinfer selected or aborted")
+        return
+    
+    policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
 
-    runner(args.kinfer_path, log_dir, args.command_source)
+    logger.set_logdir(log_dir)
+    logger.info(f"Selected policy: {policy_name}")
+
+    runner(kinfer_path, launch_interface, logger)
+
+if __name__ == "__main__":
+    main()
