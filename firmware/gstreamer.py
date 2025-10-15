@@ -173,7 +173,6 @@ class WebRTCServer:
         self.pipe.set_state(Gst.State.PLAYING)
         Gst.debug_bin_to_dot_file(self.pipe, Gst.DebugGraphDetails.ALL, "pipeline_graph")
 
-
         print("Pipeline started")
 
     def on_bus_message(self, bus: Gst.Bus, message: Gst.Message) -> int:

@@ -25,6 +25,7 @@ def signal_handler(signum: int, frame: object) -> None:
     end_policy()
     sys.exit(0)
 
+
 def end_policy() -> None:
     """Cleanup function that should be called to safely shutdown the policy."""
     global motor_driver_ref, motors_enabled, command_interface_ref
@@ -41,6 +42,7 @@ def end_policy() -> None:
         motor_driver_ref = None
         motors_enabled = False
         command_interface_ref = None
+
 
 def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> None:
     global motor_driver_ref, motors_enabled, command_interface_ref
@@ -137,6 +139,7 @@ def runner(kinfer_path: str, log_dir: str, command_source: str = "keyboard") -> 
     except Exception as e:
         print(f"❌ Error in runner: {e}")
         end_policy()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -238,9 +238,7 @@ class MotorDriver:
         self.robot = RobotConfig()
         self.can = CANInterface()
         # Cache for last known good values (initialized to zeros)
-        self.last_known_feedback = {
-            id: robot.dummy_data() for id, robot in self.robot.actuators.items()
-        }
+        self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self.startup_sequence()
 
     def ramp_down_motors(self) -> None:
@@ -275,7 +273,7 @@ class MotorDriver:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
-        joint_data_dict= self.get_joint_angles_and_velocities()
+        joint_data_dict = self.get_joint_angles_and_velocities()
 
         print("\nActuator states:")
         print("ID  | Name             | Angle | Velocity | Torque | Temp  | Faults")
@@ -350,7 +348,7 @@ class MotorDriver:
     def get_ordered_joint_data(
         self, joint_order: list[str]
     ) -> tuple[list[float], list[float], list[float], list[float]]:
-        joint_data_dict= self.get_joint_angles_and_velocities()
+        joint_data_dict = self.get_joint_angles_and_velocities()
 
         joint_angles_order, joint_vels_order, torques_order, temps_order = [], [], [], []
 
@@ -378,6 +376,7 @@ def signal_handler(signum: int, frame: object) -> None:
     if motor_driver_ref is not None:
         motor_driver_ref.ramp_down_motors()
     sys.exit(0)
+
 
 def main() -> None:
     global motor_driver_ref
