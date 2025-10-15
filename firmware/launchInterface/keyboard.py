@@ -1,8 +1,135 @@
 """Keyboard-based launch interface for local robot control."""
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+import curses
+import os
 
+def _curses_select_with_filter(stdscr, items: List[Path]) -> Optional[Path]:
+    curses.curs_set(1) 
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+
+    query = ""
+    sel_idx = 0
+    scroll = 0
+
+    def filtered():
+        q = query.lower()
+        if not q:
+            return items
+        return [p for p in items if q in p.stem.lower()]
+
+    def clamp_sel():
+        nonlocal sel_idx, scroll
+        f = filtered()
+        if not f:
+            sel_idx = 0
+            scroll = 0
+            return
+        sel_idx = max(0, min(sel_idx, len(f) - 1))
+        h, w = stdscr.getmaxyx()
+        list_rows = max(1, h - 3)  # 1 for search, 1 for header, 1 for padding
+        # Keep selection within scroll window
+        if sel_idx < scroll:
+            scroll = sel_idx
+        elif sel_idx >= scroll + list_rows:
+            scroll = sel_idx - list_rows + 1
+
+    while True:
+        stdscr.clear()
+        h, w = stdscr.getmaxyx()
+
+        # Search bar
+        stdscr.addstr(0, 0, "Search: ")
+        stdscr.clrtoeol()
+        stdscr.addstr(0, 8, query[: max(0, w - 9)])
+
+        # Header
+        stdscr.addstr(1, 0, "Policies (↑/↓ to move, Enter to select, Esc to cancel)")
+        stdscr.hline(2, 0, curses.ACS_HLINE, max(1, w - 1))
+
+        # Render filtered list
+        f = filtered()
+        list_rows = max(1, h - 3)
+        clamp_sel()
+        view = f[scroll : scroll + list_rows]
+
+        for i, p in enumerate(view):
+            line_idx = 3 + i
+            is_selected = (scroll + i) == sel_idx
+            name = p.stem  # Remove .kinfer extension
+            size_mb = p.stat().st_size / (1024 * 1024)
+            text = f"{name}  ({size_mb:.2f} MB)"
+            text = text[: max(1, w - 1)]
+            if is_selected:
+                stdscr.attron(curses.A_REVERSE)
+            stdscr.addstr(line_idx, 0, text)
+            stdscr.clrtoeol()
+            if is_selected:
+                stdscr.attroff(curses.A_REVERSE)
+
+        # Empty state
+        if not f:
+            stdscr.addstr(4, 0, "No matches.")
+
+        # Place cursor at end of query
+        stdscr.move(0, 8 + len(query))
+        stdscr.refresh()
+
+        ch = stdscr.getch()
+
+        # Enter
+        if ch in (curses.KEY_ENTER, 10, 13):
+            if f:
+                return f[sel_idx]
+            else:
+                continue
+
+        # Esc (cancel)
+        if ch == 27:
+            return None
+
+        # Backspace (handle a few common codes)
+        if ch in (curses.KEY_BACKSPACE, 127, 8):
+            if query:
+                query = query[:-1]
+            continue
+
+        # Up / Down / Page Up / Page Down / Home / End
+        if ch == curses.KEY_UP:
+            sel_idx -= 1
+            clamp_sel()
+            continue
+        if ch == curses.KEY_DOWN:
+            sel_idx += 1
+            clamp_sel()
+            continue
+        if ch == curses.KEY_PPAGE:  # Page Up
+            sel_idx -= max(1, list_rows - 1)
+            clamp_sel()
+            continue
+        if ch == curses.KEY_NPAGE:  # Page Down
+            sel_idx += max(1, list_rows - 1)
+            clamp_sel()
+            continue
+        if ch == curses.KEY_HOME:
+            sel_idx = 0
+            clamp_sel()
+            continue
+        if ch == curses.KEY_END:
+            if filtered():
+                sel_idx = len(filtered()) - 1
+                clamp_sel()
+            continue
+
+        # Typing (printable chars)
+        if 32 <= ch <= 126:
+            query += chr(ch)
+            clamp_sel()
+            continue
+
+        # Ignore everything else
 
 class KeyboardLaunchInterface:
     """Simple launch interface for keyboard control without network connection."""
@@ -59,43 +186,48 @@ class KeyboardLaunchInterface:
             print("Aborted by user")
             return False
 
-    def get_kinfer_path(self) -> Optional[str]:
-        """List available kinfer files and get user selection."""
-        # Find all .kinfer files in ~/.policies
-        print("=================")
-        policy_dir = Path.home() / ".policies"
+    def get_kinfer_path(self, policy_dir_path: str) -> Optional[str]:
+        """Improved TUI: live-search + arrow-key selection for .kinfer files."""
+        policy_dir = Path(policy_dir_path)
 
         if not policy_dir.exists():
             print(f"Policy directory not found: {policy_dir}")
             return None
-
-        kinfer_files = list(policy_dir.glob("*.kinfer"))
-
-        if not kinfer_files:
-            print(f"No kinfer files found in {policy_dir}")
+        if not policy_dir.is_dir():
+            print(f"Path is not a directory: {policy_dir}")
             return None
 
-        # Sort by modification time (newest first)
-        kinfer_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        kinfer_files = sorted(policy_dir.glob("*.kinfer"),
+                            key=lambda x: x.stat().st_mtime,
+                            reverse=True)
+        if not kinfer_files:
+            print(f"No .kinfer files found in {policy_dir}")
+            return None
 
-        print("\nAvailable kinfer policies:")
-        for i, filepath in enumerate(kinfer_files, 1):
-            size_mb = filepath.stat().st_size / (1024 * 1024)
-            print(f"  {i}. {filepath.name} ({size_mb:.2f} MB)")
-        print("=================")
-        while True:
+        # Fallback to simple CLI if curses is unavailable (e.g., on Windows without windows-curses)
+        def _fallback_select(files: List[Path]) -> Optional[Path]:
+            print("\nAvailable kinfer policies:")
+            for i, filepath in enumerate(files, 1):
+                size_mb = filepath.stat().st_size / (1024 * 1024)
+                print(f"  {i}. {filepath.stem} ({size_mb:.2f} MB)")
             try:
-                choice = input(f"\nSelect policy (1-{len(kinfer_files)}): ").strip()
+                choice = input(f"\nSelect policy (1-{len(files)}): ").strip()
                 idx = int(choice) - 1
-
-                if 0 <= idx < len(kinfer_files):
-                    selected = kinfer_files[idx]
-                    return str(selected)
-                else:
-                    print(f"❌ Invalid choice. Please enter 1-{len(kinfer_files)}")
-            except (ValueError, KeyboardInterrupt):
-                print("\n❌ Aborted by user")
+                if 0 <= idx < len(files):
+                    return files[idx]
+                print("Invalid choice.")
                 return None
+            except (ValueError, KeyboardInterrupt):
+                print("Aborted.")
+                return None
+
+        try:
+            selected = curses.wrapper(_curses_select_with_filter, kinfer_files)
+        except Exception:
+            # If curses fails (or not installed on Windows), gracefully fallback
+            selected = _fallback_select(kinfer_files)
+
+        return str(selected) if selected else None
 
     def close(self) -> None:
         """Close the interface (no-op for keyboard)."""
