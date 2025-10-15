@@ -1,20 +1,21 @@
 """Main loop to run policy inference and control motors."""
 
-import argparse
+import asyncio
 import datetime
 import os
 import time
-import asyncio
+
 import numpy as np
 
 from firmware.can import MotorDriver
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
+from firmware.imu.dummy import DummyIMU
+from firmware.launchInterface import KeyboardLaunchInterface
 from firmware.logger import Logger
 from firmware.shutdown import get_shutdown_manager
 from firmware.utils import get_imu_reader, get_onnx_sessions
-from firmware.launchInterface import KeyboardLaunchInterface
-from firmware.imu.dummy import DummyIMU
+
 
 async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger) -> None:
     shutdown_mgr = get_shutdown_manager()
@@ -27,7 +28,7 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
 
     command_source = await launch_interface.get_command_source()
     print(f"Command source selected: {command_source}")
-    
+
     command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
 
@@ -39,17 +40,17 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
     if not await launch_interface.ask_motor_permission({"actuator_info": actuator_info, "imu_reader": imu_reader}):
         print("Motor permission denied, aborting execution")
         return
-        
+
     if imu_reader is None:
         imu_reader = DummyIMU()
-    
+
     motor_driver.enable_and_home_motors()
-    
-    launchPolicy = await launch_interface.launch_policy_permission()
-    if not launchPolicy:
+
+    launch_policy = await launch_interface.launch_policy_permission()
+    if not launch_policy:
         print("Policy launch permission denied, aborting execution")
         return
-        
+
     print("Starting policy execution")
 
     t0 = time.perf_counter()
@@ -117,13 +118,13 @@ async def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, lo
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
-async def main():
+async def main() -> None:
     launch_interface = KeyboardLaunchInterface()
     kinfer_path = await launch_interface.get_kinfer_path()
     if not kinfer_path:
         print("No kinfer selected or aborted")
         return
-    
+
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")

@@ -250,7 +250,7 @@ class MotorDriver:
         # Cache for last known good values (initialized to zeros)
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self._motors_enabled = False
-        
+
         shutdown_mgr = get_shutdown_manager()
         shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
@@ -315,7 +315,7 @@ class MotorDriver:
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
-        
+
     def enable_and_home_motors(self) -> None:
         self.can.enable_motors()
         self._motors_enabled = True
