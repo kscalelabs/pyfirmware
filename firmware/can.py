@@ -403,7 +403,7 @@ class MotorDriver:
 
 def main() -> None:
     """Run sine wave test on all actuators."""
-    driver = MotorDriver(max_scaling=0.1)
+    driver = MotorDriver(dict(),max_scaling=0.1)
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 
