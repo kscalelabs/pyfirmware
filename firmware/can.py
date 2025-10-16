@@ -267,8 +267,8 @@ class MotorDriver:
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
         print("Ramping down motors...")
-        joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities()
-        joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}
+        joint_data = self.get_joint_angles_and_velocities()
+        joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}  # type: ignore[misc]
         if len(joint_data) == 0:
             print("No actuators responding, skipping ramp down")
             self._motors_enabled = False
@@ -298,15 +298,15 @@ class MotorDriver:
         print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
         print("----|--------------------------|-------|----------|--------|-------|-------")
         for act_id, data in joint_data_dict.items():
-            fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
+            fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"  # type: ignore[operator]
             print(
                 f"{act_id:3d} | {data['name']:24s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
                 f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
             )
-            if data["fault_flags"] > 0:
+            if data["fault_flags"] > 0:  # type: ignore[operator]
                 print("\033[1;33mWARNING: Actuator faults detected\033[0m")
 
-        if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):
+        if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):  # type: ignore[arg-type]
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
 
@@ -354,9 +354,9 @@ class MotorDriver:
     def flush_can_busses(self) -> None:
         self.can.flush_can_busses()
 
-    def get_joint_angles_and_velocities(self) -> dict[int, dict[str, float]]:
+    def get_joint_angles_and_velocities(self) -> dict[int, dict[str, float | str | int]]:
         fb = self.can.get_actuator_feedback()
-        answer = {}
+        answer: dict[int, dict[str, float | str | int]] = {}
         for id in self.robot.actuators.keys():
             if id in fb:
                 answer[id] = self.robot.actuators[id].can_to_physical_data(fb[id])
@@ -385,7 +385,7 @@ class MotorDriver:
             torques_order.append(joint_data["torque"])
             temps_order.append(joint_data["temperature"])
 
-        return joint_angles_order, joint_vels_order, torques_order, temps_order
+        return joint_angles_order, joint_vels_order, torques_order, temps_order  # type: ignore[return-value]
 
     def take_action(self, action: list[float], joint_order: list[str]) -> None:
         action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
