@@ -51,11 +51,11 @@ class ActuatorConfig:
     kd_can_min: float
     kd_can_max: float
 
-    def dummy_data(self) -> dict[str, float]:
+    def dummy_data(self) -> dict[str, float | str]:
         return {"name": self.name, "fault_flags": 0, "angle": 0.0, "velocity": 0.0, "torque": 0.0, "temperature": 0.0}
 
-    def can_to_physical_data(self, fb: dict[str, int]) -> dict[str, float]:
-        actuator_data = {
+    def can_to_physical_data(self, fb: dict[str, int]) -> dict[str, float | str | int]:
+        actuator_data: dict[str, float | str | int] = {
             "name": self.name,
             "full_name": self.full_name,
             "fault_flags": fb["fault_flags"],

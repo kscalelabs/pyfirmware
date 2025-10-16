@@ -20,9 +20,10 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
     shutdown_mgr = get_shutdown_manager()
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
-    joint_order = metadata.get("joint_names", None)
-    command_names = metadata.get("command_names", [])
     carry = init_session.run(None, {})[0]
+
+    joint_order = metadata["joint_names"]
+    command_names = metadata["command_names"]
 
     command_source = launch_interface.get_command_source()
     motor_driver = MotorDriver()

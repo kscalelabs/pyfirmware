@@ -4,7 +4,7 @@ import json
 import tarfile
 
 import numpy as np
-import onnxruntime as ort
+import onnxruntime as ort  # type: ignore[import-untyped]
 
 from firmware.imu.bno055 import BNO055
 from firmware.imu.hiwonder import Hiwonder
@@ -18,9 +18,15 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
     with tarfile.open(kinfer_path, "r:gz") as tar:
         assert tar.getnames() == ["init_fn.onnx", "step_fn.onnx", "metadata.json"]
 
-        init_model_bytes = tar.extractfile("init_fn.onnx").read()
-        step_model_bytes = tar.extractfile("step_fn.onnx").read()
-        metadata = json.load(tar.extractfile("metadata.json"))
+        init_file = tar.extractfile("init_fn.onnx")
+        step_file = tar.extractfile("step_fn.onnx")
+        metadata_file = tar.extractfile("metadata.json")
+
+        assert init_file is not None and step_file is not None and metadata_file is not None
+
+        init_model_bytes = init_file.read()
+        step_model_bytes = step_file.read()
+        metadata = json.load(metadata_file)
         print("kinfer model metadata:", metadata)
 
     print("Creating ONNX inference sessions...")
