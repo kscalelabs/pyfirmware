@@ -255,8 +255,6 @@ class MotorDriver:
         shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
-        self.startup_sequence()
-
     def _safe_ramp_down(self) -> None:
         """Safely ramp down motors (for cleanup callback)."""
         if not self._motors_enabled:
@@ -290,7 +288,7 @@ class MotorDriver:
         self._motors_enabled = False
         print("Motors ramped down to zero")
 
-    def startup_sequence(self) -> None:
+    def get_actuator_status(self) -> None:
         if not self.can.actuators:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
@@ -312,6 +310,8 @@ class MotorDriver:
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
+
+        return joint_data_dict
 
     def enable_and_home_motors(self) -> None:
         self.can.enable_motors()
@@ -398,6 +398,7 @@ class MotorDriver:
 def main() -> None:
     """Run sine wave test on all actuators."""
     driver = MotorDriver(max_scaling=0.1)
+    driver.get_actuator_status()
     input("Press Enter to enable motors...")
     driver.enable_and_home_motors()
     input("Press Enter to run sine wave on all actuators...")

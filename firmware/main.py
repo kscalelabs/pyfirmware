@@ -10,7 +10,7 @@ import numpy as np
 from firmware.can import MotorDriver
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
-from firmware.launchInterface import KeyboardLaunchInterface
+from firmware.launchInterface import KeyboardLaunchInterface, WebSocketInterface
 from firmware.logger import Logger
 from firmware.shutdown import get_shutdown_manager
 from firmware.utils import get_imu_reader, get_onnx_sessions
@@ -28,7 +28,9 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
     motor_driver = MotorDriver()
     imu_reader = get_imu_reader()
 
-    if not launch_interface.ask_motor_permission():
+    actuator_status = motor_driver.get_actuator_status()
+
+    if not launch_interface.ask_motor_permission({"imu": imu_reader, "actuator_status": actuator_status}):
         print("Motor permission denied, aborting execution")
         return
 
@@ -117,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument("policy_dir", help="Policy directory path (required)")
     args = parser.parse_args()
 
-    launch_interface = KeyboardLaunchInterface()
+    launch_interface = WebSocketInterface()
     kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
 
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
