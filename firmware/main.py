@@ -28,9 +28,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
 
     #command_names in order for command interface
     command_names = metadata.get("command_names", [])
-
     home_positions = metadata.get("home_position", None)
-
     carry = init_session.run(None, {})[0]
 
     command_source = launch_interface.get_command_source()

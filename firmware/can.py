@@ -253,8 +253,8 @@ class MotorDriver:
             }
         else:
             self.home_position = {
-                id: home_position[self.robot.full_name_to_actuator_id[full_name]]
-                for full_name in home_position.keys()
+                home_position[self.robot.full_name_to_actuator_id[full_name]]: angle
+                for full_name, angle in home_position.items()
             }
 
         self.can = CANInterface()
