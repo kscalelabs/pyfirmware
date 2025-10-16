@@ -50,7 +50,7 @@ def _quat_to_gravity(q: tuple[float, float, float, float]) -> tuple[float, float
     return (gx, gy, gz)
 
 
-def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running: Event, lock: Lock) -> None:
+def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running: Event, lock: Lock) -> None:  # type: ignore[valid-type]
     try:
         ser = serial.Serial(device, baudrate, timeout=0)
         shm = _open_mmap(shm_path, shm_size)
@@ -60,7 +60,7 @@ def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running
     gyro = (0.0, 0.0, 0.0)
     quat = (0.0, 0.0, 0.0, 0.0)
 
-    while running.is_set():
+    while running.is_set():  # type: ignore[attr-defined]
         time.sleep(0.0001)
         if ser.read(1) == b"\x55":
             data = b"\x55" + ser.read(10)
@@ -69,7 +69,7 @@ def _read_loop(device: str, baudrate: int, shm_path: str, shm_size: int, running
                     gyro = _parse_gyro(data)
                 elif data[1] == 0x59:
                     quat = _parse_quat(data)
-                with lock:
+                with lock:  # type: ignore[attr-defined]
                     shm.seek(0)
                     shm.write(RECORD_STRUCT.pack(time.time(), *gyro, *quat))
 

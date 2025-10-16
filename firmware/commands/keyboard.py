@@ -6,7 +6,7 @@ import select
 import sys
 import termios
 import tty
-from typing import List
+from typing import Any, List
 
 from kmotions.motions import MOTIONS
 
@@ -37,7 +37,7 @@ class Keyboard(CommandInterface):
 
     def __init__(self, command_names: List[str]) -> None:
         super().__init__(policy_command_names=command_names)
-        self.active_motion = None
+        self.active_motion: Any = None
 
         # Set up stdin for raw input
         self._fd = sys.stdin.fileno()
@@ -51,7 +51,7 @@ class Keyboard(CommandInterface):
     def set_motion(self, motion_name: str) -> None:
         """Set the active motion."""
         print(f"Setting active motion to {motion_name}")
-        self.active_motion = MOTIONS[motion_name](dt=0.02)  # TODO hard coded
+        self.active_motion = MOTIONS[motion_name](dt=0.02)  # type: ignore[call-arg]  # TODO hard coded
 
     def _read_input(self) -> None:
         """Read keyboard input and update command vector."""
