@@ -28,11 +28,8 @@ kbot-sine
 
 To run your policy with keyboard control enabled:
 ```bash
-POLICY_DIR=<your-policy-dir> kbot-run
-```
-or 
-```bash
 export POLICY_DIR=<your-policy-dir>
+
 kbot-run
 ```
 **Keybindings**
