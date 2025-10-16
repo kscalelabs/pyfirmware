@@ -5,7 +5,7 @@ import socket
 import struct
 import sys
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
 from firmware.shutdown import get_shutdown_manager
@@ -75,13 +75,13 @@ class CANInterface:
             "payload": payload,
         }
 
-    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
+    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Optional[Dict[str, int]]:
         """Recursively receive can frames until the mux is the expected value."""
         try:
             frame = sock.recv(self.FRAME_SIZE)
             parsed_frame = self._parse_can_frame(frame)
         except Exception:
-            return -1
+            return None
 
         self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
         if parsed_frame["mux"] != mux:
@@ -119,8 +119,8 @@ class CANInterface:
             print(f"Scanning bus {canbus}...")
             actuators = []
             for actuator_id in self.ACTUATOR_RANGE:
-                if self._ping_actuator(sock, actuator_id) != -1:
-                    actuators.append(actuator_id)
+                if actuator_id_response := self._ping_actuator(sock, actuator_id):
+                    actuators.append(actuator_id_response["actuator_can_id"])
             if actuators:
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = sorted(list(set(actuators)))
@@ -130,13 +130,10 @@ class CANInterface:
         for canbus, actuators in self.actuators.items():
             print(f"\033[1;34m{canbus}\033[0m: \033[1;35m{actuators}\033[0m")
 
-    def _ping_actuator(self, sock: socket.socket, actuator_can_id: int) -> bool:
+    def _ping_actuator(self, sock: socket.socket, actuator_can_id: int) -> Optional[Dict[str, int]]:
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
         sock.send(frame)
-        response = self._receive_can_frame(sock, Mux.PING)
-        if response == -1:
-            return -1
-        return response["actuator_can_id"]
+        return self._receive_can_frame(sock, Mux.PING)
 
     def enable_motors(self) -> None:
         for canbus in self.sockets.keys():
@@ -165,7 +162,7 @@ class CANInterface:
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
                     frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    if frame == -1:  # timeout
+                    if frame is None:  # timeout
                         print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
                         continue
                     result = self._parse_feedback_response(frame)
@@ -202,7 +199,7 @@ class CANInterface:
             for actuator_id in self.actuators[bus]:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
                     frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
-                    if frame == -1:  # timeout
+                    if frame is None:  # timeout
                         print("\033[1;33mWARNING: [spdt] recv timeout\033[0m")
 
     def _build_pd_command_frame(
@@ -226,7 +223,7 @@ class CANInterface:
         """
         for canbus, sock in self.sockets.items():
             result = self._receive_can_frame(sock, Mux.FEEDBACK)
-            if result != -1:
+            if result is not None:
                 print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
 
     def close(self) -> None:
