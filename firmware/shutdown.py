@@ -64,7 +64,6 @@ class ShutdownManager:
         """
         with self._lock:
             self._cleanup_callbacks.append((name, callback))
-            print(f"🔧 Registered cleanup: {name}")
 
     def _signal_handler(self, signum: int, frame: object) -> None:
         """Handle shutdown signals (SIGINT, SIGTERM)."""
