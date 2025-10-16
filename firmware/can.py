@@ -5,7 +5,7 @@ import socket
 import struct
 import sys
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
 from firmware.shutdown import get_shutdown_manager
@@ -49,15 +49,15 @@ class CANInterface:
     ]
 
     def __init__(self) -> None:
-        self.sockets = {}
-        self.actuators = {}
+        self.sockets: dict[int, socket.socket] = {}
+        self.actuators: dict[int, list[int]] = {}
         self._find_actuators()
 
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
-    def _parse_can_frame(self, frame: bytes) -> Dict[str, int]:
+    def _parse_can_frame(self, frame: bytes) -> Dict[str, Any]:
         if len(frame) != 16:
             raise ValueError("frame must be exactly 16 bytes")
         can_id, _length, _pad, _res0, _len8, payload = struct.unpack(self.FRAME_FMT, frame)
@@ -88,7 +88,7 @@ class CANInterface:
             print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
             if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
                 self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
-                return self._receive_can_frame(sock, mux)  # call again recursively
+            return self._receive_can_frame(sock, mux)  # call again recursively
         else:
             return parsed_frame
 
@@ -145,9 +145,9 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def get_actuator_feedback(self) -> Dict[str, int]:
+    def get_actuator_feedback(self) -> Dict[int, Dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
-        results = {}
+        results: dict[int, dict[str, int]] = {}
         max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
         for tranche in range(max_tranches):
             # Send requests
@@ -161,11 +161,11 @@ class CANInterface:
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
-                    frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    if frame is None:  # timeout
+                    parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
+                    if parsed_frame is None:  # timeout
                         print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
                         continue
-                    result = self._parse_feedback_response(frame)
+                    result = self._parse_feedback_response(parsed_frame)
                     if actuator_id != result["actuator_can_id"]:
                         print(
                             f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
@@ -174,12 +174,12 @@ class CANInterface:
                     results[actuator_id] = result
         return results
 
-    def _parse_feedback_response(self, result: bytes) -> Dict[str, int]:
-        angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", result["payload"])
+    def _parse_feedback_response(self, response: Dict[str, Any]) -> Dict[str, int]:
+        angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", response["payload"])
         return {
-            "host_id": result["host_id"],
-            "actuator_can_id": result["actuator_can_id"],
-            "fault_flags": result["fault_flags"],
+            "host_id": response["host_id"],
+            "actuator_can_id": response["actuator_can_id"],
+            "fault_flags": response["fault_flags"],
             "angle_raw": angle_be,
             "angular_velocity_raw": ang_vel_be,
             "torque_raw": torque_be,
@@ -198,8 +198,8 @@ class CANInterface:
         for bus in self.sockets.keys():
             for actuator_id in self.actuators[bus]:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
-                    frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
-                    if frame is None:  # timeout
+                    parsed_frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
+                    if parsed_frame is None:  # timeout
                         print("\033[1;33mWARNING: [spdt] recv timeout\033[0m")
 
     def _build_pd_command_frame(
