@@ -148,21 +148,7 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def disable_motors(self, actuators: list[int]) -> list[int]:
-        fb = self.get_actuator_feedback()
-        to_disable = []
-        new_actuators = []
-        for id in actuators:
-            if id in fb:
-                data = self.actuators[id].can_to_physical_data(fb[id])
-                if abs(data["velocity"]) > 0.05:
-                    print(f"Did not disable motor {id} because it is moving")
-                    new_actuators.append(id)
-                    continue
-                if abs(data["angle"]) < 0.5:
-                    print(f"Disabling motor {id}")
-                    to_disable.append(id)
-
+    def disable_motors(self) -> list[int]:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 if actuator_id in to_disable:
@@ -170,7 +156,7 @@ class CANInterface:
 
                         print(f"✅ Successfully disabled motor {actuator_id}")
                     else:
-                        new_actuators.append(actuator_id)
+                        print(f"Failed to disable motor {actuator_id}")
             
         return new_actuators
 
@@ -319,15 +305,8 @@ class MotorDriver:
             self._ramp_down_motors()
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
-        try:
-            actuators = list(self.robot.actuators.keys())
-            tries = 0
-            while len(actuators) > 0 and tries < 5:
-                time.sleep(0.5)
-                actuators = self.can.disable_motors(actuators)
-                tries += 1
-        except Exception as e:
-            print(f"Error during disable motors: {e}")
+            
+        self.can.disable_motors()
 
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
