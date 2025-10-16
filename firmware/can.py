@@ -275,12 +275,13 @@ class MotorDriver:
             return
 
         print(f"Ramping down {len(joint_data)} actuators")
-        num_steps = 75
+        num_steps = 30
+        start_scale = self._last_scaling
         for i in range(num_steps):
             progress = i / (num_steps - 1)
-            scale = self._last_scaling * (1.0 - progress) ** 2
+            scale = start_scale * math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * (1.0 - progress))
             self.set_pd_targets(joint_angles, scaling=scale)
-            time.sleep(0.03)
+            time.sleep(0.1)
 
         # Final zero torque command
         self.set_pd_targets(joint_angles, scaling=0.0)
@@ -318,9 +319,7 @@ class MotorDriver:
         print("\nHoming...")
         home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for i in range(30):
-            scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29)
-            if scale > self.max_scaling:
-                break
+            scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) * self.max_scaling
             print(f"PD ramp: {scale:.3f}")
             self.set_pd_targets(home_targets, scaling=scale)
             time.sleep(0.1)
