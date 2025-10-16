@@ -166,7 +166,7 @@ class CANInterface:
                         print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
                         continue
                     result = self._parse_feedback_response(frame)
-                    if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
+                    if actuator_id != result["actuator_can_id"]:
                         print(
                             f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
                         )
