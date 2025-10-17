@@ -11,7 +11,9 @@ from firmware.commands.command_interface import CommandInterface
 class UDPListener(CommandInterface):
     """Listens for UDP commands and updates the command vector."""
 
-    def __init__(self, command_names: list[str], joint_names: list[str], port: int = 10000, host: str = "0.0.0.0") -> None:
+    def __init__(
+        self, command_names: list[str], joint_names: list[str], port: int = 10000, host: str = "0.0.0.0"
+    ) -> None:
         print(f"Using UDP input on port {port} for commands: {command_names}")
         super().__init__(policy_command_names=command_names)
         self.joint_names = joint_names
@@ -37,10 +39,10 @@ class UDPListener(CommandInterface):
                         continue
 
                     payload = command_data.get("commands", command_data)
-                    self.joint_cmd.clear() # reset joint cmd always
+                    self.joint_cmd.clear()  # reset joint cmd always
                     for name, value in payload.items():
-                        if name in self.cmd:
-                            self.cmd[str(name).lower()] = float(value)
+                        if name in self.policy_cmd:
+                            self.policy_cmd[str(name).lower()] = float(value)
                         elif name in self.joint_names:
                             self.joint_cmd[name] = float(value)
                         else:

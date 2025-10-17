@@ -8,6 +8,7 @@ import time
 import numpy as np
 
 from firmware.can import MotorDriver
+from firmware.commands.command_interface import CommandInterface
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.launchInterface import KeyboardLaunchInterface
@@ -41,6 +42,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         return
 
     # initialize command interface last because it can absorb stdin
+    command_interface: CommandInterface
     if command_source == "keyboard":
         command_interface = Keyboard(command_names)
     else:
@@ -100,7 +102,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
                 "joint_temps": temps,
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
-                "command": policy_cmd, # TODO log joint cmd
+                "command": policy_cmd,  # TODO log joint cmd
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },

@@ -6,7 +6,7 @@ import select
 import sys
 import termios
 import tty
-from typing import Any, List
+from typing import Any
 
 from kmotions.motions import MOTIONS
 
@@ -38,7 +38,7 @@ class Keyboard(CommandInterface):
     # TODO assert cmd names and fall back to zeros?
     # TODO begone joint limits
 
-    def __init__(self, command_names: List[str]) -> None:
+    def __init__(self, command_names: list[str]) -> None:
         super().__init__(policy_command_names=command_names)
         self.active_motion: Any = None
 
@@ -70,38 +70,38 @@ class Keyboard(CommandInterface):
                 if ch == "0":
                     self.reset_cmd()
                 elif ch == "w":
-                    self.cmd["xvel"] += 0.1
+                    self.policy_cmd["xvel"] += 0.1
                 elif ch == "s":
-                    self.cmd["xvel"] -= 0.1
+                    self.policy_cmd["xvel"] -= 0.1
                 elif ch == "a":
-                    self.cmd["yvel"] += 0.1
+                    self.policy_cmd["yvel"] += 0.1
                 elif ch == "d":
-                    self.cmd["yvel"] -= 0.1
+                    self.policy_cmd["yvel"] -= 0.1
                 elif ch == "q":
-                    self.cmd["yawrate"] += 0.1
+                    self.policy_cmd["yawrate"] += 0.1
                 elif ch == "e":
-                    self.cmd["yawrate"] -= 0.1
+                    self.policy_cmd["yawrate"] -= 0.1
 
                 # base pose
                 elif ch == "=":
-                    self.cmd["baseheight"] += 0.05
+                    self.policy_cmd["baseheight"] += 0.05
                 elif ch == "-":
-                    self.cmd["baseheight"] -= 0.05
+                    self.policy_cmd["baseheight"] -= 0.05
                 elif ch == "r":
-                    self.cmd["baseroll"] += 0.1
+                    self.policy_cmd["baseroll"] += 0.1
                 elif ch == "f":
-                    self.cmd["baseroll"] -= 0.1
+                    self.policy_cmd["baseroll"] -= 0.1
                 elif ch == "t":
-                    self.cmd["basepitch"] += 0.1
+                    self.policy_cmd["basepitch"] += 0.1
                 elif ch == "g":
-                    self.cmd["basepitch"] -= 0.1
+                    self.policy_cmd["basepitch"] -= 0.1
 
                 # Clamp velocity commands to ±0.8, other commands to ±0.3
-                for cmd_name, value in self.cmd.items():
+                for cmd_name, value in self.policy_cmd.items():
                     if cmd_name in ["xvel", "yvel", "yawrate"]:
-                        self.cmd[cmd_name] = max(-0.8, min(0.8, value))
+                        self.policy_cmd[cmd_name] = max(-0.8, min(0.8, value))
                     else:
-                        self.cmd[cmd_name] = max(-0.3, min(0.3, value))
+                        self.policy_cmd[cmd_name] = max(-0.3, min(0.3, value))
 
                 # motion controls
                 if ch == "z":
@@ -122,7 +122,7 @@ class Keyboard(CommandInterface):
             except (IOError, EOFError):
                 continue
 
-    def get_cmd(self) -> List[float]:
+    def get_cmd(self) -> tuple[dict[str, float], dict[str, float]]:
         """Get current command vector per policy specification."""
         if self.active_motion:
             commands = self.active_motion.get_next_motion_frame()

@@ -27,8 +27,9 @@ class CommandInterface(ABC):
     """Abstract base class for command input interfaces."""
 
     def __init__(self, policy_command_names: list[str]) -> None:
+        self.policy_command_names = policy_command_names
         self.policy_cmd = {cmd: 0.0 for cmd in policy_command_names}
-        self.joint_cmd = {}
+        self.joint_cmd: dict[str, float] = {}
 
         print("\nPolicy Command Names Supported")
         print("-" * 30)
