@@ -5,7 +5,7 @@ import socket
 import time
 from typing import Optional
 
-from firmware.commands.command_interface import CMD_NAMES, CommandInterface
+from firmware.commands.command_interface import CommandInterface
 
 
 class UDPListener(CommandInterface):
@@ -37,6 +37,7 @@ class UDPListener(CommandInterface):
                         continue
 
                     payload = command_data.get("commands", command_data)
+                    self.joint_cmd.clear() # reset joint cmd always
                     for name, value in payload.items():
                         if name in self.cmd:
                             self.cmd[str(name).lower()] = float(value)
@@ -58,21 +59,3 @@ class UDPListener(CommandInterface):
         if self.sock:
             self.sock.close()
             self.sock = None
-
-
-if __name__ == "__main__":
-    print("Starting UDP listener on port 10000...")
-    print("Send JSON commands like: {'commands': [0.1, -0.05, 0.0]} or {'type': 'reset'}")
-    print("Press Ctrl+C to stop")
-
-    listener = UDPListener(command_names=CMD_NAMES, port=10000)
-
-    try:
-        while True:
-            cmd = listener.get_cmd()
-            print(f"Current command: {cmd}")
-            time.sleep(1.0)
-
-    except KeyboardInterrupt:
-        print("\nStopping UDP listener...")
-        listener.stop()
