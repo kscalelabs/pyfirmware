@@ -3,17 +3,20 @@
 import json
 import socket
 import time
-from typing import List, Optional
+from typing import Optional
 
-from firmware.commands.command_interface import CMD_NAMES, CommandInterface
+from firmware.commands.command_interface import CommandInterface
 
 
 class UDPListener(CommandInterface):
     """Listens for UDP commands and updates the command vector."""
 
-    def __init__(self, command_names: List[str], port: int = 10000, host: str = "0.0.0.0") -> None:
+    def __init__(
+        self, command_names: list[str], joint_names: list[str], port: int = 10000, host: str = "0.0.0.0"
+    ) -> None:
         print(f"Using UDP input on port {port} for commands: {command_names}")
         super().__init__(policy_command_names=command_names)
+        self.joint_names = joint_names
 
         self.port = port
         self.host = host
@@ -36,8 +39,14 @@ class UDPListener(CommandInterface):
                         continue
 
                     payload = command_data.get("commands", command_data)
+                    self.joint_cmd.clear()  # reset joint cmd always
                     for name, value in payload.items():
-                        self.cmd[str(name).lower()] = float(value)
+                        if name in self.policy_cmd:
+                            self.policy_cmd[str(name).lower()] = float(value)
+                        elif name in self.joint_names:
+                            self.joint_cmd[name] = float(value)
+                        else:
+                            print(f"Warning: Command name '{name}' not supported by policy")
 
                 except socket.timeout:
                     continue
@@ -52,21 +61,3 @@ class UDPListener(CommandInterface):
         if self.sock:
             self.sock.close()
             self.sock = None
-
-
-if __name__ == "__main__":
-    print("Starting UDP listener on port 10000...")
-    print("Send JSON commands like: {'commands': [0.1, -0.05, 0.0]} or {'type': 'reset'}")
-    print("Press Ctrl+C to stop")
-
-    listener = UDPListener(command_names=CMD_NAMES, port=10000)
-
-    try:
-        while True:
-            cmd = listener.get_cmd()
-            print(f"Current command: {cmd}")
-            time.sleep(1.0)
-
-    except KeyboardInterrupt:
-        print("\nStopping UDP listener...")
-        listener.stop()
