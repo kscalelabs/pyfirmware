@@ -32,7 +32,7 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
         print("=" * 30 + "\n")
         for i, (key, value) in enumerate(metadata.items(), 1):
             value_list = value if isinstance(value, list) else [value]
-            print(f"{i:2d}. {key:<20} :")
+            print(f"{i:2d}. {key}: ")
             for j, item in enumerate(value_list, 1):
                 print(f"    {j:2d}. {item}")
         print("=" * 30 + "\n")
