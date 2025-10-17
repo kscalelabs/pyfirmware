@@ -145,7 +145,55 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def get_actuator_feedback(self) -> Dict[int, Dict[str, int]]:
+    def disable_motors(self) -> list[int]:
+        for canbus in self.sockets.keys():
+            still_active = self.actuators[canbus]
+            failed = []
+            attempts = 0
+            while attempts < 10:
+                print(f"Still active: {still_active}")
+                for actuator_id in still_active:
+                    if self._disable_motor(canbus, actuator_id):
+                        print(f"✅ Successfully disabled motor {actuator_id}")
+                    else:
+                        failed.append(actuator_id)
+                        print(f"Failed to disable motor {actuator_id}")
+                    time.sleep(0.1)
+                if len(failed) == 0:
+                    break
+                still_active = failed
+                failed = []
+                time.sleep(0.5)
+                attempts += 1
+
+    def _disable_motor(self, canbus: int, actuator_can_id: int) -> bool:
+        """Send motor disable command and wait for feedback response.
+        
+        Returns True if disable was successful (no faults), False otherwise.
+        """
+        frame = self._build_can_frame(actuator_can_id, Mux.MOTOR_DISABLE)
+        self.sockets[canbus].send(frame)
+
+        # Wait for feedback response (Type 2 feedback frame)
+        response = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
+
+        if not response:
+            print(f"WARNING: No response from actuator {actuator_can_id} during disable")
+            return False
+
+        # Check for faults in the response
+        if response["fault_flags"] != 0:
+            print(f"WARNING: Fault flags set (0x{response['fault_flags']:02X}) for actuator {actuator_can_id} during disable")
+            return False
+
+        # Check mode status (should be 0 for disabled state)
+        if response["mode_status"] != 0:
+            print(f"WARNING: Unexpected mode status (0x{response['mode_status']:02X}) for actuator {actuator_can_id} after disable")
+            return False
+
+        return True
+
+    def get_actuator_feedback(self) -> dict[str, dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
         results: dict[int, dict[str, int]] = {}
         max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
@@ -268,6 +316,8 @@ class MotorDriver:
             self._ramp_down_motors()
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
+
+        self.can.disable_motors()
 
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""

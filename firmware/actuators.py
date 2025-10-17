@@ -12,6 +12,7 @@ class Mux:
     CONTROL: int = 0x01
     FEEDBACK: int = 0x02
     MOTOR_ENABLE: int = 0x03
+    MOTOR_DISABLE: int = 0x04
     FAULT_RESPONSE: int = 0x15
 
 
