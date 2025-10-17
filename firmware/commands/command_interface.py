@@ -30,6 +30,12 @@ class CommandInterface(ABC):
         self.policy_cmd = {cmd: 0.0 for cmd in policy_command_names}
         self.joint_cmd = {}
 
+        print("\nPolicy Command Names Supported")
+        print("-" * 30)
+        for i, cmd_name in enumerate(policy_command_names, 1):
+            print(f"{i:2d}. {cmd_name:<20}")
+        print("-" * 30 + "\n")
+
         self._running = False
         self._thread: Optional[threading.Thread] = None
 

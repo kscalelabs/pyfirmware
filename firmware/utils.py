@@ -27,9 +27,16 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
         init_model_bytes = init_file.read()
         step_model_bytes = step_file.read()
         metadata = json.load(metadata_file)
-        print("kinfer model metadata:", metadata)
 
-    print("Creating ONNX inference sessions...")
+        print("\nKinfer Model Metadata")
+        print("=" * 30 + "\n")
+        for i, (key, value) in enumerate(metadata.items(), 1):
+            value_list = value if isinstance(value, list) else [value]
+            print(f"{i:2d}. {key:<20} :")
+            for j, item in enumerate(value_list, 1):
+                print(f"    {j:2d}. {item}")
+        print("=" * 30 + "\n")
+
     init_session = ort.InferenceSession(init_model_bytes)
     step_session = ort.InferenceSession(step_model_bytes)
 
