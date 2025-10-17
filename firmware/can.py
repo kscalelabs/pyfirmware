@@ -47,26 +47,6 @@ class CANInterface:
         self.sock: socket.socket = socket
         self.active_actuators: list[ActuatorConfig] = []
 
-    def find_actuators(self, can_index: int) -> None:
-        print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
-        
-        sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
-        try:
-            sock.bind((f"can{can_index}",))
-            sock.settimeout(self.CAN_TIMEOUT)
-            sock.send(self._build_can_frame(0, Mux.PING))  # test message
-        except Exception:
-            return []
-
-        print(f"Scanning bus {can_index}...")
-        for actuator_id in self.ACTUATOR_RANGE:
-            if actuator_id_response := self._ping_actuator(sock, actuator_id):
-                found_id = actuator_id_response["actuator_can_id"]
-                self.active_actuators.append(self.robotcfg.actuators[found_id])
-
-        print(f"\033[1;34m{can_index}\033[0m: \033[1;35m{len(self.active_actuators)}\033[0m")
-        return self.active_actuators
-
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
@@ -119,6 +99,26 @@ class CANInterface:
         self._check_for_faults(self.MUX_0x15_FAULT_CODES, fault_value, actuator_can_id)
         self._check_for_faults(self.MUX_0x15_WARNING_CODES, warning_value, actuator_can_id)
 
+    def find_actuators(self, can_index: int) -> None:
+        print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
+
+        sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+        try:
+            sock.bind((f"can{can_index}",))
+            sock.settimeout(self.CAN_TIMEOUT)
+            sock.send(self._build_can_frame(0, Mux.PING))  # test message
+        except Exception:
+            return []
+
+        print(f"Scanning bus {can_index}...")
+        for actuator_id in self.ACTUATOR_RANGE:
+            if actuator_id_response := self._ping_actuator(sock, actuator_id):
+                found_id = actuator_id_response["actuator_can_id"]
+                self.active_actuators.append(self.robotcfg.actuators[found_id])
+
+        print(f"\033[1;34m{can_index}\033[0m: \033[1;35m{len(self.active_actuators)}\033[0m")
+        return self.active_actuators
+
     def _ping_actuator(self, actuator_can_id: int) -> Optional[Dict[str, int]]:
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
         self.sock.send(frame)
@@ -149,7 +149,7 @@ class CANInterface:
                 continue
             result = self._parse_feedback_response(parsed_frame)
             actuator_id = result["actuator_can_id"]
-                
+
             results[actuator_id] = result
         return results
 

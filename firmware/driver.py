@@ -4,8 +4,8 @@ import math
 import sys
 import time
 
-from firmware.can import CANInterface
 from firmware.actuators import RobotConfig
+from firmware.can import CANInterface
 from firmware.shutdown import get_shutdown_manager
 
 CANBUS_RANGE = range(0, 7)
