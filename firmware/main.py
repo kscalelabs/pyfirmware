@@ -8,6 +8,7 @@ import time
 import numpy as np
 
 from firmware.can import MotorDriver
+from firmware.commands.command_interface import CommandInterface
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.launchInterface import KeyboardLaunchInterface, WebSocketInterface, LaunchInterface
@@ -20,12 +21,16 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
     shutdown_mgr = get_shutdown_manager()
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
-    joint_order = metadata.get("joint_names", None)
-    command_names = metadata.get("command_names", [])
     carry = init_session.run(None, {})[0]
 
+    joint_order = metadata["joint_names"]
+    command_names = metadata["command_names"]
+    joint_biases = metadata.get("joint_biases", [])
+    home_positions = {name: bias for name, bias in zip(joint_order, joint_biases)}
+
     command_source = launch_interface.get_command_source()
-    motor_driver = MotorDriver()
+
+    motor_driver = MotorDriver(home_positions=home_positions)
     imu_reader = get_imu_reader()
 
     actuator_status = motor_driver.get_actuator_status()
@@ -42,7 +47,11 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
         return
 
     # initialize command interface last because it can absorb stdin
-    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
+    command_interface: CommandInterface
+    if command_source == "keyboard":
+        command_interface = Keyboard(command_names)
+    else:
+        command_interface = UDPListener(command_names, joint_names=joint_order)
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
     
     print("Starting policy...")
@@ -55,7 +64,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = command_interface.get_cmd()
+        policy_cmd, joint_cmd = command_interface.get_cmd()
         t3 = time.perf_counter()
 
         action, carry = step_session.run(
@@ -65,13 +74,14 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
                 "joint_angular_velocities": np.array(joint_vels, dtype=np.float32),
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
-                "command": np.array(command, dtype=np.float32),
+                "command": np.array([v for v in policy_cmd.values()], dtype=np.float32),
                 "carry": carry,
             },
         )
         t4 = time.perf_counter()
 
-        motor_driver.take_action(action, joint_order)
+        named_action = joint_cmd | {joint_name: action for joint_name, action in zip(joint_order, action)}
+        motor_driver.take_action(named_action)
         t5 = time.perf_counter()
         motor_driver.flush_can_busses()
         t6 = time.perf_counter()
@@ -97,7 +107,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
                 "joint_temps": temps,
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
-                "command": command,
+                "command": policy_cmd,  # TODO log joint cmd
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },

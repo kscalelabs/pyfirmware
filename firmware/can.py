@@ -5,7 +5,7 @@ import socket
 import struct
 import sys
 import time
-from typing import Dict
+from typing import Any, Dict, Optional
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
 from firmware.shutdown import get_shutdown_manager
@@ -49,15 +49,15 @@ class CANInterface:
     ]
 
     def __init__(self) -> None:
-        self.sockets = {}
-        self.actuators = {}
+        self.sockets: dict[int, socket.socket] = {}
+        self.actuators: dict[int, list[int]] = {}
         self._find_actuators()
 
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
-    def _parse_can_frame(self, frame: bytes) -> Dict[str, int]:
+    def _parse_can_frame(self, frame: bytes) -> Dict[str, Any]:
         if len(frame) != 16:
             raise ValueError("frame must be exactly 16 bytes")
         can_id, _length, _pad, _res0, _len8, payload = struct.unpack(self.FRAME_FMT, frame)
@@ -75,20 +75,20 @@ class CANInterface:
             "payload": payload,
         }
 
-    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Dict[str, int]:
+    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Optional[Dict[str, int]]:
         """Recursively receive can frames until the mux is the expected value."""
         try:
             frame = sock.recv(self.FRAME_SIZE)
             parsed_frame = self._parse_can_frame(frame)
         except Exception:
-            return -1
+            return None
 
         self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
         if parsed_frame["mux"] != mux:
             print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
             if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
                 self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
-                return self._receive_can_frame(sock, mux)  # call again recursively
+            return self._receive_can_frame(sock, mux)  # call again recursively
         else:
             return parsed_frame
 
@@ -119,8 +119,8 @@ class CANInterface:
             print(f"Scanning bus {canbus}...")
             actuators = []
             for actuator_id in self.ACTUATOR_RANGE:
-                if self._ping_actuator(sock, actuator_id) != -1:
-                    actuators.append(actuator_id)
+                if actuator_id_response := self._ping_actuator(sock, actuator_id):
+                    actuators.append(actuator_id_response["actuator_can_id"])
             if actuators:
                 self.sockets[canbus] = sock
                 self.actuators[canbus] = sorted(list(set(actuators)))
@@ -130,13 +130,10 @@ class CANInterface:
         for canbus, actuators in self.actuators.items():
             print(f"\033[1;34m{canbus}\033[0m: \033[1;35m{actuators}\033[0m")
 
-    def _ping_actuator(self, sock: socket.socket, actuator_can_id: int) -> bool:
+    def _ping_actuator(self, sock: socket.socket, actuator_can_id: int) -> Optional[Dict[str, int]]:
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
         sock.send(frame)
-        response = self._receive_can_frame(sock, Mux.PING)
-        if response == -1:
-            return -1
-        return response["actuator_can_id"]
+        return self._receive_can_frame(sock, Mux.PING)
 
     def enable_motors(self) -> None:
         for canbus in self.sockets.keys():
@@ -148,9 +145,9 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def get_actuator_feedback(self) -> Dict[str, int]:
+    def get_actuator_feedback(self) -> Dict[int, Dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
-        results = {}
+        results: dict[int, dict[str, int]] = {}
         max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
         for tranche in range(max_tranches):
             # Send requests
@@ -164,12 +161,12 @@ class CANInterface:
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
-                    frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    if frame == -1:  # timeout
+                    parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
+                    if parsed_frame is None:  # timeout
                         print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
                         continue
-                    result = self._parse_feedback_response(frame)
-                    if actuator_id != result["actuator_can_id"]:  # TODO enforce and flush
+                    result = self._parse_feedback_response(parsed_frame)
+                    if actuator_id != result["actuator_can_id"]:
                         print(
                             f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
                         )
@@ -177,12 +174,12 @@ class CANInterface:
                     results[actuator_id] = result
         return results
 
-    def _parse_feedback_response(self, result: bytes) -> Dict[str, int]:
-        angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", result["payload"])
+    def _parse_feedback_response(self, response: Dict[str, Any]) -> Dict[str, int]:
+        angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", response["payload"])
         return {
-            "host_id": result["host_id"],
-            "actuator_can_id": result["actuator_can_id"],
-            "fault_flags": result["fault_flags"],
+            "host_id": response["host_id"],
+            "actuator_can_id": response["actuator_can_id"],
+            "fault_flags": response["fault_flags"],
             "angle_raw": angle_be,
             "angular_velocity_raw": ang_vel_be,
             "torque_raw": torque_be,
@@ -201,8 +198,8 @@ class CANInterface:
         for bus in self.sockets.keys():
             for actuator_id in self.actuators[bus]:
                 if actuator_id in actions:  # Only wait for responses from actuators we commanded
-                    frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
-                    if frame == -1:  # timeout
+                    parsed_frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
+                    if parsed_frame is None:  # timeout
                         print("\033[1;33mWARNING: [spdt] recv timeout\033[0m")
 
     def _build_pd_command_frame(
@@ -226,7 +223,7 @@ class CANInterface:
         """
         for canbus, sock in self.sockets.items():
             result = self._receive_can_frame(sock, Mux.FEEDBACK)
-            if result != -1:
+            if result is not None:
                 print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
 
     def close(self) -> None:
@@ -243,9 +240,14 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, max_scaling: float = 1.0) -> None:
+    def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
+
+        self.home_positions: dict[int, float] = {}
+        for actuator in self.robot.actuators.values():
+            self.home_positions[actuator.can_id] = home_positions.get(actuator.full_name, actuator.default_home)
+
         self.can = CANInterface()
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self._motors_enabled = False
@@ -268,20 +270,21 @@ class MotorDriver:
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
         print("Ramping down motors...")
-        joint_data: dict[int, dict[str, float]] = self.get_joint_angles_and_velocities()
-        joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}
+        joint_data = self.get_joint_angles_and_velocities()
+        joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}  # type: ignore[misc]
         if len(joint_data) == 0:
             print("No actuators responding, skipping ramp down")
             self._motors_enabled = False
             return
 
         print(f"Ramping down {len(joint_data)} actuators")
-        num_steps = 75
+        num_steps = 30
+        start_scale = self._last_scaling
         for i in range(num_steps):
             progress = i / (num_steps - 1)
-            scale = self._last_scaling * (1.0 - progress) ** 2
+            scale = start_scale * math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * (1.0 - progress))
             self.set_pd_targets(joint_angles, scaling=scale)
-            time.sleep(0.03)
+            time.sleep(0.1)
 
         # Final zero torque command
         self.set_pd_targets(joint_angles, scaling=0.0)
@@ -307,13 +310,10 @@ class MotorDriver:
         print("✅ Motors enabled")
 
         print("\nHoming...")
-        home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for i in range(30):
-            scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29)
-            if scale > self.max_scaling:
-                break
+            scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) * self.max_scaling
             print(f"PD ramp: {scale:.3f}")
-            self.set_pd_targets(home_targets, scaling=scale)
+            self.set_pd_targets(self.home_positions, scaling=scale)
             time.sleep(0.1)
         print("✅ Homing complete")
 
@@ -325,7 +325,7 @@ class MotorDriver:
             _ = self.can.get_actuator_feedback()
             t1 = time.perf_counter()
             angle = 0.3 * math.sin(2 * math.pi * 0.5 * (t - t0))
-            action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            action = {id: angle + self.home_positions[id] for id in self.robot.actuators.keys()}
             t2 = time.perf_counter()
             self.set_pd_targets(action, scaling=self.max_scaling)
             t3 = time.perf_counter()
@@ -345,9 +345,9 @@ class MotorDriver:
     def flush_can_busses(self) -> None:
         self.can.flush_can_busses()
 
-    def get_joint_angles_and_velocities(self) -> dict[int, dict[str, float]]:
+    def get_joint_angles_and_velocities(self) -> dict[int, dict[str, float | str | int]]:
         fb = self.can.get_actuator_feedback()
-        answer = {}
+        answer: dict[int, dict[str, float | str | int]] = {}
         for id in self.robot.actuators.keys():
             if id in fb:
                 answer[id] = self.robot.actuators[id].can_to_physical_data(fb[id])
@@ -376,19 +376,20 @@ class MotorDriver:
             torques_order.append(joint_data["torque"])
             temps_order.append(joint_data["temperature"])
 
-        return joint_angles_order, joint_vels_order, torques_order, temps_order
+        return joint_angles_order, joint_vels_order, torques_order, temps_order  # type: ignore[return-value]
 
-    def take_action(self, action: list[float], joint_order: list[str]) -> None:
-        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
+    def take_action(self, actions: dict[str, float]) -> None:
+        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in actions.items()}
         self.set_pd_targets(action, scaling=self.max_scaling)
 
 
 def main() -> None:
     """Run sine wave test on all actuators."""
-    driver = MotorDriver(max_scaling=0.1)
+    driver = MotorDriver(dict(), max_scaling=0.1)
     driver.get_actuator_status()
     input("Press Enter to enable motors...")
     driver.enable_and_home_motors()
+
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 

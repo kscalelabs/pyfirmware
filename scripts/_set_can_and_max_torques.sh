@@ -2,13 +2,6 @@
 
 selected="$*"
 
-declare -A actuators=(
-    [11]="Lsp" [12]="Lsr" [13]="Lsy" [14]="Lep" [15]="Lwr" [16]="Lwy" [17]="Lwp"  # Left arm
-    [21]="Rsp" [22]="Rsr" [23]="Rsy" [24]="Rep" [25]="Rwr" [26]="Rwy" [27]="Rwp"  # Right arm  
-    [31]="Lhp" [32]="Lhr" [33]="Lhy" [34]="Lkp" [35]="Lap"                         # Left leg
-    [41]="Rhp" [42]="Rhr" [43]="Rhy" [44]="Rkp" [45]="Rap"                         # Right leg
-)
-
 declare -A max_torques=(
     [11]=42.0 [12]=42.0 [13]=11.9 [14]=11.9 [15]=9.8 [16]=9.8 [17]=9.8            # Left arm
     [21]=42.0 [22]=42.0 [23]=11.9 [24]=11.9 [25]=9.8 [26]=9.8 [27]=9.8            # Right arm
@@ -43,13 +36,13 @@ for id_dec in $selected; do
         resp="$(candump  -T 25 $interface,0200${id}FD:0000FF00 & sleep .01;
 		cansend $interface 1200FD${id}#0B.70.00.00.${val_littleendian})"
         if [ "$resp" ]; then
-	    echo "Set max_torque to $(printf "%04.1f" "$val") on actuator $id_dec (${actuators[$id_dec]}): $resp"
+	    echo "Set max_torque to $(printf "%04.1f" "$val") on actuator $id_dec: $resp"
 	    last_iface="$interface"
             break
         fi
     done
 
     if [ -z "$resp" ]; then
-        echo "No response from actuator $id_dec (${actuators[$id_dec]})"
+        echo "No response from actuator $id_dec"
     fi
 done

@@ -20,6 +20,8 @@ _set_can_and_max_torques.sh
 # ---------------------------
 # Run firmware policy loop
 # ---------------------------
-echo "Running firmware with policy directory: $POLICY_DIR"
+echo "=============================================="
+echo "               Running firmware               "
+echo "=============================================="
 PY="$(command -v python)"
 sudo -E chrt 30 "$PY" -m firmware.main "$POLICY_DIR"

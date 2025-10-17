@@ -194,7 +194,7 @@ class KeyboardLaunchInterface(LaunchInterface):
                 return False
             print("Invalid input. Please enter 'y' or 'n'")
 
-    def get_kinfer_path(self, policy_dir_path: str) -> Optional[str]:
+    def get_kinfer_path(self, policy_dir_path: str) -> str:
         """TUI: live-search + arrow-key selection for .kinfer files."""
         policy_dir = Path(policy_dir_path)
 
@@ -211,4 +211,7 @@ class KeyboardLaunchInterface(LaunchInterface):
             sys.exit(1)
 
         selected = curses.wrapper(_curses_select_with_filter, kinfer_files)
-        return str(selected) if selected else None
+        if not selected:
+            print("No policy file selected")
+            sys.exit(1)
+        return str(selected)
