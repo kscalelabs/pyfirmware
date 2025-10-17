@@ -240,9 +240,14 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, max_scaling: float = 1.0) -> None:
+    def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
+
+        self.home_positions: dict[int, float] = {}
+        for actuator in self.robot.actuators.values():
+            self.home_positions[actuator.can_id] = home_positions.get(actuator.full_name, actuator.default_home)
+
         self.can = CANInterface()
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self._motors_enabled = False
@@ -317,11 +322,10 @@ class MotorDriver:
         print("✅ Motors enabled")
 
         print("\nHoming...")
-        home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for i in range(30):
             scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) * self.max_scaling
             print(f"PD ramp: {scale:.3f}")
-            self.set_pd_targets(home_targets, scaling=scale)
+            self.set_pd_targets(self.home_positions, scaling=scale)
             time.sleep(0.1)
         print("✅ Homing complete")
 
@@ -333,7 +337,7 @@ class MotorDriver:
             _ = self.can.get_actuator_feedback()
             t1 = time.perf_counter()
             angle = 0.3 * math.sin(2 * math.pi * 0.5 * (t - t0))
-            action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            action = {id: angle + self.home_positions[id] for id in self.robot.actuators.keys()}
             t2 = time.perf_counter()
             self.set_pd_targets(action, scaling=self.max_scaling)
             t3 = time.perf_counter()
@@ -393,9 +397,11 @@ class MotorDriver:
 
 def main() -> None:
     """Run sine wave test on all actuators."""
-    driver = MotorDriver(max_scaling=0.1)
+    driver = MotorDriver(dict(), max_scaling=0.1)
+
     input("Press Enter to enable motors...")
     driver.enable_and_home_motors()
+
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 

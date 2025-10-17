@@ -35,7 +35,7 @@ class ActuatorConfig:
     can_id: int
     full_name: str
     actuator_type: RobstrideActuatorType
-    joint_bias: float
+    default_home: float
     kp: float
     kd: float
     # can ranges:
@@ -200,7 +200,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=100.0,
             kd=8.284,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         12: ActuatorConfig(
             can_id=12,
@@ -209,7 +209,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=100.0,
             kd=8.257,
-            joint_bias=math.radians(10.0),
+            default_home=math.radians(10.0),
         ),
         13: ActuatorConfig(
             can_id=13,
@@ -218,7 +218,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride02),
             kp=100.0,
             kd=2.945,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         14: ActuatorConfig(
             can_id=14,
@@ -227,7 +227,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride02),
             kp=80.0,
             kd=2.266,
-            joint_bias=math.radians(-90.0),
+            default_home=math.radians(-90.0),
         ),
         15: ActuatorConfig(
             can_id=15,
@@ -236,7 +236,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=20.0,
             kd=0.295,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         16: ActuatorConfig(
             can_id=16,
@@ -245,7 +245,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=4,
             kd=0.06,
-            joint_bias=math.radians(0),
+            default_home=math.radians(0),
         ),
         # Right arm
         21: ActuatorConfig(
@@ -255,7 +255,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=100.0,
             kd=8.284,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         22: ActuatorConfig(
             can_id=22,
@@ -264,7 +264,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=100.0,
             kd=8.257,
-            joint_bias=math.radians(-10.0),
+            default_home=math.radians(-10.0),
         ),
         23: ActuatorConfig(
             can_id=23,
@@ -273,7 +273,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride02),
             kp=100.0,
             kd=2.945,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         24: ActuatorConfig(
             can_id=24,
@@ -282,7 +282,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride02),
             kp=100.0,
             kd=2.266,
-            joint_bias=math.radians(90.0),
+            default_home=math.radians(90.0),
         ),
         25: ActuatorConfig(
             can_id=25,
@@ -291,7 +291,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=20.0,
             kd=0.295,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         26: ActuatorConfig(
             can_id=26,
@@ -300,7 +300,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride00),
             kp=4,
             kd=0.06,
-            joint_bias=math.radians(0),
+            default_home=math.radians(0),
         ),
         # Left leg
         31: ActuatorConfig(
@@ -310,7 +310,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride04),
             kp=150.0,
             kd=24.722,
-            joint_bias=math.radians(20.0),
+            default_home=math.radians(20.0),
         ),
         32: ActuatorConfig(
             can_id=32,
@@ -319,7 +319,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=200.0,
             kd=26.387,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         33: ActuatorConfig(
             can_id=33,
@@ -328,7 +328,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=100.0,
             kd=3.419,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         34: ActuatorConfig(
             can_id=34,
@@ -337,7 +337,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride04),
             kp=150.0,
             kd=8.654,
-            joint_bias=math.radians(50.0),
+            default_home=math.radians(50.0),
         ),
         35: ActuatorConfig(
             can_id=35,
@@ -346,7 +346,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride02),
             kp=40.0,
             kd=0.99,
-            joint_bias=math.radians(-30.0),
+            default_home=math.radians(-30.0),
         ),
         # Right leg
         41: ActuatorConfig(
@@ -356,7 +356,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride04),
             kp=150.0,
             kd=24.722,
-            joint_bias=math.radians(-20.0),
+            default_home=math.radians(-20.0),
         ),
         42: ActuatorConfig(
             can_id=42,
@@ -365,7 +365,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=200.0,
             kd=26.387,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         43: ActuatorConfig(
             can_id=43,
@@ -374,7 +374,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride03),
             kp=100.0,
             kd=3.419,
-            joint_bias=0.0,
+            default_home=0.0,
         ),
         44: ActuatorConfig(
             can_id=44,
@@ -383,7 +383,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride04),
             kp=150.0,
             kd=8.654,
-            joint_bias=math.radians(-50.0),
+            default_home=math.radians(-50.0),
         ),
         45: ActuatorConfig(
             can_id=45,
@@ -392,7 +392,7 @@ class RobotConfig:
             **actuator_ranges(RobstrideActuatorType.Robstride02),
             kp=40.0,
             kd=0.99,
-            joint_bias=math.radians(30.0),
+            default_home=math.radians(30.0),
         ),
     }
 

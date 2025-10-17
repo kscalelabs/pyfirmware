@@ -25,9 +25,12 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
 
     joint_order = metadata["joint_names"]
     command_names = metadata["command_names"]
+    joint_biases = metadata.get("joint_biases", [])
+    home_positions = {name: bias for name, bias in zip(joint_order, joint_biases)}
 
     command_source = launch_interface.get_command_source()
-    motor_driver = MotorDriver()
+
+    motor_driver = MotorDriver(home_positions=home_positions)
     imu_reader = get_imu_reader()
 
     if not launch_interface.ask_motor_permission():
