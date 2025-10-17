@@ -38,13 +38,17 @@ if [ "$gstreamer" = "true" ]; then
     sudo -E chrt 29 "$PY" "$(dirname "$(realpath "$0")")/../firmware/gstreamer.py" --flip > /dev/null 2>&1 &
     gstreamer_pid=$!
 
-    echo "Running firmware..."
+    echo "=============================================="
+    echo "               Running firmware               "
+    echo "=============================================="
     sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
 
     echo "Stopping GStreamer (PID: $gstreamer_pid)"
     kill "$gstreamer_pid" 2>/dev/null || true
 else
-    echo "Running firmware..."
+    echo "=============================================="
+    echo "               Running firmware               "
+    echo "=============================================="
     sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
 fi
 

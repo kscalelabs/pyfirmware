@@ -36,7 +36,7 @@ class BNO055:
         if hasattr(self, "i2c") and self.i2c is not None:
             try:
                 self.i2c.close()
-                self.i2c = None
+                self.i2c = None  # type: ignore[assignment]
             except Exception as e:
                 print(f"Error closing BNO055 I2C: {e}")
 

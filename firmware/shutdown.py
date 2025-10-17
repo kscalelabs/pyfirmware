@@ -37,10 +37,10 @@ class ShutdownManager:
 
     def __init__(self) -> None:
         """Initialize the shutdown manager."""
-        if self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
 
-        self._initialized = True
+        self._initialized: bool = True
         self._cleanup_callbacks: List[tuple[str, Callable[[], None]]] = []
         self._shutdown_done = False
 
@@ -64,7 +64,6 @@ class ShutdownManager:
         """
         with self._lock:
             self._cleanup_callbacks.append((name, callback))
-            print(f"🔧 Registered cleanup: {name}")
 
     def _signal_handler(self, signum: int, frame: object) -> None:
         """Handle shutdown signals (SIGINT, SIGTERM)."""
