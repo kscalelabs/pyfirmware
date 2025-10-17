@@ -386,8 +386,8 @@ class MotorDriver:
 
         return joint_angles_order, joint_vels_order, torques_order, temps_order  # type: ignore[return-value]
 
-    def take_action(self, action: list[float], joint_order: list[str]) -> None:
-        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
+    def take_action(self, actions: dict[str, float]) -> None:
+        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in actions.items()}
         self.set_pd_targets(action, scaling=self.max_scaling)
 
 

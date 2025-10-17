@@ -35,6 +35,9 @@ def clamp(name: str, value: float) -> float:
 class Keyboard(CommandInterface):
     """Tracks keyboard presses to update the command vector."""
 
+    # TODO assert cmd names and fall back to zeros?
+    # TODO begone joint limits
+
     def __init__(self, command_names: List[str]) -> None:
         super().__init__(policy_command_names=command_names)
         self.active_motion: Any = None
@@ -113,6 +116,8 @@ class Keyboard(CommandInterface):
                     self.set_motion("boxing_left_punch")
                 elif ch == "n":
                     self.set_motion("boxing_right_punch")
+                elif ch == "i":
+                    self.set_motion("cone")
 
             except (IOError, EOFError):
                 continue
@@ -125,7 +130,7 @@ class Keyboard(CommandInterface):
                 # only get commands the policy supports and fill the rest with zeros
                 policy_commands = {name: commands.get(name, 0.0) for name in self.policy_command_names}
                 clamped_commands = {name: clamp(name, policy_commands[name]) for name in self.policy_command_names}
-                return [v for v in clamped_commands.values()]
+                return {name: v for name, v in clamped_commands.items()}, {}
             else:
                 self.active_motion = None
                 self.reset_cmd()

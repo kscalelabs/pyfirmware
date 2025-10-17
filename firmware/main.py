@@ -41,7 +41,10 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         return
 
     # initialize command interface last because it can absorb stdin
-    command_interface = Keyboard(command_names) if command_source == "keyboard" else UDPListener(command_names)
+    if command_source == "keyboard":
+        command_interface = Keyboard(command_names)
+    else:
+        command_interface = UDPListener(command_names, joint_names=joint_order)
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
 
     print("Starting policy...")
@@ -54,7 +57,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
-        command = command_interface.get_cmd()
+        policy_cmd, joint_cmd = command_interface.get_cmd()
         t3 = time.perf_counter()
 
         action, carry = step_session.run(
@@ -64,13 +67,14 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
                 "joint_angular_velocities": np.array(joint_vels, dtype=np.float32),
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
-                "command": np.array(command, dtype=np.float32),
+                "command": np.array([v for v in policy_cmd.values()], dtype=np.float32),
                 "carry": carry,
             },
         )
         t4 = time.perf_counter()
 
-        motor_driver.take_action(action, joint_order)
+        named_action = joint_cmd | {joint_name: action for joint_name, action in zip(joint_order, action)}
+        motor_driver.take_action(named_action)
         t5 = time.perf_counter()
         motor_driver.flush_can_busses()
         t6 = time.perf_counter()
@@ -96,7 +100,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
                 "joint_temps": temps,
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
-                "command": command,
+                "command": policy_cmd, # TODO log joint cmd
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },
