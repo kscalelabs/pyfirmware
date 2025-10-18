@@ -4,6 +4,7 @@ set -euo pipefail
 
 # Defaults
 gstreamer=false
+websocket=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -12,9 +13,13 @@ while [[ $# -gt 0 ]]; do
             gstreamer=true
             shift
             ;;
+        --websocket)
+            websocket=true
+            shift
+            ;;
         *)
             echo "Unknown option $1"
-            echo "Usage: kbot-deploy [--gstreamer]"
+            echo "Usage: kbot-deploy [--gstreamer] [--websocket]"
             exit 1
             ;;
     esac
@@ -33,6 +38,12 @@ _set_can_and_max_torques.sh
 
 PY="$(command -v python)"
 
+# Build extra args for firmware
+extra_args=()
+if [ "$websocket" = "true" ]; then
+    extra_args+=(--websocket)
+fi
+
 if [ "$gstreamer" = "true" ]; then
     echo "Starting GStreamer with --flip"
     sudo -E chrt 29 "$PY" "$(dirname "$(realpath "$0")")/../firmware/gstreamer.py" --flip > /dev/null 2>&1 &
@@ -41,7 +52,7 @@ if [ "$gstreamer" = "true" ]; then
     echo "=============================================="
     echo "               Running firmware               "
     echo "=============================================="
-    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+    sudo -E chrt 30 "$PY" -m firmware.main "${extra_args[@]}" "$policy_dir"
 
     echo "Stopping GStreamer (PID: $gstreamer_pid)"
     kill "$gstreamer_pid" 2>/dev/null || true
@@ -49,7 +60,7 @@ else
     echo "=============================================="
     echo "               Running firmware               "
     echo "=============================================="
-    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+    sudo -E chrt 30 "$PY" -m firmware.main "${extra_args[@]}" "$policy_dir"
 fi
 
 

@@ -11,13 +11,13 @@ from firmware.can import MotorDriver
 from firmware.commands.command_interface import CommandInterface
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
-from firmware.launchInterface import KeyboardLaunchInterface
+from firmware.launchInterface import KeyboardLaunchInterface, WebSocketInterface, LaunchInterface
 from firmware.logger import Logger
 from firmware.shutdown import get_shutdown_manager
 from firmware.utils import get_imu_reader, get_onnx_sessions
 
 
-def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger) -> None:
+def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) -> None:
     shutdown_mgr = get_shutdown_manager()
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -33,7 +33,9 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
     motor_driver = MotorDriver(home_positions=home_positions)
     imu_reader = get_imu_reader()
 
-    if not launch_interface.ask_motor_permission():
+    actuator_status = motor_driver.get_actuator_status()
+    robot_devices = {"imu": imu_reader, "actuator_status": actuator_status}
+    if not launch_interface.ask_motor_permission(robot_devices):
         print("Motor permission denied, aborting execution")
         return
 
@@ -51,7 +53,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
     else:
         command_interface = UDPListener(command_names, joint_names=joint_order)
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
-
+    
     print("Starting policy...")
 
     t0 = time.perf_counter()
@@ -125,10 +127,14 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run policy inference and control motors")
     parser.add_argument("policy_dir", help="Policy directory path (required)")
+    parser.add_argument("--websocket", action="store_true", help="Use WebSocket launch interface")
     args = parser.parse_args()
 
-    launch_interface = KeyboardLaunchInterface()
+    launch_interface: LaunchInterface = WebSocketInterface() if args.websocket else KeyboardLaunchInterface()
     kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
+    if kinfer_path is None:
+        print("No kinfer path selected, aborting execution")
+        exit(0)
 
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

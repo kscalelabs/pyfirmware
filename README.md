@@ -66,5 +66,12 @@ conda activate firmware
 pip install -e .[dev]
 ```
 
+## Port Usage
+Policy Launch Interface: 8760
+WebRTC Negotiation: 8765
+Master Server: 8770
+UDP Commands: 10000
+
+
 ## Known bugs
 - critical faults raise an error, stopping the firmware, rather than gracefully handling
