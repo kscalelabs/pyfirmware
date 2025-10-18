@@ -4,6 +4,8 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from firmware.actuators import RobotConfig
+
 # Example policy command names:
 #     "xvel",
 #     "yvel",
@@ -26,17 +28,9 @@ from typing import Optional
 class CommandInterface(ABC):
     """Abstract base class for command input interfaces."""
 
-    def __init__(self, policy_command_names: list[str]) -> None:
-        self.policy_command_names = policy_command_names
-        self.policy_cmd = {cmd: 0.0 for cmd in policy_command_names}
-        self.joint_cmd: dict[str, float] = {}
-
-        print("\nPolicy Command Names Supported")
-        print("-" * 30)
-        for i, cmd_name in enumerate(policy_command_names, 1):
-            print(f"{i:2d}. {cmd_name:<20}")
-        print("-" * 30 + "\n")
-
+    def __init__(self) -> None:
+        self.robot_config = RobotConfig()
+        self.joint_cmd: dict[str, float] = RobotConfig.home_positions
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
@@ -61,9 +55,8 @@ class CommandInterface(ABC):
 
     def reset_cmd(self) -> None:
         """Reset all commands to zero."""
-        self.policy_cmd = {cmd_name: 0.0 for cmd_name in self.policy_cmd.keys()}
         self.joint_cmd = {}
 
-    def get_cmd(self) -> tuple[dict[str, float], dict[str, float]]:
+    def get_cmd(self) -> dict[str, float]:
         """Get current command vector per policy specification."""
-        return self.policy_cmd, self.joint_cmd
+        return  self.joint_cmd

@@ -25,7 +25,7 @@ class CANInterface:
     HOST_ID = 0xFD
     CAN_TIMEOUT = 0.002
     CANBUS_RANGE = range(0, 7)
-    ACTUATOR_RANGE = range(10, 50)
+    ACTUATOR_RANGE = range(10, 30)
 
     # Fault codes
     MUX_0x15_FAULT_CODES = [
@@ -240,7 +240,7 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0) -> None:
+    def __init__(self, home_positions: dict[str, float] = dict(), max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
 
@@ -391,7 +391,10 @@ class MotorDriver:
         return joint_angles_order, joint_vels_order, torques_order, temps_order  # type: ignore[return-value]
 
     def take_action(self, actions: dict[str, float]) -> None:
-        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in actions.items()}
+        action = dict()
+        for name, actuator_action in actions.items():
+            if name in self.robot.full_name_to_actuator_id:
+                action[self.robot.full_name_to_actuator_id[name]] = actuator_action
         self.set_pd_targets(action, scaling=self.max_scaling)
 
 
