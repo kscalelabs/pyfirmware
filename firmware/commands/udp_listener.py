@@ -60,14 +60,13 @@ class UDPListener(CommandInterface):
             "rshoulderyaw": "dof_right_shoulder_yaw_02",
             "relbowpitch": "dof_right_elbow_02",
             "rwristroll": "dof_right_wrist_00",
-            "rgripper": "dof_right_gripper_00",
+            "rgripper": "dof_right_wrist_gripper_05",
             "lshoulderpitch": "dof_left_shoulder_pitch_03",
             "lshoulderroll": "dof_left_shoulder_roll_03",
             "lshoulderyaw": "dof_left_shoulder_yaw_02",
-            "rshoulderyaw": "dof_right_shoulder_yaw_02",
-            "relbowpitch": "dof_right_elbow_pitch_02",
-            "rwristroll": "dof_right_wrist_00",
-            "rgripper": "dof_right_gripper_00",
+            "lelbowpitch": "dof_left_elbow_02",
+            "lwristroll": "dof_left_wrist_00",
+            "lgripper": "dof_left_wrist_gripper_05",
         }
 
         answer = dict()
