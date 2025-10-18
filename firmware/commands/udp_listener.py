@@ -12,12 +12,10 @@ class UDPListener(CommandInterface):
     """Listens for UDP commands and updates the command vector."""
 
     def __init__(
-        self, command_names: list[str], joint_names: list[str], port: int = 10000, host: str = "0.0.0.0"
+        self, port: int = 10000, host: str = "0.0.0.0"
     ) -> None:
-        print(f"Using UDP input on port {port} for commands: {command_names}")
-        super().__init__(policy_command_names=command_names)
-        self.joint_names = joint_names
-
+        print(f"Using UDP input on port {port} for commands")
+        super().__init__()
         self.port = port
         self.host = host
         self.sock: Optional[socket.socket] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

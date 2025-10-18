@@ -59,4 +59,4 @@ class CommandInterface(ABC):
 
     def get_cmd(self) -> dict[str, float]:
         """Get current command vector per policy specification."""
-        return  self.joint_cmd
+        return self.joint_cmd
