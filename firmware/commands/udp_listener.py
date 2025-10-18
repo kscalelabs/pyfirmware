@@ -38,9 +38,7 @@ class UDPListener(CommandInterface):
                         self.reset_cmd()
                         continue
                     payload = command_data.get("commands", command_data)
-                    for name, value in payload.items():
-                        self.joint_cmd[name] = float(value)
-
+                    self.joint_cmd = self.command_to_actuator(payload)
 
                 except socket.timeout:
                     continue
@@ -55,3 +53,26 @@ class UDPListener(CommandInterface):
         if self.sock:
             self.sock.close()
             self.sock = None
+
+
+    def command_to_actuator(self, command: dict[str, float]) -> dict[int, float]:
+        mapping = {
+            "rshoulderpitch": "dof_right_shoulder_pitch_03",
+            "rshoulderroll": "dof_right_shoulder_roll_03",
+            "rshoulderyaw": "dof_right_shoulder_yaw_02",
+            "relbowpitch": "dof_right_elbow_02",
+            "rwristroll": "dof_right_wrist_00",
+            "rgripper": "dof_right_gripper_00",
+            "lshoulderpitch": "dof_left_shoulder_pitch_03",
+            "lshoulderroll": "dof_left_shoulder_roll_03",
+            "lshoulderyaw": "dof_left_shoulder_yaw_02",
+            "rshoulderyaw": "dof_right_shoulder_yaw_02",
+            "relbowpitch": "dof_right_elbow_pitch_02",
+            "rwristroll": "dof_right_wrist_00",
+            "rgripper": "dof_right_gripper_00",
+        }
+
+        answer = dict()
+        for name, angle in command.items():
+            answer[mapping[name]] = angle
+        return answer
