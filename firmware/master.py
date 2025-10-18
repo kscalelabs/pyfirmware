@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 import websockets
 from websockets.server import WebSocketServerProtocol
 
-from firmware.policy_manager import start_policy, end_policy, get_status as get_policy_status
+from firmware.policy_manager import SimplePolicyManager
 from firmware.peripherals.screen import start as start_screen, stop as stop_screen
 
 
@@ -22,6 +22,26 @@ class MasterServer:
         self.running = False
         self.status_task: Optional[asyncio.Task] = None
         self.screen_started = False
+        self.policy_manager = SimplePolicyManager()
+    
+    async def cleanup(self):
+        """Clean up resources when server shuts down."""
+        print("Cleaning up resources...")
+        
+        # Stop policy if running
+        if self.policy_manager.get_status()["running"]:
+            print("Stopping policy...")
+            self.policy_manager.stop()
+        
+        # Stop screen if started
+        if self.screen_started:
+            try:
+                stop_screen()
+                print("Screen stopped")
+            except Exception as e:
+                print(f"Error stopping screen: {e}")
+        
+        print("Cleanup completed")
     
     async def register_client(self, websocket: WebSocketServerProtocol):
         """Register a new client connection."""
@@ -75,7 +95,7 @@ class MasterServer:
     async def handle_policy_command(self, payload: str):
         """Handle policy execution commands."""
         if payload == "start":
-            success = start_policy()
+            success = self.policy_manager.start()
             if success:
                 print("Policy started successfully")
                 await self.broadcast_message({
@@ -90,7 +110,7 @@ class MasterServer:
                 })
         
         elif payload == "stop":
-            success = end_policy()
+            success = self.policy_manager.stop()
             if success:
                 print("Policy stopped successfully")
                 await self.broadcast_message({
@@ -112,7 +132,7 @@ class MasterServer:
         while self.running:
             try:
                 # Get policy status
-                policy_status = get_policy_status()
+                policy_status = self.policy_manager.get_status()
                 # Broadcast combined status
                 await self.broadcast_message({
                     "type": "status_update",
@@ -170,13 +190,23 @@ class MasterServer:
                 await asyncio.Future()  # Run forever
             except KeyboardInterrupt:
                 print("Interrupted by user")
+                self.running = False
+                await self.cleanup()
                 pass
 
 
 async def main():
     """Main entry point."""
     server = MasterServer()
-    await server.start_server()
+    try:
+        await server.start_server()
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+        await server.cleanup()
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        await server.cleanup()
+        raise
 
 
 if __name__ == "__main__":

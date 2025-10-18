@@ -45,7 +45,8 @@ class WebSocketInterface(LaunchInterface):
         self.message_queue = []
         self._server_thread = None
         self._connected_event = threading.Event()
-        
+        self.devices_data={}
+        self.kinfer_files=[]
         # Initialize connection tracking
         self.active_connection_ip = None
         self.active_step = -1
@@ -133,7 +134,9 @@ class WebSocketInterface(LaunchInterface):
             # Send resume message to client
             self.send_message("resume_step", {
                 "step": self.active_step,
-                "expected_types": self.steps[self.active_step]
+                "expected_types": self.steps[self.active_step],
+                "devices_data": self.devices_data,
+                "kinfer_files": self.kinfer_files
             })
         
         self._connected_event.set()
@@ -176,6 +179,7 @@ class WebSocketInterface(LaunchInterface):
         self.send_message("request_motor_enable", robot_devices)
         self.active_step = 1
         message = self.process_step()
+        self.devices_data = robot_devices
         if message and message.get("type") == "enable_motors":
             self.send_message("enabling_motors")
             return True
@@ -192,6 +196,7 @@ class WebSocketInterface(LaunchInterface):
             self.send_message("policy_started")
             return True
         return False
+
     def get_kinfer_path(self, policy_dir: str = None) -> str or None:
         """Send list of available kinfer files and wait for user selection."""
         # Find all .kinfer files in ~/.policies or provided directory
@@ -220,7 +225,7 @@ class WebSocketInterface(LaunchInterface):
                 "message": f"No kinfer files found in {search_dir}"
             })
             return None
-        
+        self.kinfer_files = kinfer_files
         # Send list to client
         self.send_message("kinfer_list", {
             "files": kinfer_files,
