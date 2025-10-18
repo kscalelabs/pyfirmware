@@ -30,7 +30,7 @@ class CommandInterface(ABC):
 
     def __init__(self) -> None:
         self.robot_config = RobotConfig()
-        self.joint_cmd: dict[str, float] = RobotConfig.home_positions
+        self.joint_cmd: dict[str, float] = self.robot_config.home_positions
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
