@@ -74,5 +74,6 @@ class UDPListener(CommandInterface):
 
         answer = dict()
         for name, angle in command.items():
-            answer[mapping[name]] = angle
+            if name in mapping:
+                answer[mapping[name]] = angle
         return answer
