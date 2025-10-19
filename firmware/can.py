@@ -145,53 +145,16 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def disable_motors(self) -> list[int]:
+    def disable_motors(self) -> list[int]:   
         for canbus in self.sockets.keys():
-            still_active = self.actuators[canbus]
-            failed = []
-            attempts = 0
-            while attempts < 10:
-                print(f"Still active: {still_active}")
-                for actuator_id in still_active:
-                    if self._disable_motor(canbus, actuator_id):
-                        print(f"✅ Successfully disabled motor {actuator_id}")
-                    else:
-                        failed.append(actuator_id)
-                        print(f"Failed to disable motor {actuator_id}")
-                    time.sleep(0.1)
-                if len(failed) == 0:
-                    break
-                still_active = failed
-                failed = []
-                time.sleep(0.5)
-                attempts += 1
-
-    def _disable_motor(self, canbus: int, actuator_can_id: int) -> bool:
-        """Send motor disable command and wait for feedback response.
-        
-        Returns True if disable was successful (no faults), False otherwise.
-        """
-        frame = self._build_can_frame(actuator_can_id, Mux.MOTOR_DISABLE)
-        self.sockets[canbus].send(frame)
-
-        # Wait for feedback response (Type 2 feedback frame)
-        response = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
-
-        if not response:
-            print(f"WARNING: No response from actuator {actuator_can_id} during disable")
-            return False
-
-        # Check for faults in the response
-        if response["fault_flags"] != 0:
-            print(f"WARNING: Fault flags set (0x{response['fault_flags']:02X}) for actuator {actuator_can_id} during disable")
-            return False
-
-        # Check mode status (should be 0 for disabled state)
-        if response["mode_status"] != 0:
-            print(f"WARNING: Unexpected mode status (0x{response['mode_status']:02X}) for actuator {actuator_can_id} after disable")
-            return False
-
-        return True
+            self._flush_can_bus(canbus)
+            
+            actuator_list = self.actuators[canbus].copy()
+            
+            for actuator_id in actuator_list:
+                frame = self._build_can_frame(actuator_id, Mux.MOTOR_DISABLE)
+                self.sockets[canbus].send(frame)
+                time.sleep(0.01)
 
     def get_actuator_feedback(self) -> dict[str, dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
@@ -288,9 +251,14 @@ class CANInterface:
 class MotorDriver:
     """Driver logic."""
 
-    def __init__(self, max_scaling: float = 1.0) -> None:
+    def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
+
+        self.home_positions: dict[int, float] = {}
+        for actuator in self.robot.actuators.values():
+            self.home_positions[actuator.can_id] = home_positions.get(actuator.full_name, actuator.default_home)
+
         self.can = CANInterface()
         self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
         self._motors_enabled = False
@@ -367,11 +335,10 @@ class MotorDriver:
         print("✅ Motors enabled")
 
         print("\nHoming...")
-        home_targets = {id: self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
         for i in range(30):
             scale = math.exp(math.log(0.001) + (math.log(1.0) - math.log(0.001)) * i / 29) * self.max_scaling
             print(f"PD ramp: {scale:.3f}")
-            self.set_pd_targets(home_targets, scaling=scale)
+            self.set_pd_targets(self.home_positions, scaling=scale)
             time.sleep(0.1)
         print("✅ Homing complete")
 
@@ -383,7 +350,7 @@ class MotorDriver:
             _ = self.can.get_actuator_feedback()
             t1 = time.perf_counter()
             angle = 0.3 * math.sin(2 * math.pi * 0.5 * (t - t0))
-            action = {id: angle + self.robot.actuators[id].joint_bias for id in self.robot.actuators.keys()}
+            action = {id: angle + self.home_positions[id] for id in self.robot.actuators.keys()}
             t2 = time.perf_counter()
             self.set_pd_targets(action, scaling=self.max_scaling)
             t3 = time.perf_counter()
@@ -436,16 +403,18 @@ class MotorDriver:
 
         return joint_angles_order, joint_vels_order, torques_order, temps_order  # type: ignore[return-value]
 
-    def take_action(self, action: list[float], joint_order: list[str]) -> None:
-        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in zip(joint_order, action)}
+    def take_action(self, actions: dict[str, float]) -> None:
+        action = {self.robot.full_name_to_actuator_id[name]: action for name, action in actions.items()}
         self.set_pd_targets(action, scaling=self.max_scaling)
 
 
 def main() -> None:
     """Run sine wave test on all actuators."""
-    driver = MotorDriver(max_scaling=0.1)
+    driver = MotorDriver(dict(), max_scaling=0.1)
+
     input("Press Enter to enable motors...")
     driver.enable_and_home_motors()
+
     input("Press Enter to run sine wave on all actuators...")
     driver.sine_wave()
 
