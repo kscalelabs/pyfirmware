@@ -140,11 +140,10 @@ class KeyboardLaunchInterface:
 
     def get_command_source(self) -> str:
         """Return the command source type."""
+        print("=================")
+        print("Select command source: (k) Keyboard, (u) UDP")
         while True:
-            print("=================")
-            print("Select command source: (k) Keyboard, (u) UDP")
             response = input("Enter choice: ").lower()
-            print("=================")
             if response == "k":
                 return "keyboard"
             elif response == "u":
@@ -153,11 +152,10 @@ class KeyboardLaunchInterface:
 
     def ask_motor_permission(self) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
+        print("=================")
+        print("Enable motors (y/n):")
         while True:
-            print("=================")
-            print("Enable motors (y/n):")
             response = input("Enter choice: ").lower()
-            print("=================")
             if response == "n":
                 return False
             elif response == "y":
@@ -166,13 +164,11 @@ class KeyboardLaunchInterface:
 
     def launch_policy_permission(self) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
+        print("=================")
+        print("🚀 Ready to start policy")
+        print("Start policy? (y/n): ")
         while True:
-            print("=================")
-            print("🚀 Ready to start policy")
-
-            print("Start policy? (y/n): ")
             response = input("Enter choice: ").lower()
-            print("=================")
             if response == "y":
                 return True
             elif response == "n":
