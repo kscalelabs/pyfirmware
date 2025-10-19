@@ -21,50 +21,51 @@ pip install .
 ```
 
 ## Usage
-You can test the actuators with a simple sinewave test at low pd gains by running:
+Test the actuators with a simple sinewave at low pd gains:
 ```bash
 kbot-sine
 ```
 
-To run your policy with keyboard control enabled:
+Run Kscale policies:
 ```bash
-export POLICY_DIR=<your-policy-dir>
-
 kbot-run
 ```
-**Keybindings**
 
-- `0` → reset cmd
-- `w` / `s` → cmd[0] x-vel  +0.1 / −0.1
-- `a` / `d` → cmd[1] y-vel  +0.1 / −0.1
-- `q` / `e` → cmd[2] yaw ω  +0.1 / −0.1
+Run your policies:
+```bash
+POLICY_DIR=<your-policy-dir> kbot-run
+```
 
-- `=` / `-` → cmd[3] base height +0.05 / −0.05
-- `r` / `f` → cmd[4] roll  +0.1 / −0.1
-- `t` / `g` → cmd[5] pitch +0.1 / −0.1
+**Robot Control Keybindings**
+
+| Key(s)    | Command         | Change    |
+|-----------|-----------------|-----------|
+| `w` / `s` | x-vel           | +0.1/-0.1 |
+| `a` / `d` | y-vel           | +0.1/-0.1 |
+| `q` / `e` | yaw ω           | +0.1/-0.1 |
+| `=` / `-` | base height     | +0.05/-0.05 |
+| `r` / `f` | base roll       | +0.1/-0.1 |
+| `t` / `g` | base pitch      | +0.1/-0.1 |
+| `0`       | reset cmds      | -         |
 
 
-## Dev usage (internal)
+## Dev usage (internal use only)
+
+⚠️ **WARNING: BETA POLICIES** ⚠️
+
+Untested, unlabeled, incompatible policies that **WILL** break your bot:
+
 ```bash
 kbot-deploy [--gstreamer] [--command-source keyboard|udp]
 ```
 
-## Alternative manual install
+## Alternative manual installation
 ```bash
 conda env create -n firmware -f environment.yml
 conda activate firmware
 pip install .
 ```
 
-## Development setup
-```bash
-# create/update conda env
-make setup
-conda activate firmware
-
-# install in editable mode with dev extras
-pip install -e .[dev]
-```
 
 ## Known bugs
 - critical faults raise an error, stopping the firmware, rather than gracefully handling
