@@ -48,7 +48,6 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
     print(f"Step fn - Inputs: {[inp.name for inp in step_inputs]}, Outputs: {[out.name for out in step_outputs]}")
     print("=" * 30 + "\n")
 
-
     # warm up step function
     step_dummy_inputs = {}
     for inp in step_inputs:
