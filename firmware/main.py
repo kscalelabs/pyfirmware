@@ -44,7 +44,7 @@ def runner(launch_interface: KeyboardLaunchInterface) -> None:
         motor_driver.flush_can_busses()
 
         step_id += 1
-        time.sleep(max(0.02 - (time.perf_counter() - t), 0))  # wait for 50 hz
+        time.sleep(max(0.01 - (time.perf_counter() - t), 0))  # wait for 50 hz
 
 
 if __name__ == "__main__":

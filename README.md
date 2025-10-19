@@ -41,7 +41,7 @@ Or alternatively:
 python main.py
 ```
 
-This will start the actuator control loop at 50Hz and listen for UDP commands on port 10000.
+This will start the actuator control loop at 100Hz and listen for UDP commands on port 10000.
 
 ### Testing with Sine Wave Motion
 
@@ -108,7 +108,7 @@ The system uses the following joint mapping:
 
 ## Control Loop
 
-The control loop runs at 50Hz:
+The control loop runs at 100Hz:
 - Reads sensor values from actuators
 - Processes UDP commands
 - Sends actuator commands to motors
