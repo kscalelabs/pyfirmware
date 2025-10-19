@@ -11,7 +11,7 @@ from firmware.imu.hiwonder import Hiwonder
 
 
 def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.InferenceSession, dict]:
-    print("Loading kinfer model from", kinfer_path)
+    print("\n" + "=" * 30 + "\n" + "Loading kinfer model from: ", kinfer_path)
     if not kinfer_path or not kinfer_path.endswith(".kinfer"):  # .tar.gz really
         raise ValueError("Model path must be provided and end with .kinfer")
 
@@ -28,14 +28,13 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
         step_model_bytes = step_file.read()
         metadata = json.load(metadata_file)
 
-        print("\nKinfer Model Metadata")
-        print("=" * 30 + "\n")
+        print("\nKinfer Model Metadata:")
+        print("-" * 20 + "\n")
         for i, (key, value) in enumerate(metadata.items(), 1):
             value_list = value if isinstance(value, list) else [value]
             print(f"{i:2d}. {key}: ")
             for j, item in enumerate(value_list, 1):
                 print(f"    {j:2d}. {item}")
-        print("=" * 30 + "\n")
 
     init_session = ort.InferenceSession(init_model_bytes)
     step_session = ort.InferenceSession(step_model_bytes)
@@ -47,6 +46,8 @@ def get_onnx_sessions(kinfer_path: str) -> tuple[ort.InferenceSession, ort.Infer
 
     print(f"\nInit fn - Inputs: {[inp.name for inp in init_inputs]}, Outputs: {[out.name for out in init_outputs]}")
     print(f"Step fn - Inputs: {[inp.name for inp in step_inputs]}, Outputs: {[out.name for out in step_outputs]}")
+    print("=" * 30 + "\n")
+
 
     # warm up step function
     step_dummy_inputs = {}
