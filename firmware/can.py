@@ -145,8 +145,8 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def disable_motors(self) -> list[int]:   
-        for canbus in self.sockets.keys():        
+    def disable_motors(self) -> list[int]:
+        for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 frame = self._build_can_frame(actuator_id, Mux.MOTOR_DISABLE)
                 self.sockets[canbus].send(frame)
