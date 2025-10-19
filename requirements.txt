@@ -2,5 +2,5 @@ numpy
 onnxruntime
 python-periphery
 pyserial
-kmotions
+kmotions>=0.3.6
 
