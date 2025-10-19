@@ -78,12 +78,12 @@ def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Opti
         stdscr.move(0, 8 + len(query))
         stdscr.refresh()
         ch = stdscr.getch()
-        if ch in (curses.KEY_ENTER, 10, 13): # Enter
+        if ch in (curses.KEY_ENTER, 10, 13):  # Enter
             if f:
                 return f[sel_idx]
-        elif ch == 27: # Esc
+        elif ch == 27:  # Esc
             return None
-        elif ch in (curses.KEY_BACKSPACE, 127, 8): # Backspace
+        elif ch in (curses.KEY_BACKSPACE, 127, 8):  # Backspace
             if query:
                 query = query[:-1]
         elif ch == curses.KEY_UP:
