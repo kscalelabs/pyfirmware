@@ -77,58 +77,31 @@ def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Opti
         # Place cursor at end of query
         stdscr.move(0, 8 + len(query))
         stdscr.refresh()
-
         ch = stdscr.getch()
-
-        # Enter
-        if ch in (curses.KEY_ENTER, 10, 13):
+        if ch in (curses.KEY_ENTER, 10, 13): # Enter
             if f:
                 return f[sel_idx]
-            else:
-                continue
-
-        # Esc (cancel)
-        if ch == 27:
+        elif ch == 27: # Esc
             return None
-
-        # Backspace (handle a few common codes)
-        if ch in (curses.KEY_BACKSPACE, 127, 8):
+        elif ch in (curses.KEY_BACKSPACE, 127, 8): # Backspace
             if query:
                 query = query[:-1]
-            continue
-
-        # Up / Down / Page Up / Page Down / Home / End
-        if ch == curses.KEY_UP:
+        elif ch == curses.KEY_UP:
             sel_idx -= 1
-            clamp_sel()
-            continue
-        if ch == curses.KEY_DOWN:
+        elif ch == curses.KEY_DOWN:
             sel_idx += 1
-            clamp_sel()
-            continue
-        if ch == curses.KEY_PPAGE:  # Page Up
+        elif ch == curses.KEY_PPAGE:  # Page Up
             sel_idx -= max(1, list_rows - 1)
-            clamp_sel()
-            continue
-        if ch == curses.KEY_NPAGE:  # Page Down
+        elif ch == curses.KEY_NPAGE:  # Page Down
             sel_idx += max(1, list_rows - 1)
-            clamp_sel()
-            continue
-        if ch == curses.KEY_HOME:
+        elif ch == curses.KEY_HOME:
             sel_idx = 0
-            clamp_sel()
-            continue
-        if ch == curses.KEY_END:
-            if filtered():
-                sel_idx = len(filtered()) - 1
-                clamp_sel()
-            continue
-
-        # Typing (printable chars)
-        if 32 <= ch <= 126:
+        elif ch == curses.KEY_END:
+            sel_idx = len(filtered()) - 1
+        elif 32 <= ch <= 126:
             query += chr(ch)
-            clamp_sel()
-            continue
+
+        clamp_sel()
 
 
 class KeyboardLaunchInterface:
