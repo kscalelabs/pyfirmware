@@ -298,7 +298,7 @@ class MotorDriver:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
-        joint_data_dict = self.get_joint_angles_and_velocities()
+        joint_data_dict = self.get_joint_angles_and_velocities(fallback_to_zeros=False)
 
         print("\nActuator states:")
         print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
