@@ -21,7 +21,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # download kinfer models (rsync remote -> local cache)
-policy_dir="${HOME}/.policies"
+policy_dir="${HOME}/.policies_beta"
 remote_policies="mu:~/kodachrome/policies/"
 
 mkdir -p "$policy_dir"
