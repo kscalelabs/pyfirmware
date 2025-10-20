@@ -167,7 +167,6 @@ class WebSocketLaunchInterface(LaunchInterface):
         # Run sanity check on actuator angles
         if "actuators" in robot_devices:
             self.enable_motors_sanity_check(robot_devices["actuators"])
-
         self.send_message("request_motor_enable", robot_devices)
         self.active_step = 1
         message = self.process_step()
@@ -225,7 +224,7 @@ class WebSocketLaunchInterface(LaunchInterface):
 
         self.active_step = 0
         message = self.process_step()
-        if message.type == "abort":
+        if message and message.get("type") == "abort":
             return None
         if message and message.get("type") == "select_kinfer":
             selected_path = message.get("data", {}).get("path")
