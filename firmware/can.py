@@ -256,7 +256,7 @@ class MotorDriver:
             self.home_positions[actuator.can_id] = home_positions.get(actuator.full_name, actuator.default_home)
 
         self.can = CANInterface()
-        self.last_known_feedback = {id: robot.dummy_data() for id, robot in self.robot.actuators.items()}
+        self.last_known_feedback: dict[int, dict[str, float | str | int]] = {}
         self._motors_enabled = False
         self._last_scaling = 0.0
 
@@ -307,7 +307,7 @@ class MotorDriver:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
-        joint_data_dict = self.get_joint_angles_and_velocities()
+        joint_data_dict = self.get_joint_angles_and_velocities(zeros_fallback=False)
 
         print("\nActuator states:")
         print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
@@ -366,19 +366,16 @@ class MotorDriver:
     def flush_can_busses(self) -> None:
         self.can.flush_can_busses()
 
-    def get_joint_angles_and_velocities(self) -> dict[int, dict[str, float | str | int]]:
+    def get_joint_angles_and_velocities(self, zeros_fallback: bool = True) -> dict[int, dict[str, float | str | int]]:
         fb = self.can.get_actuator_feedback()
         answer: dict[int, dict[str, float | str | int]] = {}
         for id in self.robot.actuators.keys():
             if id in fb:
                 answer[id] = self.robot.actuators[id].can_to_physical_data(fb[id])
                 self.last_known_feedback[id] = answer[id].copy()
-
-            elif id in self.last_known_feedback:
-                # Fall back to last known good values
+            elif id in self.last_known_feedback:  # Fallback to last known good values
                 answer[id] = self.last_known_feedback[id].copy()
-            else:
-                # Ultimate fallback to zeros for unknown actuators
+            elif zeros_fallback:  # Fallback to zeros for unknown actuators
                 answer[id] = self.robot.actuators[id].dummy_data()
         return answer
 

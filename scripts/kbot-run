@@ -5,12 +5,12 @@ set -euo pipefail
 # ---------------------------
 # Policy directory handling
 # ---------------------------
+policy_dir="${POLICY_DIR:-${HOME}/.policies}"
+remote_policies="mu:~/public_policies/"
 
-if [ -z "${POLICY_DIR:-}" ]; then
-    echo "Error: POLICY_DIR environment variable is required"
-    echo "Example: POLICY_DIR=/path/to/policies kbot-run"
-    exit 1
-fi
+mkdir -p "$policy_dir"
+echo "Syncing policies from $remote_policies to $policy_dir (with deletion)..."
+rsync -aLP --delete "$remote_policies" "$policy_dir/"
 
 # ---------------------------
 # Bring up CAN and set torques
@@ -24,4 +24,4 @@ echo "=============================================="
 echo "               Running firmware               "
 echo "=============================================="
 PY="$(command -v python)"
-sudo -E chrt 30 "$PY" -m firmware.main "$POLICY_DIR"
+sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
