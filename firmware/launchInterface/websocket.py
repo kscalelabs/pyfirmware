@@ -119,12 +119,20 @@ class WebSocketLaunchInterface(LaunchInterface):
         # Send resume state if mid-process
         if self.active_step != -1:
             print(f"🔄 Resuming from step {self.active_step}")
-            self.send_message("resume_step", {
+            # Send resume message with data at top level for React compatibility
+            if not self.websocket:
+                return
+            message = {
+                "type": "resume_step",
                 "step": self.active_step,
                 "expected_types": self.steps[self.active_step],
                 "devices_data": self.devices_data,
                 "kinfer_files": self.kinfer_files
-            })
+            }
+            try:
+                self.websocket.send_message(json.dumps(message))
+            except Exception as e:
+                print(f"Error sending resume message: {e}")
 
         self._connected_event.set()
 
