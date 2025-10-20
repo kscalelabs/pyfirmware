@@ -3,7 +3,7 @@
 From scratch firmware rewrite in python. Intent is to keep it as small and as simple as possible. Minimize complexity --> Minimize bugs.
 
 ## Control loop overview
-Loop runs at 50hz. Roundtrip time is around 4.5ms. We then wait 15.5ms to get to 50hz.
+Loop runs at 50Hz. Roundtrip time is around 4.5ms. We then wait 15.5ms to get to 50hz. The actuators independently run a PD controller at 1kHz.
 
 Loop:
    - Read sensor values from actuators, imu, etc
