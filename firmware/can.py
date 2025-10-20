@@ -145,7 +145,14 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def get_actuator_feedback(self) -> Dict[int, Dict[str, int]]:
+    def disable_motors(self) -> None:
+        for canbus in self.sockets.keys():
+            for actuator_id in self.actuators[canbus]:
+                frame = self._build_can_frame(actuator_id, Mux.MOTOR_DISABLE)
+                self.sockets[canbus].send(frame)
+                time.sleep(0.01)
+
+    def get_actuator_feedback(self) -> dict[int, dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
         results: dict[int, dict[str, int]] = {}
         max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
@@ -268,6 +275,8 @@ class MotorDriver:
             self._ramp_down_motors()
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
+
+        self.can.disable_motors()
 
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
