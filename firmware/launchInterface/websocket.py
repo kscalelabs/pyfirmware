@@ -105,14 +105,16 @@ class WebSocketLaunchInterface(LaunchInterface):
         return None
 
     def _on_connect(self, websocket: WebSocket) -> None:
-        """Called when a client connects. Only one connection allowed at a time."""
-        # Reject if someone is already connected
+        """Called when a client connects. Seamlessly override any existing connection."""
+        # Close existing connection if present
         if self.websocket is not None:
-            print("❌ Connection denied: Already have an active connection")
-            websocket.close()
-            return
+            print(f"🔄 New connection from {websocket.address}, closing old connection")
+            try:
+                self.websocket.close()
+            except Exception as e:
+                print(f"Error closing old connection: {e}")
 
-        # Accept connection
+        # Accept new connection
         self.websocket = websocket
         print(f"🔌 Client connected from {websocket.address}")
 
@@ -120,8 +122,6 @@ class WebSocketLaunchInterface(LaunchInterface):
         if self.active_step != -1:
             print(f"🔄 Resuming from step {self.active_step}")
             # Send resume message with data at top level for React compatibility
-            if not self.websocket:
-                return
             message = {
                 "type": "resume_step",
                 "step": self.steps[self.active_step][0],
