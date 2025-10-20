@@ -3,7 +3,6 @@
 import math
 import socket
 import struct
-import sys
 import time
 from typing import Any, Dict, Optional
 
@@ -264,7 +263,6 @@ class MotorDriver:
         shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
-        self.startup_sequence()
 
     def _safe_ramp_down(self) -> None:
         """Safely ramp down motors (for cleanup callback)."""
@@ -301,29 +299,6 @@ class MotorDriver:
         self.set_pd_targets(joint_angles, scaling=0.0)
         self._motors_enabled = False
         print("Motors ramped down to zero")
-
-    def startup_sequence(self) -> None:
-        if not self.can.actuators:
-            print("\033[1;31mERROR: No actuators detected\033[0m")
-            sys.exit(1)
-
-        joint_data_dict = self.get_joint_angles_and_velocities(zeros_fallback=False)
-
-        print("\nActuator states:")
-        print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
-        print("----|--------------------------|-------|----------|--------|-------|-------")
-        for act_id, data in joint_data_dict.items():
-            fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"  # type: ignore[operator]
-            print(
-                f"{act_id:3d} | {data['name']:24s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
-                f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
-            )
-            if data["fault_flags"] > 0:  # type: ignore[operator]
-                print("\033[1;33mWARNING: Actuator faults detected\033[0m")
-
-        if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):  # type: ignore[arg-type]
-            print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
-            sys.exit(1)
 
     def enable_and_home_motors(self) -> None:
         self.can.enable_motors()

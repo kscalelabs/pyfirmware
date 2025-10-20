@@ -11,13 +11,13 @@ from firmware.can import MotorDriver
 from firmware.commands.command_interface import CommandInterface
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
-from firmware.launchInterface import KeyboardLaunchInterface
+from firmware.launchInterface import KeyboardLaunchInterface, LaunchInterface, WebSocketLaunchInterface
 from firmware.logger import Logger
 from firmware.shutdown import get_shutdown_manager
 from firmware.utils import get_imu_reader, get_onnx_sessions
 
 
-def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger) -> None:
+def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) -> None:
     shutdown_mgr = get_shutdown_manager()
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -33,7 +33,12 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
     motor_driver = MotorDriver(home_positions=home_positions)
     imu_reader = get_imu_reader()
 
-    if not launch_interface.ask_motor_permission():
+    device_data = {
+        "actuators": motor_driver.get_joint_angles_and_velocities(),
+        "imu": imu_reader.__class__.name,
+    }
+
+    if not launch_interface.ask_motor_permission(device_data):
         print("Motor permission denied, aborting execution")
         return
 
@@ -50,6 +55,9 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         command_interface = Keyboard(command_names)
     else:
         command_interface = UDPListener(command_names, joint_names=joint_order)
+
+    launch_interface.stop()
+    del launch_interface
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
 
     print("Starting policy...")
@@ -125,9 +133,12 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run policy inference and control motors")
     parser.add_argument("policy_dir", help="Policy directory path (required)")
+    parser.add_argument("--websocket", action="store_true", help="Use WebSocket interface instead of keyboard")
     args = parser.parse_args()
 
-    launch_interface = KeyboardLaunchInterface()
+
+    launch_interface = WebSocketLaunchInterface() if args.websocket else KeyboardLaunchInterface()
+
     kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
 
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]

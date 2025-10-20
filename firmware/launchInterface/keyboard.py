@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from firmware.launchInterface.launch_interface import LaunchInterface
+
 
 def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Optional[Path]:
     curses.curs_set(1)
@@ -77,34 +79,61 @@ def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Opti
         # Place cursor at end of query
         stdscr.move(0, 8 + len(query))
         stdscr.refresh()
+
         ch = stdscr.getch()
-        if ch in (curses.KEY_ENTER, 10, 13):  # Enter
+
+        # Enter
+        if ch in (curses.KEY_ENTER, 10, 13):
             if f:
                 return f[sel_idx]
-        elif ch == 27:  # Esc
+            else:
+                continue
+
+        # Esc (cancel)
+        if ch == 27:
             return None
-        elif ch in (curses.KEY_BACKSPACE, 127, 8):  # Backspace
+
+        # Backspace (handle a few common codes)
+        if ch in (curses.KEY_BACKSPACE, 127, 8):
             if query:
                 query = query[:-1]
-        elif ch == curses.KEY_UP:
+            continue
+
+        # Up / Down / Page Up / Page Down / Home / End
+        if ch == curses.KEY_UP:
             sel_idx -= 1
-        elif ch == curses.KEY_DOWN:
+            clamp_sel()
+            continue
+        if ch == curses.KEY_DOWN:
             sel_idx += 1
-        elif ch == curses.KEY_PPAGE:  # Page Up
+            clamp_sel()
+            continue
+        if ch == curses.KEY_PPAGE:  # Page Up
             sel_idx -= max(1, list_rows - 1)
-        elif ch == curses.KEY_NPAGE:  # Page Down
+            clamp_sel()
+            continue
+        if ch == curses.KEY_NPAGE:  # Page Down
             sel_idx += max(1, list_rows - 1)
-        elif ch == curses.KEY_HOME:
+            clamp_sel()
+            continue
+        if ch == curses.KEY_HOME:
             sel_idx = 0
-        elif ch == curses.KEY_END:
-            sel_idx = len(filtered()) - 1
-        elif 32 <= ch <= 126:
+            clamp_sel()
+            continue
+        if ch == curses.KEY_END:
+            if filtered():
+                sel_idx = len(filtered()) - 1
+                clamp_sel()
+            continue
+
+        # Typing (printable chars)
+        if 32 <= ch <= 126:
             query += chr(ch)
+            clamp_sel()
+            continue
 
-        clamp_sel()
 
-
-class KeyboardLaunchInterface:
+class KeyboardLaunchInterface(LaunchInterface):
     """Simple launch interface for keyboard control without network connection."""
 
     def __init__(self) -> None:
@@ -113,22 +142,37 @@ class KeyboardLaunchInterface:
 
     def get_command_source(self) -> str:
         """Return the command source type."""
-        print("=================")
-        print("Select command source: (k) Keyboard, (u) UDP")
         while True:
+            print("=================")
+            print("Select command source: (k) Keyboard, (u) UDP")
             response = input("Enter choice: ").lower()
+            print("=================")
             if response == "k":
                 return "keyboard"
             elif response == "u":
                 return "udp"
             print("Invalid choice. Please enter K or U")
 
-    def ask_motor_permission(self) -> bool:
+    def ask_motor_permission(self, robot_devices: dict) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        print("=================")
-        print("Enable motors (y/n):")
+        print("----|--------------------------|-------|----------|--------|-------|-------")
+        actuators = robot_devices["actuator_status"]
+        print("\nActuator states:")
+        print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
+        for act_id, data in actuators.items():
+            fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
+            print(
+                f"{act_id:3d} | {data['name']:24s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
+                f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
+            )
+            if data["fault_flags"] > 0:
+                print("\033[1;33mWARNING: Actuator faults detected\033[0m")
+        print("IMU:" + robot_devices["imu"].__class__.__name__)
         while True:
+            print("=================")
+            print("Enable motors (y/n):")
             response = input("Enter choice: ").lower()
+            print("=================")
             if response == "n":
                 return False
             elif response == "y":
@@ -137,11 +181,13 @@ class KeyboardLaunchInterface:
 
     def launch_policy_permission(self) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
-        print("=================")
-        print("🚀 Ready to start policy")
-        print("Start policy? (y/n): ")
         while True:
+            print("=================")
+            print("🚀 Ready to start policy")
+
+            print("Start policy? (y/n): ")
             response = input("Enter choice: ").lower()
+            print("=================")
             if response == "y":
                 return True
             elif response == "n":
