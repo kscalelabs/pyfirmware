@@ -126,11 +126,12 @@ class KeyboardLaunchInterface(LaunchInterface):
             print("Invalid choice. Please enter K or U")
 
     def ask_motor_permission(self, robot_devices: dict) -> bool:
-        """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        print("----|--------------------------|-------|----------|--------|-------|-------")
-        actuators = robot_devices["actuator_status"]
+        """Ask permission to enable motors. Returns True if should enable, False to abort."""        
+        actuators = robot_devices["actuators"]
         print("\nActuator states:")
         print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
+        print("----|--------------------------|-------|----------|--------|-------|-------")
+        
         for act_id, data in actuators.items():
             fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
             print(
