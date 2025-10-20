@@ -124,7 +124,7 @@ class WebSocketLaunchInterface(LaunchInterface):
                 return
             message = {
                 "type": "resume_step",
-                "step": self.active_step,
+                "step": self.steps[self.active_step][0],
                 "expected_types": self.steps[self.active_step],
                 "devices_data": self.devices_data,
                 "kinfer_files": self.kinfer_files
@@ -169,8 +169,8 @@ class WebSocketLaunchInterface(LaunchInterface):
             self.enable_motors_sanity_check(robot_devices["actuators"])
         self.send_message("request_motor_enable", robot_devices)
         self.active_step = 1
-        message = self.process_step()
         self.devices_data = robot_devices
+        message = self.process_step()
         if message and message.get("type") == "enable_motors":
             self.send_message("enabling_motors")
             return True
