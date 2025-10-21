@@ -208,7 +208,10 @@ class WebSocketLaunchInterface(LaunchInterface):
                 })
 
             # Sort by modification time (newest first)
-            kinfer_files.sort(key=lambda x: float(x["modified"]) if isinstance(x["modified"], (int, float, str)) else 0, reverse=True)
+            kinfer_files.sort(
+                key=lambda x: float(x["modified"]) if isinstance(x["modified"], (int, float, str)) else 0,
+                reverse=True
+            )
 
         if not kinfer_files:
             self.send_message("error", {

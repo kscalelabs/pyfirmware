@@ -141,7 +141,7 @@ if __name__ == "__main__":
     launch_interface = WebSocketLaunchInterface() if args.websocket else KeyboardLaunchInterface()
 
     kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
-    
+
     if kinfer_path is None:
         print("No policy selected. Exiting.")
         sys.exit(1)
