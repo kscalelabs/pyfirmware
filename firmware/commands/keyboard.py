@@ -122,6 +122,10 @@ class Keyboard(CommandInterface):
             except (IOError, EOFError):
                 continue
 
+    def reset_cmd(self) -> None:
+        super().reset_cmd()
+        self.active_motion = None
+
     def get_cmd(self) -> tuple[dict[str, float], dict[str, float]]:
         """Get current command vector per policy specification."""
         if self.active_motion:
