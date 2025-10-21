@@ -40,7 +40,12 @@ class SimplePolicyManager:
         # Default policy directory
         default_policy_dir = str(Path.home() / ".policies")
         
+        # Run with sudo for IMU/CAN permissions and real-time priority
         self._default_cmd: List[str] = [
+            "sudo",
+            "-E",           # Preserve environment variables
+            "chrt",         # Real-time scheduler
+            "30",           # Priority level
             python_cmd,
             "-m",
             "firmware.main",
