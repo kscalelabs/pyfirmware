@@ -17,7 +17,7 @@ def start():
         screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         
         # Load and display face
-        assets_dir = Path(__file__).parent.parent.parent / "assets"
+        assets_dir = Path(__file__).parent.parent / "images"
         face_path = assets_dir / "face.png"
         
         if face_path.exists():
