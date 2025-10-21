@@ -9,6 +9,7 @@ import websockets
 from websockets.server import WebSocketServerProtocol
 
 from firmware.policy_manager import SimplePolicyManager
+from firmware.peripherals.screen import start as start_screen, stop as stop_screen
 
 
 class MasterServer:
@@ -20,7 +21,7 @@ class MasterServer:
         self.clients: set[WebSocketServerProtocol] = set()
         self.running = False
         self.status_task: Optional[asyncio.Task] = None
-        # self.screen_started = False
+        self.screen_started = False
         self.policy_manager = SimplePolicyManager()
     
     async def cleanup(self):
@@ -32,13 +33,13 @@ class MasterServer:
             print("Stopping policy...")
             self.policy_manager.stop()
         
-        # # Stop screen if started
-        # if self.screen_started:
-        #     try:
-        #         stop_screen()
-        #         print("Screen stopped")
-        #     except Exception as e:
-        #         print(f"Error stopping screen: {e}")
+        # Stop screen if started
+        if self.screen_started:
+            try:
+                stop_screen()
+                print("Screen stopped")
+            except Exception as e:
+                print(f"Error stopping screen: {e}")
         
         print("Cleanup completed")
     
@@ -163,15 +164,15 @@ class MasterServer:
         print(f"Starting master server on {self.host}:{self.port}")
         
         # Start screen with face display
-        # try:
-        #     screen_success = start_screen()
-        #     if screen_success:
-        #         self.screen_started = True
-        #         print("Face displayed on screen")
-        #     else:
-        #         print("Failed to display face")
-        # except Exception as e:
-        #     print(f"Error displaying face: {e}")
+        try:
+            screen_success = start_screen()
+            if screen_success:
+                self.screen_started = True
+                print("Face displayed on screen")
+            else:
+                print("Failed to display face")
+        except Exception as e:
+            print(f"Error displaying face: {e}")
         
         # Start WebSocket server
         self.running = True
