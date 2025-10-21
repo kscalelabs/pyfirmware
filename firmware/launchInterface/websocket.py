@@ -39,9 +39,9 @@ class WebSocketLaunchInterface(LaunchInterface):
         """Initialize and wait for a client connection."""
         self.host = host
         self.port = port
-        self.websocket: Optional[WebSocket] = None  
+        self.websocket: Optional[WebSocket] = None
         self.server: Optional[WebSocketServer] = None
-        self.message_queue: list[dict[str, Any]] = [] 
+        self.message_queue: list[dict[str, Any]] = []
         self._server_thread: Optional[threading.Thread] = None
         self._connected_event = threading.Event()
 
