@@ -1,5 +1,13 @@
 """WebRTC server using GStreamer and websockets for streaming video/audio."""
 
+# GstWebRTC uses GObject Introspection - a dynamic type system.
+# The types like WebRTCBin don't exist as normal Python attributes.
+# They're generated on-demand using __getattr__ magic methods.
+# When you access GstWebRTC.WebRTCBin during class definition,
+# the introspection system hasn't fully initialized yet,
+#  so it can't find WebRTCBin and raises
+from __future__ import annotations
+
 import argparse
 import asyncio
 import json
@@ -7,14 +15,12 @@ import os
 from typing import Optional
 
 import gi  # type: ignore[import-not-found]
+import websockets  # type: ignore[import-not-found]
+from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-not-found]
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
 gi.require_version("GstSdp", "1.0")
-
-import websockets  # type: ignore[import-not-found]
-from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-not-found]
-
 
 Gst.init(None)
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
