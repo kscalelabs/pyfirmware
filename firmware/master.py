@@ -145,7 +145,7 @@ class MasterServer:
                 print(f"Error in status monitor: {e}")
                 await asyncio.sleep(1.0)
     
-    async def handle_client(self, websocket: WebSocketServerProtocol, path: str):
+    async def handle_client(self, websocket: WebSocketServerProtocol):
         """Handle individual client connection."""
         await self.register_client(websocket)
         
