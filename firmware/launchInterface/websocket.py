@@ -4,7 +4,7 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from simple_websocket_server import WebSocket, WebSocketServer
 
@@ -39,15 +39,15 @@ class WebSocketLaunchInterface(LaunchInterface):
         """Initialize and wait for a client connection."""
         self.host = host
         self.port = port
-        self.websocket = None  # None = no one connected
-        self.server = None
-        self.message_queue = []  # Simple list for blocking access
-        self._server_thread = None
+        self.websocket: Optional[WebSocket] = None  
+        self.server: Optional[WebSocketServer] = None
+        self.message_queue: list[dict[str, Any]] = [] 
+        self._server_thread: Optional[threading.Thread] = None
         self._connected_event = threading.Event()
 
         # State persistence for reconnection
-        self.devices_data = {}
-        self.kinfer_files = []
+        self.devices_data: dict[str, Any] = {}
+        self.kinfer_files: list[dict[str, Any]] = []
         self.active_step = -1
         self.steps = [
             ["select_kinfer"],
@@ -147,7 +147,7 @@ class WebSocketLaunchInterface(LaunchInterface):
         if not self._connected_event.wait(timeout=timeout):
             raise TimeoutError("No client connected within timeout period")
 
-    def send_message(self, message_type: str, data: dict = None) -> None:
+    def send_message(self, message_type: str, data: Optional[dict[str, Any]] = None) -> None:
         """Send a JSON message to the client (blocking)."""
         if not self.websocket:
             return
@@ -188,7 +188,7 @@ class WebSocketLaunchInterface(LaunchInterface):
             return True
         return False
 
-    def get_kinfer_path(self, policy_dir: str = None) -> str or None:
+    def get_kinfer_path(self, policy_dir: Optional[str] = None) -> Optional[str]:
         """Send list of available kinfer files and wait for user selection."""
         # Find all .kinfer files in ~/.policies or provided directory
         if policy_dir:
@@ -208,7 +208,7 @@ class WebSocketLaunchInterface(LaunchInterface):
                 })
 
             # Sort by modification time (newest first)
-            kinfer_files.sort(key=lambda x: x["modified"], reverse=True)
+            kinfer_files.sort(key=lambda x: float(x["modified"]), reverse=True)
 
         if not kinfer_files:
             self.send_message("error", {
