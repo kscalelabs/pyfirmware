@@ -37,6 +37,8 @@ class ActuatorConfig:
     full_name: str
     actuator_type: RobstrideActuatorType
     default_home: float
+    joint_limit_min: float
+    joint_limit_max: float
     kp: float
     kd: float
     # can ranges:
@@ -202,6 +204,8 @@ class RobotConfig:
             kp=100.0,
             kd=8.284,
             default_home=0.0,
+            joint_limit_min=-1.047198,
+            joint_limit_max=3.490658,
         ),
         12: ActuatorConfig(
             can_id=12,
@@ -211,6 +215,8 @@ class RobotConfig:
             kp=100.0,
             kd=8.257,
             default_home=math.radians(10.0),
+            joint_limit_min=-0.436332,
+            joint_limit_max=1.658063,
         ),
         13: ActuatorConfig(
             can_id=13,
@@ -220,6 +226,8 @@ class RobotConfig:
             kp=100.0,
             kd=2.945,
             default_home=0.0,
+            joint_limit_min=-1.671886,
+            joint_limit_max=1.671886,
         ),
         14: ActuatorConfig(
             can_id=14,
@@ -229,6 +237,8 @@ class RobotConfig:
             kp=80.0,
             kd=2.266,
             default_home=math.radians(-90.0),
+            joint_limit_min=-2.478368,
+            joint_limit_max=0.0,
         ),
         15: ActuatorConfig(
             can_id=15,
@@ -238,6 +248,8 @@ class RobotConfig:
             kp=20.0,
             kd=0.295,
             default_home=0.0,
+            joint_limit_min=-1.37881,
+            joint_limit_max=1.37881,
         ),
         16: ActuatorConfig(
             can_id=16,
@@ -247,6 +259,8 @@ class RobotConfig:
             kp=4,
             kd=0.06,
             default_home=math.radians(0),
+            joint_limit_min=-pi,  # TODO
+            joint_limit_max=pi,
         ),
         # Right arm
         21: ActuatorConfig(
@@ -257,6 +271,8 @@ class RobotConfig:
             kp=100.0,
             kd=8.284,
             default_home=0.0,
+            joint_limit_min=-3.490658,
+            joint_limit_max=1.047198,
         ),
         22: ActuatorConfig(
             can_id=22,
@@ -266,6 +282,8 @@ class RobotConfig:
             kp=100.0,
             kd=8.257,
             default_home=math.radians(-10.0),
+            joint_limit_min=-1.658063,
+            joint_limit_max=0.436332,
         ),
         23: ActuatorConfig(
             can_id=23,
@@ -275,6 +293,8 @@ class RobotConfig:
             kp=100.0,
             kd=2.945,
             default_home=0.0,
+            joint_limit_min=-1.671886,
+            joint_limit_max=1.671886,
         ),
         24: ActuatorConfig(
             can_id=24,
@@ -284,6 +304,8 @@ class RobotConfig:
             kp=100.0,
             kd=2.266,
             default_home=math.radians(90.0),
+            joint_limit_min=0.0,
+            joint_limit_max=2.478368,
         ),
         25: ActuatorConfig(
             can_id=25,
@@ -293,6 +315,8 @@ class RobotConfig:
             kp=20.0,
             kd=0.295,
             default_home=0.0,
+            joint_limit_min=-1.37881,
+            joint_limit_max=1.37881,
         ),
         26: ActuatorConfig(
             can_id=26,
@@ -302,6 +326,8 @@ class RobotConfig:
             kp=4,
             kd=0.06,
             default_home=math.radians(0),
+            joint_limit_min=-pi,  # TODO
+            joint_limit_max=pi,
         ),
         # Left leg
         31: ActuatorConfig(
@@ -312,6 +338,8 @@ class RobotConfig:
             kp=150.0,
             kd=24.722,
             default_home=math.radians(20.0),
+            joint_limit_min=-1.047198,
+            joint_limit_max=2.216568,
         ),
         32: ActuatorConfig(
             can_id=32,
@@ -321,6 +349,8 @@ class RobotConfig:
             kp=200.0,
             kd=26.387,
             default_home=0.0,
+            joint_limit_min=-0.20944,
+            joint_limit_max=2.268928,
         ),
         33: ActuatorConfig(
             can_id=33,
@@ -330,6 +360,8 @@ class RobotConfig:
             kp=100.0,
             kd=3.419,
             default_home=0.0,
+            joint_limit_min=-1.570796,
+            joint_limit_max=1.570796,
         ),
         34: ActuatorConfig(
             can_id=34,
@@ -339,6 +371,8 @@ class RobotConfig:
             kp=150.0,
             kd=8.654,
             default_home=math.radians(50.0),
+            joint_limit_min=0.0,
+            joint_limit_max=2.70526,
         ),
         35: ActuatorConfig(
             can_id=35,
@@ -348,6 +382,8 @@ class RobotConfig:
             kp=40.0,
             kd=0.99,
             default_home=math.radians(-30.0),
+            joint_limit_min=-1.134464,
+            joint_limit_max=0.261799,
         ),
         # Right leg
         41: ActuatorConfig(
@@ -358,6 +394,8 @@ class RobotConfig:
             kp=150.0,
             kd=24.722,
             default_home=math.radians(-20.0),
+            joint_limit_min=-2.216568,
+            joint_limit_max=1.047198,
         ),
         42: ActuatorConfig(
             can_id=42,
@@ -367,6 +405,8 @@ class RobotConfig:
             kp=200.0,
             kd=26.387,
             default_home=0.0,
+            joint_limit_min=-2.268928,
+            joint_limit_max=0.20944,
         ),
         43: ActuatorConfig(
             can_id=43,
@@ -376,6 +416,8 @@ class RobotConfig:
             kp=100.0,
             kd=3.419,
             default_home=0.0,
+            joint_limit_min=-1.570796,
+            joint_limit_max=1.570796,
         ),
         44: ActuatorConfig(
             can_id=44,
@@ -385,6 +427,8 @@ class RobotConfig:
             kp=150.0,
             kd=8.654,
             default_home=math.radians(-50.0),
+            joint_limit_min=-2.70526,
+            joint_limit_max=0.0,
         ),
         45: ActuatorConfig(
             can_id=45,
@@ -394,6 +438,8 @@ class RobotConfig:
             kp=40.0,
             kd=0.99,
             default_home=math.radians(30.0),
+            joint_limit_min=-0.261799,
+            joint_limit_max=1.134464,
         ),
     }
 

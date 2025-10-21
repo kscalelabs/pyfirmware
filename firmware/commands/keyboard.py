@@ -70,38 +70,38 @@ class Keyboard(CommandInterface):
                 if ch == "0":
                     self.reset_cmd()
                 elif ch == "w":
-                    self.policy_cmd["xvel"] += 0.1
+                    self.cmd["xvel"] += 0.1
                 elif ch == "s":
-                    self.policy_cmd["xvel"] -= 0.1
+                    self.cmd["xvel"] -= 0.1
                 elif ch == "a":
-                    self.policy_cmd["yvel"] += 0.1
+                    self.cmd["yvel"] += 0.1
                 elif ch == "d":
-                    self.policy_cmd["yvel"] -= 0.1
+                    self.cmd["yvel"] -= 0.1
                 elif ch == "q":
-                    self.policy_cmd["yawrate"] += 0.1
+                    self.cmd["yawrate"] += 0.1
                 elif ch == "e":
-                    self.policy_cmd["yawrate"] -= 0.1
+                    self.cmd["yawrate"] -= 0.1
 
                 # base pose
                 elif ch == "=":
-                    self.policy_cmd["baseheight"] += 0.05
+                    self.cmd["baseheight"] += 0.05
                 elif ch == "-":
-                    self.policy_cmd["baseheight"] -= 0.05
+                    self.cmd["baseheight"] -= 0.05
                 elif ch == "r":
-                    self.policy_cmd["baseroll"] += 0.1
+                    self.cmd["baseroll"] += 0.1
                 elif ch == "f":
-                    self.policy_cmd["baseroll"] -= 0.1
+                    self.cmd["baseroll"] -= 0.1
                 elif ch == "t":
-                    self.policy_cmd["basepitch"] += 0.1
+                    self.cmd["basepitch"] += 0.1
                 elif ch == "g":
-                    self.policy_cmd["basepitch"] -= 0.1
+                    self.cmd["basepitch"] -= 0.1
 
                 # Clamp velocity commands to ±0.8, other commands to ±0.3
-                for cmd_name, value in self.policy_cmd.items():
+                for cmd_name, value in self.cmd.items():
                     if cmd_name in ["xvel", "yvel", "yawrate"]:
-                        self.policy_cmd[cmd_name] = max(-0.8, min(0.8, value))
+                        self.cmd[cmd_name] = max(-0.8, min(0.8, value))
                     else:
-                        self.policy_cmd[cmd_name] = max(-0.3, min(0.3, value))
+                        self.cmd[cmd_name] = max(-0.3, min(0.3, value))
 
                 # motion controls
                 if ch == "z":
@@ -128,8 +128,7 @@ class Keyboard(CommandInterface):
             commands = self.active_motion.get_next_motion_frame()
             if commands:
                 # only get commands the policy supports and fill the rest with zeros
-                policy_commands = {name: commands.get(name, 0.0) for name in self.policy_command_names}
-                clamped_commands = {name: clamp(name, policy_commands[name]) for name in self.policy_command_names}
+                clamped_commands = {name: clamp(name, commands.get(name, 0.0)) for name in self.policy_command_names}
                 return {name: v for name, v in clamped_commands.items()}, {}
             else:
                 self.active_motion = None
