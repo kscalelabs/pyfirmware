@@ -3,11 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-MAX_ANGLE = 2.0
 
 class LaunchInterface(ABC):
-    """Abstract interface for launch UIs (keyboard, websocket, etc.)."""
-
     @abstractmethod
     def get_command_source(self) -> str:
         """Return the command source type, e.g. "keyboard" or "udp"."""
