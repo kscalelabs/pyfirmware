@@ -84,6 +84,7 @@ class Hiwonder:
         self.lock = Lock()
         self.running = Event()
         self.running.set()
+        self.imu_name = "Hiwonder"
 
         self.proc = Process(
             target=_read_loop,

@@ -24,10 +24,10 @@ warn_redundant_casts = true
 incremental = true
 namespace_packages = false
 
-# Uncomment to exclude modules from Mypy.
-# [[tool.mypy.overrides]]
-# module = []
-# ignore_missing_imports = true
+# Exclude modules with missing type stubs from Mypy
+[[tool.mypy.overrides]]
+module = ["simple_websocket_server"]
+ignore_missing_imports = true
 
 [tool.ruff]
 
