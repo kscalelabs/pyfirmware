@@ -1,5 +1,7 @@
 """WebRTC server using GStreamer and websockets for streaming video/audio."""
 
+from __future__ import annotations
+
 import argparse
 import asyncio
 import json
@@ -13,7 +15,6 @@ from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-no
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
 gi.require_version("GstSdp", "1.0")
-
 
 Gst.init(None)
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
