@@ -33,11 +33,19 @@ class SimplePolicyManager:
         self._running = True
 
         # Default command mirrors existing usage: run firmware.main with websocket
+        # Use kbot environment if available, fallback to system python
+        kbot_python = Path.home() / "kbot" / "bin" / "python"
+        python_cmd = str(kbot_python) if kbot_python.exists() else "python"
+        
+        # Default policy directory
+        default_policy_dir = str(Path.home() / ".policies")
+        
         self._default_cmd: List[str] = [
-            "python",
+            python_cmd,
             "-m",
             "firmware.main",
             "--websocket",
+            default_policy_dir,
         ]
 
         # Run from the project directory that contains the `firmware` package
