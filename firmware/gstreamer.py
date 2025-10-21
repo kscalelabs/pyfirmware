@@ -1,11 +1,5 @@
 """WebRTC server using GStreamer and websockets for streaming video/audio."""
 
-# GstWebRTC uses GObject Introspection - a dynamic type system.
-# The types like WebRTCBin don't exist as normal Python attributes.
-# They're generated on-demand using __getattr__ magic methods.
-# When you access GstWebRTC.WebRTCBin during class definition,
-# the introspection system hasn't fully initialized yet,
-#  so it can't find WebRTCBin and raises
 from __future__ import annotations
 
 import argparse
