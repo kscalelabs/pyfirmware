@@ -35,7 +35,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
     imu_reader = get_imu_reader()
 
     device_data = {
-        "actuators": motor_driver.get_joint_angles_and_velocities(),
+        "actuators": motor_driver.startup_sequence(),
         "imu": imu_reader.imu_name,
     }
 
@@ -87,7 +87,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
         )
         t4 = time.perf_counter()
 
-        named_action = joint_cmd | {joint_name: action for joint_name, action in zip(joint_order, action)}
+        named_action = {joint_name: action for joint_name, action in zip(joint_order, action)} | joint_cmd
         motor_driver.take_action(named_action)
         t5 = time.perf_counter()
         motor_driver.flush_can_busses()
@@ -114,7 +114,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
                 "joint_temps": temps,
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
-                "command": policy_cmd,  # TODO log joint cmd
+                "command": policy_cmd | joint_cmd,
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },

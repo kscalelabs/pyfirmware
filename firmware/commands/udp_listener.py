@@ -39,14 +39,11 @@ class UDPListener(CommandInterface):
                         continue
 
                     payload = command_data.get("commands", command_data)
-                    self.joint_cmd.clear()  # reset joint cmd always
                     for name, value in payload.items():
-                        if name in self.policy_cmd:
-                            self.policy_cmd[str(name).lower()] = float(value)
-                        elif name in self.joint_names:
-                            self.joint_cmd[name] = float(value)
+                        if name in self.policy_command_names or name in self.joint_names:
+                            self.cmd[str(name).lower()] = float(value)
                         else:
-                            print(f"Warning: Command name '{name}' not supported by policy")
+                            print(f"Warning: Command name '{name}' not supported by policy or joint names")
 
                 except socket.timeout:
                     continue

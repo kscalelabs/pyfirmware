@@ -33,8 +33,6 @@ class RobotWebSocket(WebSocket):
 
 
 class WebSocketLaunchInterface(LaunchInterface):
-    """WebSocket interface using blocking I/O - no async needed!"""
-
     def __init__(self, host: str = "0.0.0.0", port: int = 8760) -> None:
         """Initialize and wait for a client connection."""
         self.host = host
@@ -80,9 +78,7 @@ class WebSocketLaunchInterface(LaunchInterface):
         expected_types.append('abort')
         start_time = time.time()
 
-
         while time.time() - start_time < timeout:
-            # Check message queue
             if self.message_queue:
                 message = self.message_queue.pop(0)
 
@@ -95,10 +91,8 @@ class WebSocketLaunchInterface(LaunchInterface):
                     })
                     continue
 
-            # Sleep briefly to avoid busy waiting
             time.sleep(0.01)
 
-        # Timeout
         self.send_message("timeout", {
             "message": f"Waiting for one of: {expected_types}"
         })
@@ -114,14 +108,12 @@ class WebSocketLaunchInterface(LaunchInterface):
             except Exception as e:
                 print(f"Error closing old connection: {e}")
 
-        # Accept new connection
         self.websocket = websocket
         print(f"🔌 Client connected from {websocket.address}")
 
         # Send resume state if mid-process
         if self.active_step != -1:
             print(f"🔄 Resuming from step {self.active_step}")
-            # Send resume message with data at top level for React compatibility
             message = {
                 "type": "resume_step",
                 "step": self.steps[self.active_step][0],
@@ -137,10 +129,8 @@ class WebSocketLaunchInterface(LaunchInterface):
         self._connected_event.set()
 
     def _on_disconnect(self, websocket: WebSocket) -> None:
-        """Called when a client disconnects. State is preserved for reconnection."""
         print(f"🔌 Client disconnected from {websocket.address}")
-        self.websocket = None  # Allow anyone to reconnect
-        # Keep active_step, devices_data, kinfer_files for resume
+        self.websocket = None
 
     def _wait_for_connection(self, timeout: int = 300) -> None:
         """Block until a client connects."""
@@ -164,9 +154,6 @@ class WebSocketLaunchInterface(LaunchInterface):
 
     def ask_motor_permission(self, robot_devices: dict = {}) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        # Run sanity check on actuator angles
-        if "actuators" in robot_devices:
-            self.enable_motors_sanity_check(robot_devices["actuators"])
         self.send_message("request_motor_enable", robot_devices)
         self.active_step = 1
         self.devices_data = robot_devices
@@ -188,49 +175,35 @@ class WebSocketLaunchInterface(LaunchInterface):
             return True
         return False
 
-    def get_kinfer_path(self, policy_dir: Optional[str] = None) -> Optional[str]:
+    def get_kinfer_path(self, policy_dir: str) -> Optional[str]:
         """Send list of available kinfer files and wait for user selection."""
-        # Find all .kinfer files in ~/.policies or provided directory
-        if policy_dir:
-            search_dir = Path(policy_dir)
-        else:
-            search_dir = Path.home() / ".policies"
-        kinfer_files = []
+        search_dir = Path(policy_dir)
+        self.kinfer_files = []
 
         if search_dir.exists():
             # Get all .kinfer files with metadata
             for filepath in search_dir.glob("*.kinfer"):
-                kinfer_files.append({
+                self.kinfer_files.append({
                     "name": filepath.name,
                     "path": str(filepath),
                     "size": filepath.stat().st_size,
                     "modified": filepath.stat().st_mtime
                 })
 
-            # Sort by modification time (newest first)
-            kinfer_files.sort(
-                key=lambda x: float(x["modified"]) if isinstance(x["modified"], (int, float, str)) else 0,
-                reverse=True
-            )
-
-        if not kinfer_files:
-            self.send_message("error", {
-                "message": f"No kinfer files found in {search_dir}"
-            })
+        if not self.kinfer_files:
             return None
-        self.kinfer_files = kinfer_files
-        # Send list to client
+
         self.send_message("kinfer_list", {
-            "files": kinfer_files,
-            "count": len(kinfer_files)
+            "files": self.kinfer_files
         })
 
         self.active_step = 0
+
         message = self.process_step()
         if message and message.get("type") == "abort":
             return None
         if message and message.get("type") == "select_kinfer":
-            selected_path = message.get("data", {}).get("path")
+            selected_path = message.get("data", {}).get("path", None)
             return selected_path
         return None
 

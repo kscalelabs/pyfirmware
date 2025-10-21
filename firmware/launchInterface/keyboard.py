@@ -142,8 +142,6 @@ class KeyboardLaunchInterface(LaunchInterface):
                 print("\033[1;33mWARNING: Actuator faults detected\033[0m")
         print("IMU:" + robot_devices["imu"])
 
-        self.enable_motors_sanity_check(actuators)
-
         while True:
             print("=================")
             print("Enable motors (y/n):")

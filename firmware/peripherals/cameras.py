@@ -1,5 +1,7 @@
 """WebRTC camera streaming server with clean lifecycle management."""
 
+from __future__ import annotations
+
 import argparse
 import asyncio
 import json
