@@ -7,12 +7,13 @@ import os
 from typing import Optional
 
 import gi  # type: ignore[import-not-found]
-import websockets  # type: ignore[import-not-found]
-from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-not-found]
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
 gi.require_version("GstSdp", "1.0")
+
+import websockets  # type: ignore[import-not-found]
+from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-not-found]
 
 
 Gst.init(None)
