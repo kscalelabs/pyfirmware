@@ -35,7 +35,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
     imu_reader = get_imu_reader()
 
     device_data = {
-        "actuators": motor_driver.get_joint_angles_and_velocities(),
+        "actuators": motor_driver.startup_sequence(),
         "imu": imu_reader.imu_name,
     }
 

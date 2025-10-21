@@ -3,6 +3,7 @@
 import math
 import socket
 import struct
+import sys
 import time
 from typing import Any, Dict, Optional
 
@@ -299,6 +300,19 @@ class MotorDriver:
         self.set_pd_targets(joint_angles, scaling=0.0)
         self._motors_enabled = False
         print("Motors ramped down to zero")
+
+    def startup_sequence(self) -> dict[int, dict[str, float | str | int]]:
+        if not self.can.actuators:
+            print("\033[1;31mERROR: No actuators detected\033[0m")
+            sys.exit(1)
+
+        joint_data_dict = self.get_joint_angles_and_velocities(zeros_fallback=False)
+
+        if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):  # type: ignore[arg-type]
+            print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
+            sys.exit(1)
+
+        return joint_data_dict
 
     def enable_and_home_motors(self) -> None:
         self.can.enable_motors()

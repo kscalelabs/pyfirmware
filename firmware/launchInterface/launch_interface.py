@@ -1,6 +1,5 @@
 """Base interface for launching robot control workflows."""
 
-import sys
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -28,16 +27,6 @@ class LaunchInterface(ABC):
     def get_kinfer_path(self, policy_dir_path: str) -> Optional[str]:
         """Return the selected .kinfer path or None if cancelled/invalid."""
         raise NotImplementedError
-
-    def enable_motors_sanity_check(self, joint_data_dict: dict) -> bool:
-        """Check if actuators are safe to enable."""
-        if any(abs(data["angle"]) > MAX_ANGLE for data in joint_data_dict.values()):
-            print(
-                f"\033[1;31mERROR: Actuator angles too far from zero (max={MAX_ANGLE:.1f} rad) - "
-                f"move joints closer to home position\033[0m"
-            )
-            sys.exit(1)
-        return True
 
     def stop(self) -> None:
         """Cleanup/teardown resources owned by the implementation."""

@@ -164,9 +164,6 @@ class WebSocketLaunchInterface(LaunchInterface):
 
     def ask_motor_permission(self, robot_devices: dict = {}) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        # Run sanity check on actuator angles
-        if "actuators" in robot_devices:
-            self.enable_motors_sanity_check(robot_devices["actuators"])
         self.send_message("request_motor_enable", robot_devices)
         self.active_step = 1
         self.devices_data = robot_devices
