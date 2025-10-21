@@ -13,7 +13,7 @@ class CommandInterface(ABC):
     def __init__(self, policy_command_names: list[str]) -> None:
         self.policy_command_names = policy_command_names
         self.cmd = {cmd: 0.0 for cmd in policy_command_names}
-        self.last_cmd: dict[str, float] = {}
+        self.last_cmd = self.cmd.copy()
         self.max_delta = 0.05
         self.joint_limits = {
             actuator.full_name: (actuator.joint_limit_min, actuator.joint_limit_max)
@@ -51,7 +51,7 @@ class CommandInterface(ABC):
     def reset_cmd(self) -> None:
         """Reset all commands to zero."""
         self.cmd = {cmd_name: 0.0 for cmd_name in self.policy_command_names}
-        self.last_cmd = {}
+        self.last_cmd = self.cmd.copy()
 
     def get_cmd(self) -> tuple[dict[str, float], dict[str, float]]:
         """Get new commands that are clamped for safety.
