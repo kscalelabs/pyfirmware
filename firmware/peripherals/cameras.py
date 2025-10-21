@@ -1,4 +1,4 @@
-"""WebRTC server using GStreamer and websockets for streaming video/audio."""
+"""WebRTC camera streaming server with clean lifecycle management."""
 
 import argparse
 import asyncio
@@ -13,7 +13,6 @@ from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-no
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
 gi.require_version("GstSdp", "1.0")
-
 
 Gst.init(None)
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
@@ -392,22 +391,103 @@ class WebRTCServer:
         self.close_pipeline()
 
 
+class CameraStreamer:
+    """Manages WebRTC camera streaming server with proper lifecycle."""
+    
+    def __init__(self, host: str = "0.0.0.0", port: int = 8765, flip_video: bool = False):
+        """Initialize camera streamer."""
+        self.host = host
+        self.port = port
+        self.flip_video = flip_video
+        self.server: Optional[WebRTCServer] = None
+        self.ws_server: Optional[websockets.WebSocketServer] = None
+        self.glib_task: Optional[asyncio.Task] = None
+        self.running = False
+    
+    async def start(self) -> bool:
+        """Start the camera streaming server."""
+        if self.running:
+            print("Camera streamer already running")
+            return True
+        
+        try:
+            loop = asyncio.get_running_loop()
+            self.server = WebRTCServer(loop, flip_video=self.flip_video)
+            
+            async def handler(websocket: websockets.WebSocketServerProtocol) -> None:
+                await self.server.websocket_handler(websocket)
+            
+            # Start GLib main loop integration
+            self.glib_task = asyncio.create_task(glib_main_loop_iteration())
+            
+            # Start WebSocket server
+            self.ws_server = await websockets.serve(handler, self.host, self.port)
+            self.running = True
+            
+            print(f"✅ Camera streaming server running on ws://{self.host}:{self.port}")
+            return True
+            
+        except Exception as e:
+            print(f"Error starting camera streamer: {e}")
+            await self.stop()
+            return False
+    
+    async def stop(self) -> bool:
+        """Stop the camera streaming server."""
+        if not self.running:
+            print("Camera streamer not running")
+            return True
+        
+        try:
+            # Close WebSocket server
+            if self.ws_server:
+                self.ws_server.close()
+                await self.ws_server.wait_closed()
+                self.ws_server = None
+            
+            # Close any active pipelines
+            if self.server:
+                self.server.close_pipeline()
+                self.server = None
+            
+            # Cancel GLib task
+            if self.glib_task and not self.glib_task.done():
+                self.glib_task.cancel()
+                try:
+                    await self.glib_task
+                except asyncio.CancelledError:
+                    pass
+                self.glib_task = None
+            
+            self.running = False
+            print("✅ Camera streaming server stopped")
+            return True
+            
+        except Exception as e:
+            print(f"Error stopping camera streamer: {e}")
+            self.running = False
+            return False
+    
+    def is_running(self) -> bool:
+        """Check if camera streamer is running."""
+        return self.running
+
+
 async def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="WebRTC Video Streaming Server")
     parser.add_argument("--flip", action="store_true", help="Vertically flip the video stream")
     args = parser.parse_args()
 
-    loop = asyncio.get_running_loop()
-    server = WebRTCServer(loop, flip_video=args.flip)
-
-    async def handler(websocket: websockets.WebSocketServerProtocol) -> None:
-        await server.websocket_handler(websocket)
-
-    asyncio.create_task(glib_main_loop_iteration())
-    async with websockets.serve(handler, "0.0.0.0", 8765):
-        print("WebSocket server running on ws://0.0.0.0:8765")
+    streamer = CameraStreamer(flip_video=args.flip)
+    await streamer.start()
+    
+    try:
         await asyncio.Future()  # run forever
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+    finally:
+        await streamer.stop()
 
 
 if __name__ == "__main__":
