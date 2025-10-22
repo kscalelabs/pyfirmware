@@ -52,6 +52,7 @@ class WebRTCServer:
         self.added_data_channel = False
         self.added_streams = 0
         self.flip_video = flip_video
+        self.udp_target = ("127.0.0.1", 10000)
 
     def connect_audio(self, webrtc: GstWebRTC.WebRTCBin) -> None:
         if self.pipe is None:
@@ -86,7 +87,7 @@ class WebRTCServer:
         else:
             print("Audio linked to webrtcbin")
 
-    def start_pipeline(self, active_cameras: list[int] = [1], audio: bool = True, undistort: bool = False) -> None:
+    def start_pipeline(self, active_cameras: list[int] = [1], audio: bool = True) -> None:
         print("Starting pipeline")
         self.pipe = Gst.Pipeline.new("pipeline")
 
@@ -192,8 +193,15 @@ class WebRTCServer:
             self.webrtc = None
             self.added_data_channel = False
 
-    def on_message_string(self, channel: GstWebRTC.WebRTCDataChannel, message: str) -> None:
-        print("Received:", message)
+    def on_message_string(self, channel, message) -> None:
+        """Handle incoming messages from WebRTC data channel and forward to UDP listener."""
+        try:
+            msg = {"commands": json.loads(message)}
+            # Forward the command object to UDP listener on port 10000
+            self.udp_sock.sendto(json.dumps(msg).encode("utf-8"), self.udp_target)
+            print(f"Forwarded command to UDP {self.udp_target}: {msg}")
+        except Exception as e:
+            print(f"Error forwarding command: {e}")
 
     def on_data_channel(self, webrtc: GstWebRTC.WebRTCBin, channel: GstWebRTC.WebRTCDataChannel) -> None:
         print("New data channel:", channel.props.label)
@@ -364,9 +372,8 @@ class WebRTCServer:
 
             msg_cameras = msg.get("cameras", [0])
             msg_audio = msg.get("audio", True)
-            msg_undistort = msg.get("undistort", False)
 
-            self.start_pipeline(msg_cameras, msg_audio, msg_undistort)
+            self.start_pipeline(msg_cameras, msg_audio)
 
             return
 
