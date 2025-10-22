@@ -18,7 +18,6 @@ gi.require_version("GstSdp", "1.0")
 
 Gst.init(None)
 
-# Optional TURN Configuration
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
 
 WEBRTC_DESC = """
@@ -28,20 +27,25 @@ webrtcbin name=sendrecv
 """
 
 VIDEO_SOURCES = [
-    "/base/axi/pcie@1000120000/rp1/i2c@80000/ov5647@36",
     "/base/axi/pcie@1000120000/rp1/i2c@88000/ov5647@36",
+    "/base/axi/pcie@1000120000/rp1/i2c@80000/ov5647@36",
 ]
 
 AUDIO_SOURCE = "hw:0,0"
 
 async def glib_main_loop_iteration() -> None:
     while True:
-        # Process all pending GLib events without blocking
         while GLib.main_context_default().iteration(False):
             pass
-        # Yield control back to asyncio, adjust delay as needed
         await asyncio.sleep(0.01)
 
+def add_elements_to_pipeline(pipeline: Gst.Pipeline, elements: list[Gst.Element]) -> None:
+    for element in elements:
+        pipeline.add(element)
+        element.sync_state_with_parent()
+
+    for i in range(len(elements) - 1):
+        elements[i].link(elements[i + 1])
 
 class WebRTCServer:
     def __init__(self, loop: asyncio.AbstractEventLoop, flip_video: bool = False) -> None:
@@ -52,9 +56,9 @@ class WebRTCServer:
         self.added_data_channel = False
         self.added_streams = 0
         self.flip_video = flip_video
-        self.udp_target = ("127.0.0.1", 10000)
+        self.udp_target = ("127.0.0.1", 10000) # To Forward Data Channel Commands
 
-    def connect_audio(self, webrtc: GstWebRTC.WebRTCBin) -> None:
+    def connect_microphone(self, webrtc: GstWebRTC.WebRTCBin) -> None:
         if self.pipe is None:
             print("Error: Pipeline not initialized")
             return
@@ -66,13 +70,9 @@ class WebRTCServer:
         rtp_pay = Gst.ElementFactory.make("rtpopuspay", "rtp_pay")
         rtp_pay.set_property("pt", 98)
 
-        for e in [audio_src, audio_conv, audio_resample, opus_enc, rtp_pay]:
-            self.pipe.add(e)
+        elements_to_add = [audio_src, audio_conv, audio_resample, opus_enc, rtp_pay]
 
-        audio_src.link(audio_conv)
-        audio_conv.link(audio_resample)
-        audio_resample.link(opus_enc)
-        opus_enc.link(rtp_pay)
+        add_elements_to_pipeline(self.pipe, elements_to_add)
 
         sink_pad = webrtc.get_request_pad("sink_1")
         src_pad = rtp_pay.get_static_pad("src")
@@ -90,15 +90,16 @@ class WebRTCServer:
     def start_pipeline(self, active_cameras: list[int] = [1], audio: bool = True) -> None:
         print("Starting pipeline")
         self.pipe = Gst.Pipeline.new("pipeline")
-
         webrtc = Gst.parse_launch(WEBRTC_DESC)
         webrtc.set_property("turn-server", TURN_URL)
         webrtc.set_property("ice-transport-policy", "all")
 
         self.pipe.add(webrtc)
+
         bus = self.pipe.get_bus()
         bus.add_signal_watch()
         bus.connect("message", self.on_bus_message)
+
         self.webrtc = self.pipe.get_by_name("sendrecv")
         self.webrtc.set_property("latency", 0)
         self.webrtc.connect("on-ice-candidate", self.send_ice_candidate_message)
@@ -119,31 +120,16 @@ class WebRTCServer:
 
             conv = Gst.ElementFactory.make("videoconvert", f"conv{i}")
 
-            if self.flip_video:
-                flip = Gst.ElementFactory.make("videoflip", f"flip{i}")
-                flip.set_property("method", 2)  # 2 = vertical flip
-
             sink_queue = Gst.ElementFactory.make("queue", f"sink_queue{i}")
             sink_queue.set_property("leaky", 2)
             sink_queue.set_property("max-size-buffers", 2)
 
             elements_to_add = [src, capsfilter, conv, sink_queue]
 
-            if self.flip_video:
+            if not self.flip_video:
+                flip = Gst.ElementFactory.make("videoflip", f"flip{i}")
+                flip.set_property("method", 2)  # 2 = vertical flip
                 elements_to_add.append(flip)
-
-            for e in elements_to_add:
-                self.pipe.add(e)
-
-            src.link(capsfilter)
-            capsfilter.link(conv)
-
-            if self.flip_video:
-                conv.link(flip)
-                flip.link(sink_queue)
-            else:
-                conv.link(sink_queue)
-
 
             vp8enc = Gst.ElementFactory.make("vp8enc", f"vp8enc{i}")
             vp8enc.set_property("deadline", 1)
@@ -152,12 +138,9 @@ class WebRTCServer:
             pay = Gst.ElementFactory.make("rtpvp8pay", f"pay{i}")
             pay.set_property("pt", 96 + i)
 
-            # Add elements to pipeline
-            for e in [vp8enc, pay]:
-                self.pipe.add(e)
+            elements_to_add.extend([vp8enc, pay])
 
-            sink_queue.link(vp8enc)
-            vp8enc.link(pay)
+            add_elements_to_pipeline(self.pipe, elements_to_add)
 
             src_pad = src.get_static_pad("src")
             sink_pad = webrtc.get_request_pad(f"sink_{i * 2}")
@@ -169,7 +152,7 @@ class WebRTCServer:
                 print("Pad link result", ret)
 
         if audio:
-            self.connect_audio(webrtc)
+            self.connect_microphone(webrtc)
 
         self.webrtc.connect("on-negotiation-needed", self.on_negotiation_needed)
         self.pipe.set_state(Gst.State.PLAYING)
@@ -178,9 +161,7 @@ class WebRTCServer:
 
     def on_bus_message(self, bus: Gst.Bus, message: Gst.Message) -> int:
         """Handle messages from the GStreamer bus, specifically for latency."""
-        t = message.type
-        if t == Gst.MessageType.LATENCY:
-            print("Received a LATENCY message. Recalculating latency.")
+        if message.type == Gst.MessageType.LATENCY:
             if self.pipe is not None:
                 self.pipe.recalculate_latency()
 
@@ -193,11 +174,10 @@ class WebRTCServer:
             self.webrtc = None
             self.added_data_channel = False
 
-    def on_message_string(self, channel, message) -> None:
+    def on_message_string(self, channel: GstWebRTC.WebRTCDataChannel, message: str) -> None:
         """Handle incoming messages from WebRTC data channel and forward to UDP listener."""
         try:
             msg = {"commands": json.loads(message)}
-            # Forward the command object to UDP listener on port 10000
             self.udp_sock.sendto(json.dumps(msg).encode("utf-8"), self.udp_target)
             print(f"Forwarded command to UDP {self.udp_target}: {msg}")
         except Exception as e:
@@ -211,7 +191,6 @@ class WebRTCServer:
         if pad.direction != Gst.PadDirection.SRC:
             return
 
-        # Get the caps to determine if this is video or audio
         caps = pad.get_current_caps()
         if not caps:
             print("No caps available for incoming stream")
@@ -224,58 +203,40 @@ class WebRTCServer:
         print(f"Incoming stream - Media: {media_type}, Encoding: {encoding_name}")
 
         if media_type == "video" and encoding_name == "VP8":
-            # Create video pipeline with proper synchronization
             stream_id = self.added_streams
 
-            # Create elements
             vp8depay = Gst.ElementFactory.make("rtpvp8depay", f"vp8depay_{stream_id}")
             vp8dec = Gst.ElementFactory.make("vp8dec", f"vp8dec_{stream_id}")
             queue2 = Gst.ElementFactory.make("queue", f"queue2_{stream_id}")
             videoconvert = Gst.ElementFactory.make("videoconvert", f"videoconvert_{stream_id}")
-            videoscale = Gst.ElementFactory.make("videoscale", f"videoscale_{stream_id}")
 
-            # Configure scaling to fill screen (1024x600) while preserving aspect ratio
+            videoscale = Gst.ElementFactory.make("videoscale", f"videoscale_{stream_id}")
             videoscale.set_property("method", 1)  # Bilinear scaling
             videoscale.set_property("add-borders", True)  # Add black bars to maintain aspect ratio
+
             scale_caps = Gst.Caps.from_string("video/x-raw,width=1024,height=600")
             scale_capsfilter = Gst.ElementFactory.make("capsfilter", f"scale_caps_{stream_id}")
             scale_capsfilter.set_property("caps", scale_caps)
 
-            # Use kmssink for console mode display
             videosink = Gst.ElementFactory.make("kmssink", f"kmssink_{stream_id}")
             if videosink:
-                # kmssink properties - it will display fullscreen by default
-                videosink.set_property("connector-id", -1)  # Auto-select display
-                videosink.set_property("can-scale", True)  # Enable hardware scaling if available
+                videosink.set_property("connector-id", -1)
+                videosink.set_property("can-scale", True)
             else:
                 print(f"Warning: Failed to create kmssink for stream {stream_id}")
-                # Fallback to fakesink if kmssink not available
                 videosink = Gst.ElementFactory.make("fakesink", f"fakesink_{stream_id}")
 
             vp8depay.set_property("request-keyframe", True)
             vp8depay.set_property("wait-for-keyframe", False)
 
             elements = [vp8depay, vp8dec, queue2, videoconvert, videoscale, scale_capsfilter, videosink]
-            for element in elements:
-                if self.pipe is not None:
-                    self.pipe.add(element)
-                element.sync_state_with_parent()
 
-            vp8depay.link(vp8dec)
-            vp8dec.link(queue2)
-            queue2.link(videoconvert)
-            videoconvert.link(videoscale)
-            videoscale.link(scale_capsfilter)
-            scale_capsfilter.link(videosink)
+            add_elements_to_pipeline(self.pipe, elements)
 
-            # Link the incoming pad to vp8depay
             sink_pad = vp8depay.get_static_pad("sink")
             pad.link(sink_pad)
 
-            print("Created video pipeline: pad -> vp8depay -> vp8dec -> queue -> convert -> scale(1024x600) -> sink")
-
         elif media_type == "audio" and encoding_name == "OPUS":
-            # Create audio pipeline with proper synchronization
             stream_id = self.added_streams
 
             opusdepay = Gst.ElementFactory.make("rtpopusdepay", f"opusdepay_{stream_id}")
@@ -289,24 +250,10 @@ class WebRTCServer:
 
             # Add elements to pipeline
             elements = [opusdepay, opusdec, audioconvert, audioresample, autoaudiosink]
-            for element in elements:
-                if self.pipe is not None:
-                    self.pipe.add(element)
-                element.sync_state_with_parent()
+            add_elements_to_pipeline(self.pipe, elements)
 
-            # Link elements
-            opusdepay.link(opusdec)
-            opusdec.link(audioconvert)
-            audioconvert.link(audioresample)
-            audioresample.link(autoaudiosink)
-
-            # Link the incoming pad
             sink_pad = opusdepay.get_static_pad("sink")
             pad.link(sink_pad)
-
-            print(
-                "Created audio pipeline: pad -> opusdepay -> queue -> opusdec -> queue -> convert -> resample -> sink"
-            )
 
         else:
             print(f"Unsupported stream type: {media_type}/{encoding_name}")
@@ -314,7 +261,8 @@ class WebRTCServer:
         self.added_streams += 1
 
     def on_negotiation_needed(self, element: GstWebRTC.WebRTCBin) -> None:
-        print("Negotiation needed")
+        """Triggered by webrtcbin when media streams are connected to sink pad."""
+        print("Media Stream Connected, Negotiating...")
         if self.added_data_channel or self.webrtc is None:
             return
 
@@ -322,7 +270,6 @@ class WebRTCServer:
         self.data_channel = self.webrtc.emit("create-data-channel", "chat", None)
 
         if self.data_channel:
-            print("Data channel created on robot")
             self.data_channel.connect("on-message-string", self.on_message_string)
 
         promise = Gst.Promise.new_with_change_func(self.on_offer_created, element, None)
@@ -335,9 +282,8 @@ class WebRTCServer:
         offer = reply.get_value("offer")
         if self.webrtc is not None:
             self.webrtc.emit("set-local-description", offer, Gst.Promise.new())
-        text = offer.sdp.as_text()
-        print("Created offer:", text)
-        message = json.dumps({"sdp": {"type": "offer", "sdp": text}})
+        print("Sending SDP Offer")
+        message = json.dumps({"sdp": {"type": "offer", "sdp": offer.sdp.as_text()}})
         if self.ws is not None:
             asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
@@ -347,13 +293,11 @@ class WebRTCServer:
             asyncio.run_coroutine_threadsafe(self.ws.send(message), self.loop)
 
     def handle_client_message(self, message: str) -> None:
-        print("Handling client message")
-        print(message)
-
         msg = json.loads(message)
         msg_type = msg.get("type", None)
 
         if "sdp" in msg and msg["sdp"]["type"] == "answer":
+            print("Received SDP Answer")
             sdp = msg["sdp"]["sdp"]
             res, sdpmsg = GstSdp.SDPMessage.new()
             GstSdp.sdp_message_parse_buffer(sdp.encode(), sdpmsg)
@@ -367,15 +311,10 @@ class WebRTCServer:
                 self.webrtc.emit("add-ice-candidate", ice["sdpMLineIndex"], ice["candidate"])
 
         elif msg_type == "HELLO":
+            print("Restarting Pipeline")
             if self.pipe:
                 self.close_pipeline()
-
-            msg_cameras = msg.get("cameras", [0])
-            msg_audio = msg.get("audio", True)
-
-            self.start_pipeline(msg_cameras, msg_audio)
-
-            return
+            self.start_pipeline(msg.get("cameras", [0]), msg.get("audio", True))
 
     async def websocket_handler(self, ws: websockets.WebSocketServerProtocol) -> None:
         print("Client connected")
@@ -383,9 +322,8 @@ class WebRTCServer:
         async for msg in ws:
             self.handle_client_message(msg)
 
-        print("Client disconnected")
+        print("Client disconnected, Stopping Pipeline")
         self.close_pipeline()
-
 
 async def main() -> None:
     # Parse command line arguments
@@ -403,7 +341,6 @@ async def main() -> None:
     async with websockets.serve(handler, "0.0.0.0", 8765):
         print("WebSocket server running on ws://0.0.0.0:8765")
         await asyncio.Future()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
