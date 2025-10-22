@@ -16,7 +16,7 @@ class LaunchInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def launch_policy_permission(self) -> bool:
+    def launch_policy_permission(self, policy_name: str) -> bool:
         """Ask permission to start the policy. Return True to proceed, False to abort."""
         raise NotImplementedError
 
