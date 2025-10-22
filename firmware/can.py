@@ -228,21 +228,10 @@ class CANInterface:
 
         Actuators sometimes send late or extra messages that we need to get rid of.
         """
-        t, t0 = time.monotonic(), time.monotonic()
         for canbus, sock in self.sockets.items():
-            print(f"{canbus}: {(time.monotonic() - t)*1000:.3f}ms")
-            t = time.monotonic()
-            try:
-                sock.recv(self.FRAME_SIZE)
+            result = self._receive_can_frame(sock, Mux.FEEDBACK)
+            if result is not None:
                 print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
-
-            except Exception:
-                continue
-        print(f"last: {(time.monotonic() - t)*1000:.3f}ms")
-        print(f"total: {(time.monotonic() - t0)*1000:.3f}ms")
-            # result = self._receive_can_frame(sock, Mux.FEEDBACK)
-            # if result is not None:
-            #     print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
 
     def close(self) -> None:
         """Close all CAN sockets."""
