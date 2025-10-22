@@ -23,7 +23,7 @@ class CANInterface:
     FRAME_SIZE = struct.calcsize(FRAME_FMT)
     EFF = 0x8000_0000
     HOST_ID = 0xFD
-    CAN_TIMEOUT = 0.002
+    CAN_TIMEOUT = 0.001
     CANBUS_RANGE = range(0, 7)
     ACTUATOR_RANGE = range(10, 50)
 
@@ -229,9 +229,15 @@ class CANInterface:
         Actuators sometimes send late or extra messages that we need to get rid of.
         """
         for canbus, sock in self.sockets.items():
-            result = self._receive_can_frame(sock, Mux.FEEDBACK)
-            if result is not None:
+            try:
+                sock.recv(self.FRAME_SIZE)
                 print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
+
+            except Exception:
+                continue
+            # result = self._receive_can_frame(sock, Mux.FEEDBACK)
+            # if result is not None:
+            #     print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
 
     def close(self) -> None:
         """Close all CAN sockets."""
