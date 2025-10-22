@@ -23,7 +23,7 @@ class CANInterface:
     FRAME_SIZE = struct.calcsize(FRAME_FMT)
     EFF = 0x8000_0000
     HOST_ID = 0xFD
-    CAN_TIMEOUT = 0.002
+    CAN_TIMEOUT = 0.001
     CANBUS_RANGE = range(0, 7)
     ACTUATOR_RANGE = range(10, 50)
 
