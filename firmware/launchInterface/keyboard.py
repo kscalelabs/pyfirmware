@@ -156,7 +156,7 @@ class KeyboardLaunchInterface(LaunchInterface):
     def launch_policy_permission(self, policy_name: str) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
         print("=================")
-        print("Start {policy_name}? (y/n): ")
+        print(f"Start {policy_name}? (y/n): ")
         while True:
             response = input("Enter choice: ").lower()
             if response == "y":
