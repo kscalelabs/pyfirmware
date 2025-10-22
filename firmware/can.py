@@ -155,30 +155,48 @@ class CANInterface:
     def get_actuator_feedback(self) -> dict[int, dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
         results: dict[int, dict[str, int]] = {}
-        max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
-        for tranche in range(max_tranches):
-            # Send requests
-            for can, sock in self.sockets.items():
-                if tranche < len(self.actuators[can]):
-                    actuator_id = self.actuators[can][tranche]
-                    frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
-                    sock.send(frame)
 
-            # Receive responses
-            for can, sock in self.sockets.items():
-                if tranche < len(self.actuators[can]):
-                    actuator_id = self.actuators[can][tranche]
-                    parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    if parsed_frame is None:  # timeout
-                        print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
-                        continue
-                    result = self._parse_feedback_response(parsed_frame)
-                    if actuator_id != result["actuator_can_id"]:
-                        print(
-                            f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
-                        )
-                        actuator_id = result["actuator_can_id"]
-                    results[actuator_id] = result
+        for bus in self.sockets.keys():
+            for actuator_id in self.actuators[bus]:
+                frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
+                self.sockets[bus].send(frame)
+
+        for bus in self.sockets.keys():
+            for actuator_id in self.actuators[bus]:
+                parsed_frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
+                if parsed_frame is None:  # timeout
+                    print(f"\033[1;33mWARNING: [gaf] recv timeout bus {bus} actuator {actuator_id}\033[0m")
+                    continue
+                result = self._parse_feedback_response(parsed_frame)
+                if actuator_id != result["actuator_can_id"]:
+                    print(f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m")
+                    actuator_id = result["actuator_can_id"]
+                results[actuator_id] = result
+
+        # max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
+        # for tranche in range(max_tranches):
+        #     # Send requests
+        #     for can, sock in self.sockets.items():
+        #         if tranche < len(self.actuators[can]):
+        #             actuator_id = self.actuators[can][tranche]
+        #             frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
+        #             sock.send(frame)
+
+        #     # Receive responses
+        #     for can, sock in self.sockets.items():
+        #         if tranche < len(self.actuators[can]):
+        #             actuator_id = self.actuators[can][tranche]
+        #             parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
+        #             if parsed_frame is None:  # timeout
+        #                 print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
+        #                 continue
+        #             result = self._parse_feedback_response(parsed_frame)
+        #             if actuator_id != result["actuator_can_id"]:
+        #                 print(
+        #                     f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
+        #                 )
+        #                 actuator_id = result["actuator_can_id"]
+        #             results[actuator_id] = result
         return results
 
     def _parse_feedback_response(self, response: Dict[str, Any]) -> Dict[str, int]:
