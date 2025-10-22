@@ -153,11 +153,10 @@ class KeyboardLaunchInterface(LaunchInterface):
                 return True
             print("Invalid input. Please enter 'y' or 'n'")
 
-    def launch_policy_permission(self) -> bool:
+    def launch_policy_permission(self, policy_name: str) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
         print("=================")
-        print("🚀 Ready to start policy")
-        print("Start policy? (y/n): ")
+        print("Start {policy_name}? (y/n): ")
         while True:
             response = input("Enter choice: ").lower()
             if response == "y":
