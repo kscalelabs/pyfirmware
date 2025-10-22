@@ -396,7 +396,7 @@ def main() -> None:
     driver = MotorDriver(dict(), max_scaling=0.1)
     launch_interface = KeyboardLaunchInterface()
 
-    device_data = driver.startup_sequence()
+    device_data = {"actuators": driver.startup_sequence()}
 
     if not launch_interface.ask_motor_permission(device_data):
         sys.exit(1)
