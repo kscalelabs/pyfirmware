@@ -157,7 +157,7 @@ class WebRTCServer:
 
             upstream_element.link(vp8enc)
             vp8enc.link(pay)
-            print(f"Camera {i} encoding: AppSrc (BGR) -> VideoConvert -> Scale(1920x1080) -> I420 -> VP8 -> RTP")
+            print(f"Camera {i} encoding: AppSrc (BGR) -> VideoConvert -> Scale(1024x600) -> I420 -> VP8 -> RTP")
 
             src_pad = src.get_static_pad("src")
             sink_pad = webrtc.get_request_pad(f"sink_{i * 2}")
@@ -227,9 +227,10 @@ class WebRTCServer:
             videoconvert = Gst.ElementFactory.make("videoconvert", f"videoconvert_{stream_id}")
             videoscale = Gst.ElementFactory.make("videoscale", f"videoscale_{stream_id}")
 
-            # Configure scaling to fit within 1920x1080 while preserving aspect ratio
+            # Configure scaling to fill screen (1024x600) while preserving aspect ratio
             videoscale.set_property("method", 1)  # Bilinear scaling
-            scale_caps = Gst.Caps.from_string("video/x-raw,width=1920,height=1080")
+            videoscale.set_property("add-borders", True)  # Add black bars to maintain aspect ratio
+            scale_caps = Gst.Caps.from_string("video/x-raw,width=1024,height=600")
             scale_capsfilter = Gst.ElementFactory.make("capsfilter", f"scale_caps_{stream_id}")
             scale_capsfilter.set_property("caps", scale_caps)
 
@@ -271,7 +272,7 @@ class WebRTCServer:
             sink_pad = vp8depay.get_static_pad("sink")
             pad.link(sink_pad)
 
-            print("Created video pipeline: pad -> vp8depay -> vp8dec -> queue -> convert -> scale(1920x1080) -> sink")
+            print("Created video pipeline: pad -> vp8depay -> vp8dec -> queue -> convert -> scale(1024x600) -> sink")
 
         elif media_type == "audio" and encoding_name == "OPUS":
             # Create audio pipeline with proper synchronization
