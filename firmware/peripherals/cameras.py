@@ -25,11 +25,11 @@ webrtcbin name=sendrecv
 """
 # ice-transport-policy=relay
 VIDEO_SOURCES = [
-    "/base/axi/pcie@1000120000/rp1/i2c@80000/ov5647@36",
     "/base/axi/pcie@1000120000/rp1/i2c@88000/ov5647@36",
+    "/base/axi/pcie@1000120000/rp1/i2c@80000/ov5647@36",
 ]
 
-AUDIO_SOURCE = "hw:0,0"
+AUDIO_SOURCE = "hw:2,0"
 
 
 async def glib_main_loop_iteration() -> None:
@@ -168,8 +168,8 @@ class WebRTCServer:
                 ret = src_pad.link(sink_pad)
                 print("Pad link result", ret)
 
-        # if audio:
-        #     self.connect_audio(webrtc)
+        if audio:
+            self.connect_audio(webrtc)
         self.webrtc.connect("on-negotiation-needed", self.on_negotiation_needed)
         self.pipe.set_state(Gst.State.PLAYING)
         Gst.debug_bin_to_dot_file(self.pipe, Gst.DebugGraphDetails.ALL, "pipeline_graph")
@@ -233,9 +233,16 @@ class WebRTCServer:
             scale_capsfilter = Gst.ElementFactory.make("capsfilter", f"scale_caps_{stream_id}")
             scale_capsfilter.set_property("caps", scale_caps)
 
-            # Use glimagesink directly with fullscreen/borderless properties
-            autovideosink = Gst.ElementFactory.make("glimagesink", f"glimagesink_{stream_id}")
-            autovideosink.set_property("force-aspect-ratio", True)
+            # Use kmssink for console mode display
+            autovideosink = Gst.ElementFactory.make("kmssink", f"kmssink_{stream_id}")
+            if autovideosink:
+                # kmssink properties - it will display fullscreen by default
+                autovideosink.set_property("connector-id", -1)  # Auto-select display
+                autovideosink.set_property("can-scale", True)  # Enable hardware scaling if available
+            else:
+                print(f"Warning: Failed to create kmssink for stream {stream_id}")
+                # Fallback to fakesink if kmssink not available
+                autovideosink = Gst.ElementFactory.make("fakesink", f"fakesink_{stream_id}")
 
             # Configure depayloader properties
             vp8depay.set_property("request-keyframe", True)

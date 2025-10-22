@@ -22,7 +22,7 @@ class MasterServer:
         self.clients: set[WebSocketServerProtocol] = set()
         self.running = False
         self.status_task: Optional[asyncio.Task] = None
-        self.screen = ScreenDisplay()
+        # self.screen = ScreenDisplay()
         self.camera_streamer = CameraStreamer(host="0.0.0.0", port=camera_port, flip_video=False)
         self.policy_manager = SimplePolicyManager()
     
@@ -172,12 +172,12 @@ class MasterServer:
         print(f"Starting master server on {self.host}:{self.port}")
         
         # Start screen with face display
-        try:
-            screen_success = self.screen.start()
-            if not screen_success:
-                print("Failed to display face")
-        except Exception as e:
-            print(f"Error displaying face: {e}")
+        # try:
+        #     # screen_success = self.screen.start()
+        #     if not screen_success:
+        #         print("Failed to display face")
+        # except Exception as e:
+        #     print(f"Error displaying face: {e}")
         
         # Start camera streaming server
         try:
