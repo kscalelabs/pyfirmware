@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 import os
+import socket
 from typing import Optional
 
 import gi  # type: ignore[import-not-found]
@@ -15,7 +16,6 @@ from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-no
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
 gi.require_version("GstSdp", "1.0")
-
 Gst.init(None)
 
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
@@ -57,6 +57,13 @@ class WebRTCServer:
         self.added_streams = 0
         self.flip_video = flip_video
         self.udp_target = ("127.0.0.1", 10000) # To Forward Data Channel Commands
+        self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def cleanup(self) -> None:
+        if self.pipe:
+            self.close_pipeline()
+        if self.udp_sock:
+            self.udp_sock.close()
 
     def connect_microphone(self, webrtc: GstWebRTC.WebRTCBin) -> None:
         if self.pipe is None:
@@ -160,7 +167,6 @@ class WebRTCServer:
         print("Pipeline started")
 
     def on_bus_message(self, bus: Gst.Bus, message: Gst.Message) -> int:
-        """Handle messages from the GStreamer bus, specifically for latency."""
         if message.type == Gst.MessageType.LATENCY:
             if self.pipe is not None:
                 self.pipe.recalculate_latency()
@@ -170,9 +176,7 @@ class WebRTCServer:
     def close_pipeline(self) -> None:
         if self.pipe:
             self.pipe.set_state(Gst.State.NULL)
-            self.pipe = None
-            self.webrtc = None
-            self.added_data_channel = False
+            self.pipe, self.webrtc, self.added_data_channel = None, None, False
 
     def on_message_string(self, channel: GstWebRTC.WebRTCDataChannel, message: str) -> None:
         """Handle incoming messages from WebRTC data channel and forward to UDP listener."""
@@ -230,7 +234,6 @@ class WebRTCServer:
             vp8depay.set_property("wait-for-keyframe", False)
 
             elements = [vp8depay, vp8dec, queue2, videoconvert, videoscale, scale_capsfilter, videosink]
-
             add_elements_to_pipeline(self.pipe, elements)
 
             sink_pad = vp8depay.get_static_pad("sink")
@@ -244,13 +247,9 @@ class WebRTCServer:
             audioconvert = Gst.ElementFactory.make("audioconvert", f"audioconvert_{stream_id}")
             audioresample = Gst.ElementFactory.make("audioresample", f"audioresample_{stream_id}")
             autoaudiosink = Gst.ElementFactory.make("autoaudiosink", f"autoaudiosink_{stream_id}")
-
-            # Configure audio sink
             autoaudiosink.set_property("sync", True)
 
-            # Add elements to pipeline
-            elements = [opusdepay, opusdec, audioconvert, audioresample, autoaudiosink]
-            add_elements_to_pipeline(self.pipe, elements)
+            add_elements_to_pipeline(self.pipe, [opusdepay, opusdec, audioconvert, audioresample, autoaudiosink])
 
             sink_pad = opusdepay.get_static_pad("sink")
             pad.link(sink_pad)
@@ -326,7 +325,6 @@ class WebRTCServer:
         self.close_pipeline()
 
 async def main() -> None:
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description="WebRTC Video Streaming Server")
     parser.add_argument("--flip", action="store_true", help="Vertically flip the video stream")
     args = parser.parse_args()
@@ -337,10 +335,13 @@ async def main() -> None:
     async def handler(websocket: websockets.WebSocketServerProtocol) -> None:
         await server.websocket_handler(websocket)
 
-    asyncio.create_task(glib_main_loop_iteration())
-    async with websockets.serve(handler, "0.0.0.0", 8765):
-        print("WebSocket server running on ws://0.0.0.0:8765")
-        await asyncio.Future()
+    try:
+        asyncio.create_task(glib_main_loop_iteration())
+        async with websockets.serve(handler, "0.0.0.0", 8765):
+            print("WebSocket server running on ws://0.0.0.0:8765")
+            await asyncio.Future()
+    finally:
+        server.cleanup()
 
 if __name__ == "__main__":
     asyncio.run(main())
