@@ -136,15 +136,19 @@ class CANInterface:
         sock.send(frame)
         return self._receive_can_frame(sock, Mux.PING)
 
+    def clear_faults(self) -> None:
+        for canbus in self.sockets.keys():
+            for actuator_id in self.actuators[canbus]:
+                frame = self._build_can_frame(actuator_id, Mux.CLEAR_FAULTS)
+                self.sockets[canbus].send(frame)
+                _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
+
     def enable_motors(self) -> None:
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
-                self._enable_motor(canbus, actuator_id)
-
-    def _enable_motor(self, canbus: int, actuator_can_id: int) -> None:
-        frame = self._build_can_frame(actuator_can_id, Mux.MOTOR_ENABLE)
-        self.sockets[canbus].send(frame)
-        _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
+                frame = self._build_can_frame(actuator_id, Mux.MOTOR_ENABLE)
+                self.sockets[canbus].send(frame)
+                _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
     def disable_motors(self) -> None:
         for canbus in self.sockets.keys():
@@ -316,6 +320,7 @@ class MotorDriver:
         return joint_data_dict
 
     def enable_and_home_motors(self) -> None:
+        self.can.clear_faults()
         self.can.enable_motors()
         self._motors_enabled = True
         print("✅ Motors enabled")
