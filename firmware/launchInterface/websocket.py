@@ -4,16 +4,17 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from simple_websocket_server import WebSocket, WebSocketServer
 
+
 class WebSocketLaunchInterface:
-    def __init__(self, host: str = "0.0.0.0", port: int = 8760):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8760) -> None:
         self.host = host
         self.port = port
         self.websocket: Optional[WebSocket] = None
-        
+
         self.allow_motors = False
         self.allow_policy = False
         self.selected_kinfer: Optional[str] = None
@@ -21,9 +22,9 @@ class WebSocketLaunchInterface:
         self.current_step = "started"
         self.kinfer_files: list[dict[str, Any]] = []
         self.devices_data: dict[str, Any] = {}
-
+        self.policy_name: Optional[str] = None
         self.server = self._create_server(host, port)
-        
+
         self.server_thread = threading.Thread(
             target=self.server.serve_forever,
             daemon=True,
@@ -36,43 +37,40 @@ class WebSocketLaunchInterface:
     def _create_server(self, host: str, port: int) -> WebSocketServer:
         """Create a WebSocketServer with a handler that references this interface."""
         interface = self
-        
+
         class RobotWebSocketHandler(WebSocket):
-            def handle(self):
+            def handle(self) -> None:
                 try:
                     msg = json.loads(self.data)
                     interface._handle_message(msg)
                 except Exception as e:
                     print(f"Bad message: {e}")
 
-            def connected(self):
+            def connected(self) -> None:
                 print(f"Client connected from {self.address}")
                 interface.websocket = self
 
-            def handle_close(self):
+            def handle_close(self) -> None:
                 print(f"Client disconnected from {self.address}")
                 interface.websocket = None
-        
+
         return WebSocketServer(host, port, RobotWebSocketHandler)
 
     def _handle_message(self, msg: dict[str, Any]) -> None:
         """Handle incoming WebSocket messages."""
         msg_type = msg.get("type")
-        data = msg.get("data", {})
 
-        if msg_type == "enable_motors":
-            self.current_step = "enable_motors"
+        if msg_type == "request_state":
+            self._send_state()
+        elif msg_type == "enable_motors":
             self.allow_motors = True
         elif msg_type == "start_policy":
-            self.current_step = "start_policy"
             self.allow_policy = True
         elif msg_type == "select_kinfer":
-            self.current_step = "select_kinfer"
+            data = msg.get("data", {})
             self.selected_kinfer = data.get("path")
         elif msg_type == "abort":
             self.abort = True
-        elif msg_type == "request_state":
-            self._send_state()
 
     def _send_message(self, msg_type: str, data: dict[str, Any] | None = None) -> None:
         """Send a message to the connected WebSocket client."""
@@ -83,9 +81,10 @@ class WebSocketLaunchInterface:
             except Exception as e:
                 print(f"Error sending message: {e}")
 
-    def _send_state(self):
+    def _send_state(self) -> None:
         """Send current state to client."""
         state = {
+            "policy_name": self.policy_name,
             "current_step": self.current_step,
             "kinfer_files": self.kinfer_files,
             "devices_data": self.devices_data,
@@ -94,14 +93,17 @@ class WebSocketLaunchInterface:
 
     def ask_motor_permission(self, devices: dict[str, Any]) -> bool:
         self.devices_data = devices
-        self.allow_motors = False
-        self._send_message("request_motor_enable", devices)
-        return self._wait_for_flag(lambda: self.allow_motors)
+        return self._wait_for_flag(lambda: self.allow_motors, "enable_motors")
 
     def launch_policy_permission(self, policy_name: str) -> bool:
-        self.allow_policy = False
-        self._send_message("request_policy_start", {"policy": policy_name})
-        return self._wait_for_flag(lambda: self.allow_policy)
+        self.policy_name = policy_name
+        launch_permission = self._wait_for_flag(lambda: self.allow_policy, "start_policy")
+        if launch_permission:
+            self.current_step = "launched"
+        return launch_permission
+
+    def get_command_source(self) -> str:
+        return "udp"
 
     def get_kinfer_path(self, policy_dir: str) -> Optional[str]:
         path = Path(policy_dir)
@@ -112,27 +114,25 @@ class WebSocketLaunchInterface:
         if not self.kinfer_files:
             print("No kinfer files found.")
             return None
-        
-        self.selected_kinfer = None
-        self._send_message("kinfer_list", {"files": self.kinfer_files})
-        
-        if self._wait_for_flag(lambda: self.selected_kinfer is not None):
+        if self._wait_for_flag(lambda: self.selected_kinfer is not None, "select_kinfer"):
             return self.selected_kinfer
         return None
 
-    def _wait_for_flag(self, condition, timeout: int = 300) -> bool:
-        """ Block until condition() is True"""
+    def _wait_for_flag(self, condition: Callable[[], bool], step_name: str, timeout: int = 300) -> bool:
+        """Block until condition() is True."""
         start_time = time.time()
+        self.current_step = step_name
         while time.time() - start_time < timeout:
             if condition():
-                self.current_step = "in-between"
+                self.current_step = "done"
                 return True
             if self.abort:
+                self.current_step = "aborted"
                 return False
             time.sleep(0.1)
         return False
 
-    def stop(self):
+    def stop(self) -> None:
         """Shutdown the WebSocket server and close connections."""
         print("Shutting down WebSocket interface")
         if self.websocket:
