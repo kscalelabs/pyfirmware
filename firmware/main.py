@@ -88,7 +88,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
         t4 = time.perf_counter()
 
         named_action = {joint_name: action for joint_name, action in zip(joint_order, action)} | joint_cmd
-        motor_driver.take_action(named_action)
+        # motor_driver.take_action(named_action)
         t5 = time.perf_counter()
         motor_driver.flush_can_busses()
         t6 = time.perf_counter()

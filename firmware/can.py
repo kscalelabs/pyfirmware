@@ -151,17 +151,26 @@ class CANInterface:
 
     def get_actuator_feedback(self) -> dict[int, dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
+        t_start = time.perf_counter()
         results: dict[int, dict[str, int]] = {}
         max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
+        
+        tranche_times = []
+        
         for tranche in range(max_tranches):
+            t_tranche_start = time.perf_counter()
+            
             # Send requests
+            t_send_start = time.perf_counter()
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
                     frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
                     sock.send(frame)
+            t_send_end = time.perf_counter()
 
             # Receive responses
+            t_recv_start = time.perf_counter()
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
                     actuator_id = self.actuators[can][tranche]
@@ -176,6 +185,21 @@ class CANInterface:
                         )
                         actuator_id = result["actuator_can_id"]
                     results[actuator_id] = result
+            t_recv_end = time.perf_counter()
+            
+            t_tranche_end = time.perf_counter()
+            
+            send_time_us = (t_send_end - t_send_start) * 1e6
+            recv_time_us = (t_recv_end - t_recv_start) * 1e6
+            tranche_time_us = (t_tranche_end - t_tranche_start) * 1e6
+            tranche_times.append(tranche_time_us)
+            
+            print(f"  Tranche {tranche}: send={send_time_us:.0f}μs, recv={recv_time_us:.0f}μs, total={tranche_time_us:.0f}μs")
+        
+        t_end = time.perf_counter()
+        total_time_us = (t_end - t_start) * 1e6
+        print(f"\033[1;36m✓ get_actuator_feedback: {len(results)} actuators in {total_time_us:.0f}μs ({max_tranches} tranches)\033[0m")
+        
         return results
 
     def _parse_feedback_response(self, response: Dict[str, Any]) -> Dict[str, int]:
