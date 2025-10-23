@@ -5,7 +5,7 @@ import struct
 import time
 from typing import Any, Dict, Optional
 
-from firmware.actuators import FaultCode, Mux, RobotConfig
+from firmware.actuators import ActuatorConfig, FaultCode, Mux, RobotConfig
 
 
 class CriticalFaultError(Exception):
@@ -45,10 +45,32 @@ class CANInterface:
         FaultCode(0x01, False, "Undervoltage"),
     ]
 
-    def __init__(self) -> None:
-        self.sockets: dict[int, socket.socket] = {}
-        self.actuators: dict[int, list[int]] = {}
-        self._find_actuators()
+    def __init__(self, robotcfg: RobotConfig, can_index: int) -> None:
+        """Initialize CAN interface for a specific bus.
+
+        Args:
+            robotcfg: Robot configuration containing actuator specs
+            can_index: CAN bus index (e.g., 0 for can0)
+        """
+        self.robotcfg = robotcfg
+        self.can_index = can_index
+        self.sock: Optional[socket.socket] = None
+        self.active_actuators: list[ActuatorConfig] = []
+
+        # Initialize socket and find actuators
+        self._init_socket()
+        self.find_actuators(can_index)
+
+    def _init_socket(self) -> None:
+        """Initialize CAN socket."""
+        try:
+            self.sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+            self.sock.bind((f"can{self.can_index}",))
+            self.sock.settimeout(self.CAN_TIMEOUT)
+            print(f"✓ Initialized CAN{self.can_index}")
+        except Exception as e:
+            print(f"✗ Failed to initialize CAN{self.can_index}: {e}")
+            raise
 
     def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
@@ -72,22 +94,30 @@ class CANInterface:
             "payload": payload,
         }
 
-    def _receive_can_frame(self, sock: socket.socket, mux: int) -> Optional[Dict[str, int]]:
+    def _receive_can_frame(self, mux: int) -> Optional[Dict[str, Any]]:
         """Recursively receive can frames until the mux is the expected value."""
+        if self.sock is None:
+            return None
+
         try:
-            frame = sock.recv(self.FRAME_SIZE)
+            frame = self.sock.recv(self.FRAME_SIZE)
             parsed_frame = self._parse_can_frame(frame)
         except Exception:
             return None
 
-        self._check_for_faults(self.CAN_ID_FAULT_CODES, parsed_frame["fault_flags"], parsed_frame["actuator_can_id"])
+        self._check_for_faults(
+            self.CAN_ID_FAULT_CODES,
+            parsed_frame["fault_flags"],
+            parsed_frame["actuator_can_id"]
+        )
+
         if parsed_frame["mux"] != mux:
             print(f"\033[1;33mWARNING: unexpected mux 0x{parsed_frame['mux']:02X} in feedback response\033[0m")
             if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
                 self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
-            return self._receive_can_frame(sock, mux)  # call again recursively
-        else:
-            return parsed_frame
+            return self._receive_can_frame(mux)  # Recursive retry
+
+        return parsed_frame
 
     def _check_for_faults(self, faults: list[FaultCode], fault_flags: int, actuator_can_id: int) -> None:
         for fault_code in faults:
@@ -102,104 +132,100 @@ class CANInterface:
         self._check_for_faults(self.MUX_0x15_FAULT_CODES, fault_value, actuator_can_id)
         self._check_for_faults(self.MUX_0x15_WARNING_CODES, warning_value, actuator_can_id)
 
-    def _find_actuators(self) -> None:
-        print("\033[1;36m🔍 Scanning CAN buses for actuators...\033[0m")
-        for canbus in self.CANBUS_RANGE:
-            sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
-            try:
-                sock.bind((f"can{canbus}",))
-                sock.settimeout(self.CAN_TIMEOUT)
-                sock.send(self._build_can_frame(0, Mux.PING))  # test message
-            except Exception:
-                continue
+    def find_actuators(self, can_index: int) -> list[ActuatorConfig]:
+        """Scan this CAN bus for actuators."""
+        print(f"\033[1;36m🔍 Scanning CAN{can_index} for actuators...\033[0m")
 
-            print(f"Scanning bus {canbus}...")
-            actuators = []
-            for actuator_id in self.ACTUATOR_RANGE:
-                if actuator_id_response := self._ping_actuator(sock, actuator_id):
-                    actuators.append(actuator_id_response["actuator_can_id"])
-            if actuators:
-                self.sockets[canbus] = sock
-                self.actuators[canbus] = sorted(list(set(actuators)))
+        if self.sock is None:
+            return []
 
-        total_actuators = sum(len(actuators) for actuators in self.actuators.values())
-        print(f"\033[1;32mFound {total_actuators} actuators on {len(self.sockets)} sockets\033[0m")
-        for canbus, actuators in self.actuators.items():
-            print(f"\033[1;34m{canbus}\033[0m: \033[1;35m{actuators}\033[0m")
+        # Test bus with ping
+        try:
+            self.sock.send(self._build_can_frame(0, Mux.PING))
+        except Exception as e:
+            print(f"✗ CAN{can_index} not responsive: {e}")
+            return []
 
-    def _ping_actuator(self, sock: socket.socket, actuator_can_id: int) -> Optional[Dict[str, int]]:
+        for actuator_id in self.ACTUATOR_RANGE:
+            if response := self._ping_actuator(actuator_id):
+                found_id = response["actuator_can_id"]
+                if found_id in self.robotcfg.actuators:
+                    self.active_actuators.append(self.robotcfg.actuators[found_id])
+
+        print(f"\033[1;32m✓ CAN{can_index}: Found {len(self.active_actuators)} actuators\033[0m")
+        return self.active_actuators
+
+    def _ping_actuator(self, actuator_can_id: int) -> Optional[Dict[str, Any]]:
+        """Ping a specific actuator."""
+        if self.sock is None:
+            return None
         frame = self._build_can_frame(actuator_can_id, Mux.PING)
-        sock.send(frame)
-        return self._receive_can_frame(sock, Mux.PING)
+        self.sock.send(frame)
+        return self._receive_can_frame(Mux.PING)
 
     def enable_motors(self) -> None:
-        for canbus in self.sockets.keys():
-            for actuator_id in self.actuators[canbus]:
-                self._enable_motor(canbus, actuator_id)
+        """Enable all motors on this bus."""
+        for actuator in self.active_actuators:
+            self._enable_motor(actuator.can_id)
 
-    def _enable_motor(self, canbus: int, actuator_can_id: int) -> None:
+    def _enable_motor(self, actuator_can_id: int) -> None:
+        """Enable a single motor."""
+        if self.sock is None:
+            return
         frame = self._build_can_frame(actuator_can_id, Mux.MOTOR_ENABLE)
-        self.sockets[canbus].send(frame)
-        _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
+        self.sock.send(frame)
+        _ = self._receive_can_frame(Mux.FEEDBACK)
 
     def disable_motors(self) -> None:
-        for canbus in self.sockets.keys():
-            for actuator_id in self.actuators[canbus]:
-                frame = self._build_can_frame(actuator_id, Mux.MOTOR_DISABLE)
-                self.sockets[canbus].send(frame)
-                time.sleep(0.01)
+        """Disable all motors on this bus."""
+        for actuator in self.active_actuators:
+            frame = self._build_can_frame(actuator.can_id, Mux.MOTOR_DISABLE)
+            self.sock.send(frame)
+            time.sleep(0.01)
 
-    def get_actuator_feedback(self) -> dict[int, dict[str, int]]:
-        """Send one message per bus; wait for all of them concurrently."""
+    def get_actuator_feedback(self, timeout: float = 0.1) -> Dict[int, Dict[str, int]]:
+        """Get feedback from all actuators on this bus.
+
+        Args:
+            timeout: Maximum time to wait for all responses in seconds
+
+        Returns:
+            Dictionary mapping actuator_id to feedback data
+        """
         t_start = time.perf_counter()
-        results: dict[int, dict[str, int]] = {}
-        max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
-        
-        tranche_times = []
-        
-        for tranche in range(max_tranches):
-            t_tranche_start = time.perf_counter()
-            
-            # Send requests
-            t_send_start = time.perf_counter()
-            for can, sock in self.sockets.items():
-                if tranche < len(self.actuators[can]):
-                    actuator_id = self.actuators[can][tranche]
-                    frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
-                    sock.send(frame)
-            t_send_end = time.perf_counter()
+        results: Dict[int, Dict[str, int]] = {}
 
-            # Receive responses
-            t_recv_start = time.perf_counter()
-            for can, sock in self.sockets.items():
-                if tranche < len(self.actuators[can]):
-                    actuator_id = self.actuators[can][tranche]
-                    parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    if parsed_frame is None:  # timeout
-                        print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
-                        continue
-                    result = self._parse_feedback_response(parsed_frame)
-                    if actuator_id != result["actuator_can_id"]:
-                        print(
-                            f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
-                        )
-                        actuator_id = result["actuator_can_id"]
-                    results[actuator_id] = result
-            t_recv_end = time.perf_counter()
-            
-            t_tranche_end = time.perf_counter()
-            
-            send_time_us = (t_send_end - t_send_start) * 1e6
-            recv_time_us = (t_recv_end - t_recv_start) * 1e6
-            tranche_time_us = (t_tranche_end - t_tranche_start) * 1e6
-            tranche_times.append(tranche_time_us)
-            
-            print(f"  Tranche {tranche}: send={send_time_us:.0f}μs, recv={recv_time_us:.0f}μs, total={tranche_time_us:.0f}μs")
-        
+        if self.sock is None:
+            return results
+
+        # Send all feedback requests
+        for actuator in self.active_actuators:
+            try:
+                frame = self._build_can_frame(actuator.can_id, Mux.FEEDBACK)
+                self.sock.send(frame)
+            except Exception as e:
+                print(f"\033[1;33mWARNING: Failed to send feedback request to {actuator.can_id}: {e}\033[0m")
+
+        # Receive all responses
+        for _ in range(len(self.active_actuators)):
+            parsed_frame = self._receive_can_frame(Mux.FEEDBACK)
+            if parsed_frame is None:
+                # Timeout - continue to try receiving from other actuators
+                continue
+
+            result = self._parse_feedback_response(parsed_frame)
+            actuator_id = result["actuator_can_id"]
+            results[actuator_id] = result
+
+        # Check if we got all responses
+        missing = len(self.active_actuators) - len(results)
+        if missing > 0:
+            print(f"\033[1;33mWARNING: CAN{self.can_index} missing {missing} responses\033[0m")
+
         t_end = time.perf_counter()
         total_time_us = (t_end - t_start) * 1e6
-        print(f"\033[1;36m✓ get_actuator_feedback: {len(results)} actuators in {total_time_us:.0f}μs ({max_tranches} tranches)\033[0m")
-        
+        print(f"\033[1;36m✓ CAN{self.can_index} feedback: {len(results)} actuators in {total_time_us:.0f}μs\033[0m")
+
         return results
 
     def _parse_feedback_response(self, response: Dict[str, Any]) -> Dict[str, int]:
@@ -214,53 +240,72 @@ class CANInterface:
             "temperature_raw": temp_be,
         }
 
-    def set_pd_targets(self, actions: dict[int, float], robotcfg: RobotConfig, scaling: float) -> None:
-        # Send all commands
-        for bus in self.sockets.keys():
-            for actuator_id in self.actuators[bus]:
-                if actuator_id in actions:
-                    frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], robotcfg, scaling)
-                    self.sockets[bus].send(frame)
+    def set_pd_targets(self, actions: dict[int, float], scaling: float) -> None:
+        """Send PD control commands to actuators (non-blocking).
 
-        # Receive all responses
-        for bus in self.sockets.keys():
-            for actuator_id in self.actuators[bus]:
-                if actuator_id in actions:  # Only wait for responses from actuators we commanded
-                    parsed_frame = self._receive_can_frame(self.sockets[bus], Mux.FEEDBACK)
-                    if parsed_frame is None:  # timeout
-                        print("\033[1;33mWARNING: [spdt] recv timeout\033[0m")
+        Args:
+            actions: Dictionary mapping actuator_id to target angle
+            scaling: PD gain scaling factor (0.0 to 1.0)
+        """
+        if self.sock is None:
+            return
+
+        # Send all commands without waiting for responses
+        for actuator in self.active_actuators:
+            actuator_id = actuator.can_id
+            if actuator_id in actions:
+                try:
+                    frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], scaling)
+                    self.sock.send(frame)
+                except Exception as e:
+                    print(f"\033[1;33mWARNING: Failed to send PD command to {actuator_id}: {e}\033[0m")
+
 
     def _build_pd_command_frame(
-        self, actuator_can_id: int, angle: float, robotcfg: RobotConfig, scaling: float
+        self, actuator_can_id: int, angle: float, scaling: float
     ) -> bytes:
         assert 0.0 <= scaling <= 1.0
-        raw_torque = int(robotcfg.actuators[actuator_can_id].physical_to_can_torque(0))
-        raw_angle = int(robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle))
-        raw_ang_vel = int(robotcfg.actuators[actuator_can_id].physical_to_can_velocity(0))
-        raw_kp = int(robotcfg.actuators[actuator_can_id].raw_kp * scaling)
-        raw_kd = int(robotcfg.actuators[actuator_can_id].raw_kd * scaling)
+        raw_torque = int(self.robotcfg.actuators[actuator_can_id].physical_to_can_torque(0))
+        raw_angle = int(self.robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle))
+        raw_ang_vel = int(self.robotcfg.actuators[actuator_can_id].physical_to_can_velocity(0))
+        raw_kp = int(self.robotcfg.actuators[actuator_can_id].raw_kp * scaling)
+        raw_kd = int(self.robotcfg.actuators[actuator_can_id].raw_kd * scaling)
 
         can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((Mux.CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
-    def flush_can_busses(self) -> None:
-        """Try to drain 1 message from each CAN bus.
+    def flush_can_bus_completely(self) -> int:
+        """Drain all pending messages from the CAN bus.
 
-        Actuators sometimes send late or extra messages that we need to get rid of.
+        Returns:
+            Number of messages flushed
         """
-        for canbus, sock in self.sockets.items():
-            result = self._receive_can_frame(sock, Mux.FEEDBACK)
-            if result is not None:
-                print(f"\033[1;32mflushed message on bus {canbus}\033[0m")
+        if self.sock is None:
+            return 0
+
+        count = 0
+        while True:
+            result = self._receive_can_frame(Mux.FEEDBACK)
+            if result is None:  # Timeout means bus is empty
+                break
+            count += 1
+
+        if count > 0:
+            print(f"\033[1;32mFlushed {count} messages from CAN{self.can_index}\033[0m")
+
+        return count
 
     def close(self) -> None:
-        """Close all CAN sockets."""
-        for canbus, sock in self.sockets.items():
+        """Close socket and cleanup resources."""
+        # Close socket
+        if self.sock is not None:
             try:
-                sock.close()
+                self.sock.close()
             except Exception as e:
-                print(f"Error closing socket for CAN bus {canbus}: {e}")
-        self.sockets.clear()
-        self.actuators.clear()
+                print(f"Error closing CAN{self.can_index} socket: {e}")
+            finally:
+                self.sock = None
+
+        self.active_actuators.clear()
 

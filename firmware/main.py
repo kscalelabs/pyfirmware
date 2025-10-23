@@ -8,10 +8,10 @@ import time
 
 import numpy as np
 
-from firmware.can import MotorDriver
 from firmware.commands.command_interface import CommandInterface
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
+from firmware.driver import MotorDriver
 from firmware.launchInterface import KeyboardLaunchInterface, LaunchInterface, WebSocketLaunchInterface
 from firmware.logger import Logger
 from firmware.shutdown import get_shutdown_manager
@@ -87,7 +87,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
         )
         t4 = time.perf_counter()
 
-        named_action = {joint_name: action for joint_name, action in zip(joint_order, action)} | joint_cmd
+        # named_action = {joint_name: action for joint_name, action in zip(joint_order, action)} | joint_cmd
         # motor_driver.take_action(named_action)
         t5 = time.perf_counter()
         motor_driver.flush_can_busses()

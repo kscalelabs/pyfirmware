@@ -3,12 +3,15 @@
 import math
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict
 
 from firmware.actuators import RobotConfig
 from firmware.can import CANInterface
 from firmware.launchInterface import KeyboardLaunchInterface
 from firmware.shutdown import get_shutdown_manager
 
+CANBUS_RANGE = range(0, 7)
 
 class MotorDriver:
     """Driver logic."""
@@ -16,20 +19,89 @@ class MotorDriver:
     def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
+        self.cans: list[CANInterface] = []
+
+        # Initialize all CAN buses
+        print("\033[1;36m🚀 Initializing CAN buses...\033[0m")
+        for canbus in CANBUS_RANGE:
+            try:
+                can_interface = CANInterface(self.robot, canbus)
+                if len(can_interface.active_actuators) > 0:
+                    self.cans.append(can_interface)
+                else:
+                    can_interface.close()
+            except Exception as e:
+                print(f"\033[1;33mWARNING: Failed to initialize CAN{canbus}: {e}\033[0m")
+
+        if not self.cans:
+            print("\033[1;31mERROR: No CAN buses initialized successfully\033[0m")
+            sys.exit(1)
+
+        # Thread pool for coordinating parallel bus operations
+        self.coordinator_executor = ThreadPoolExecutor(
+            max_workers=len(self.cans),
+            thread_name_prefix="coordinator"
+        )
+
+        total_actuators = sum(len(can.active_actuators) for can in self.cans)
+        print(f"\033[1;32m✓ Initialized {len(self.cans)} buses with {total_actuators} total actuators\033[0m")
 
         self.home_positions: dict[int, float] = {}
         for actuator in self.robot.actuators.values():
             self.home_positions[actuator.can_id] = home_positions.get(actuator.full_name, actuator.default_home)
 
-        self.can = CANInterface()
         self.last_known_feedback: dict[int, dict[str, float | str | int]] = {}
         self._motors_enabled = False
         self._last_scaling = 0.0
 
         shutdown_mgr = get_shutdown_manager()
-        shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
+        shutdown_mgr.register_cleanup("CAN sockets", self._cleanup_cans)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
+    def async_can(self, func_name: str, *args: Any, timeout: float = 0.1) -> Dict[int, Any]:
+        """Generic function to execute a method on all CAN buses in parallel.
+
+        Args:
+            func_name: Name of the method to call on each CAN bus
+            *args: Arguments to pass to the method
+            timeout: Maximum time to wait for each bus
+
+        Returns:
+            Dictionary mapping CAN bus index to results
+        """
+        futures = []
+        for i, can in enumerate(self.cans):
+            method = getattr(can, func_name)
+            future = self.coordinator_executor.submit(method, *args)
+            futures.append((i, future))
+
+        results = {}
+        for i, future in futures:
+            try:
+                result = future.result(timeout=timeout)
+                results[i] = result
+            except Exception as e:
+                print(f"\033[1;33mWARNING: Error on CAN{i} calling {func_name}: {e}\033[0m")
+                results[i] = None
+
+        return results
+
+    def _cleanup_cans(self) -> None:
+        """Cleanup all CAN interfaces."""
+        print("\033[1;36m🛑 Shutting down motor driver...\033[0m")
+
+        # Shutdown coordinator thread pool
+        self.coordinator_executor.shutdown(wait=True, cancel_futures=True)
+
+        # Close all CAN buses
+        for can in self.cans:
+            try:
+                can.close()
+            except Exception as e:
+                print(f"\033[1;31mError closing CAN bus: {e}\033[0m")
+
+        self.cans.clear()
+        print("\033[1;32m✓ Motor driver shutdown complete\033[0m")
 
     def _safe_ramp_down(self) -> None:
         """Safely ramp down motors (for cleanup callback)."""
@@ -41,7 +113,8 @@ class MotorDriver:
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
 
-        self.can.disable_motors()
+        # Disable motors on all buses
+        self.async_can("disable_motors", timeout=1.0)
 
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
@@ -68,7 +141,7 @@ class MotorDriver:
         print("Motors ramped down to zero")
 
     def startup_sequence(self) -> dict[int, dict[str, float | str | int]]:
-        if not self.can.actuators:
+        if len(self.cans) == 0:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
@@ -81,9 +154,14 @@ class MotorDriver:
         return joint_data_dict
 
     def enable_and_home_motors(self) -> None:
-        self.can.enable_motors()
+        """Enable motors on all buses in parallel."""
+        print("Enabling motors on all buses...")
+
+        # Use generic async_can function
+        self.async_can("enable_motors", timeout=2.0)
+
         self._motors_enabled = True
-        print("✅ Motors enabled")
+        print("\033[1;32m✓ All motors enabled\033[0m")
 
         print("\nHoming...")
         for i in range(30):
@@ -98,40 +176,85 @@ class MotorDriver:
         t0 = time.perf_counter()
         while True:
             t = time.perf_counter()
-            _ = self.can.get_actuator_feedback()
+            _ = self.get_joint_angles_and_velocities()
             t1 = time.perf_counter()
             angle = 0.3 * math.sin(2 * math.pi * 0.5 * (t - t0))
             action = {id: angle + self.home_positions[id] for id in self.robot.actuators.keys()}
             t2 = time.perf_counter()
             self.set_pd_targets(action, scaling=self.max_scaling)
             t3 = time.perf_counter()
-            self.can.flush_can_busses()
+            flushed = self.flush_can_busses()
             t4 = time.perf_counter()
             print(
                 f"get feedback={(t1 - t) * 1e6:.0f}us, "
                 f"set targets={(t3 - t2) * 1e6:.0f}us, "
-                f"receive missing responses={(t4 - t3) * 1e6:.0f}us"
+                f"flush={flushed} msgs in {(t4 - t3) * 1e6:.0f}us"
             )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 
     def set_pd_targets(self, actions: dict[int, float], scaling: float) -> None:
+        """Send PD commands to all actuators across all buses in parallel.
+
+        Args:
+            actions: Dictionary mapping actuator_id to target angle
+            scaling: PD gain scaling factor (0.0 to 1.0)
+        """
         self._last_scaling = scaling
-        self.can.set_pd_targets(actions, robotcfg=self.robot, scaling=scaling)
+
+        # Use generic async_can function
+        self.async_can("set_pd_targets", actions, scaling, timeout=0.05)
 
     def flush_can_busses(self) -> None:
-        self.can.flush_can_busses()
+        """Flush all CAN buses in parallel.
+
+        Returns:
+            Total number of messages flushed across all buses
+        """
+        # Use generic async_can function to collect results
+        results = self.async_can("flush_can_bus_completely", timeout=0.1)
+
+        total_flushed = 0
+        for can_index, count in results.items():
+            if count is not None:
+                total_flushed += count
+
+        print(f"Flushed {total_flushed} messages")
 
     def get_joint_angles_and_velocities(self, zeros_fallback: bool = True) -> dict[int, dict[str, float | str | int]]:
-        fb = self.can.get_actuator_feedback()
+        """Get feedback from ALL actuators on ALL buses in parallel.
+
+        This method:
+        1. Submits feedback requests to all CAN buses simultaneously
+        2. Each bus uses its own thread to send/receive
+        3. Waits for all buses to complete or timeout
+        4. Aggregates results from all buses
+        """
+        t_start = time.perf_counter()
+
+        # Use generic async_can function to collect results
+        results = self.async_can("get_actuator_feedback", timeout=0.1)
+
+        # Aggregate results from all buses
+        all_feedback: dict[int, dict[str, int]] = {}
+        for can_index, bus_results in results.items():
+            if bus_results is not None:
+                all_feedback.update(bus_results)
+
+        t_end = time.perf_counter()
+        total_time_us = (t_end - t_start) * 1e6
+        print(f"\033[1;36m✓ Total feedback: {len(all_feedback)} actuators in {total_time_us:.0f}μs\033[0m")
+
+        # Convert to physical data
         answer: dict[int, dict[str, float | str | int]] = {}
         for id in self.robot.actuators.keys():
-            if id in fb:
-                answer[id] = self.robot.actuators[id].can_to_physical_data(fb[id])
+            if id in all_feedback:
+                answer[id] = self.robot.actuators[id].can_to_physical_data(all_feedback[id])
                 self.last_known_feedback[id] = answer[id].copy()
             elif id in self.last_known_feedback:  # Fallback to last known good values
                 answer[id] = self.last_known_feedback[id].copy()
             elif zeros_fallback:  # Fallback to zeros for unknown actuators
                 answer[id] = self.robot.actuators[id].dummy_data()
+
         return answer
 
     def get_ordered_joint_data(
