@@ -42,7 +42,7 @@ async def glib_main_loop_iteration() -> None:
 
 
 class WebRTCServer:
-    def __init__(self, loop: asyncio.AbstractEventLoop, flip_video: bool = False) -> None:
+    def __init__(self, loop: asyncio.AbstractEventLoop, flip_video: bool = False, record_video: bool = False) -> None:
         self.pipe: Optional[Gst.Pipeline] = None
         self.webrtc: Optional[GstWebRTC.WebRTCBin] = None
         self.ws: Optional[websockets.WebSocketServerProtocol] = None  # active client connection
@@ -51,6 +51,13 @@ class WebRTCServer:
         self.added_streams = 0
         self.flip_video = flip_video
         self.first_frame_timestamp: Optional[float] = None
+        self.record_video = record_video
+        self.video_output_dir = os.path.expanduser("~/videos")
+        self.temp_video_files = {}  # Maps camera index to temp filename
+        
+        # Create video output directory if recording is enabled
+        if self.record_video:
+            os.makedirs(self.video_output_dir, exist_ok=True)
 
     def connect_audio(self, webrtc: GstWebRTC.WebRTCBin) -> None:
         if self.pipe is None:
@@ -146,6 +153,48 @@ class WebRTCServer:
 
             upstream_element = sink_queue
 
+            # Add tee element to split stream if recording
+            if self.record_video:
+                tee = Gst.ElementFactory.make("tee", f"tee{i}")
+                self.pipe.add(tee)
+                upstream_element.link(tee)
+                
+                # Branch 1: WebRTC streaming
+                queue_webrtc = Gst.ElementFactory.make("queue", f"queue_webrtc{i}")
+                self.pipe.add(queue_webrtc)
+                tee.link(queue_webrtc)
+                upstream_element = queue_webrtc
+                
+                # Branch 2: File recording (H.264 to MP4)
+                queue_file = Gst.ElementFactory.make("queue", f"queue_file{i}")
+                h264enc = Gst.ElementFactory.make("x264enc", f"h264enc{i}")
+                h264enc.set_property("tune", "zerolatency")
+                h264enc.set_property("speed-preset", "ultrafast")
+                h264enc.set_property("bitrate", 2000)  # 2 Mbps
+                h264parse = Gst.ElementFactory.make("h264parse", f"h264parse{i}")
+                mp4mux = Gst.ElementFactory.make("mp4mux", f"mp4mux{i}")
+                
+                # Create temporary filename (will be renamed after recording)
+                temp_video_filename = f"{self.video_output_dir}/camera{i}_temp.mp4"
+                filesink = Gst.ElementFactory.make("filesink", f"filesink{i}")
+                filesink.set_property("location", temp_video_filename)
+                
+                # Store temp filename for later renaming
+                self.temp_video_files[i] = temp_video_filename
+                
+                # Add recording elements
+                for e in [queue_file, h264enc, h264parse, mp4mux, filesink]:
+                    self.pipe.add(e)
+                
+                # Link recording branch: tee -> queue -> h264enc -> parse -> mux -> filesink
+                tee.link(queue_file)
+                queue_file.link(h264enc)
+                h264enc.link(h264parse)
+                h264parse.link(mp4mux)
+                mp4mux.link(filesink)
+                
+                print(f"Recording to: {temp_video_filename} (will be renamed after recording)")
+
             vp8enc = Gst.ElementFactory.make("vp8enc", f"vp8enc{i}")
             vp8enc.set_property("deadline", 1)
             vp8enc.set_property("keyframe-max-dist", 30)
@@ -158,7 +207,11 @@ class WebRTCServer:
 
             upstream_element.link(vp8enc)
             vp8enc.link(pay)
-            print(f"Camera {i} encoding: AppSrc (BGR) -> VideoConvert -> Scale(1920x1080) -> I420 -> VP8 -> RTP")
+            
+            if self.record_video:
+                print(f"Camera {i} encoding: libcamerasrc -> tee -> [VP8->WebRTC + H.264->MP4]")
+            else:
+                print(f"Camera {i} encoding: libcamerasrc -> VP8 -> WebRTC")
 
             src_pad = src.get_static_pad("src")
             sink_pad = webrtc.get_request_pad(f"sink_{i * 2}")
@@ -198,6 +251,18 @@ class WebRTCServer:
     def close_pipeline(self) -> None:
         if self.pipe:
             self.pipe.set_state(Gst.State.NULL)
+            
+            # Rename video files using first_frame_timestamp
+            if self.record_video and self.first_frame_timestamp is not None:
+                import time as time_module
+                for camera_idx, temp_filename in self.temp_video_files.items():
+                    if os.path.exists(temp_filename):
+                        # Create final filename with first_frame_timestamp
+                        final_filename = f"{self.video_output_dir}/camera{camera_idx}_{self.first_frame_timestamp:.6f}.mp4"
+                        os.rename(temp_filename, final_filename)
+                        print(f"Renamed: {temp_filename} -> {final_filename}")
+                self.temp_video_files.clear()
+            
             self.pipe = None
             self.webrtc = None
             self.added_data_channel = False
@@ -407,10 +472,14 @@ async def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="WebRTC Video Streaming Server")
     parser.add_argument("--flip", action="store_true", help="Vertically flip the video stream")
+    parser.add_argument("--record", action="store_true", help="Record video to ~/videos directory")
     args = parser.parse_args()
 
     loop = asyncio.get_running_loop()
-    server = WebRTCServer(loop, flip_video=args.flip)
+    server = WebRTCServer(loop, flip_video=args.flip, record_video=args.record)
+    
+    if args.record:
+        print(f"Video recording enabled: Files will be saved to ~/videos/")
 
     async def handler(websocket: websockets.WebSocketServerProtocol) -> None:
         await server.websocket_handler(websocket)
