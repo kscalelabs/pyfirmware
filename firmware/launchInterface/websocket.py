@@ -8,8 +8,10 @@ from typing import Any, Callable, Optional
 
 from simple_websocket_server import WebSocket, WebSocketServer
 
+from firmware.launchInterface.launch_interface import LaunchInterface
 
-class WebSocketLaunchInterface:
+
+class WebSocketLaunchInterface(LaunchInterface):
     def __init__(self, host: str = "0.0.0.0", port: int = 8760) -> None:
         self.host = host
         self.port = port
