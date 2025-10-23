@@ -23,6 +23,7 @@ class WebSocketLaunchInterface:
         self.kinfer_files: list[dict[str, Any]] = []
         self.devices_data: dict[str, Any] = {}
         self.policy_name: Optional[str] = None
+        self._running = True
         self.server = self._create_server(host, port)
 
         self.server_thread = threading.Thread(
@@ -31,7 +32,14 @@ class WebSocketLaunchInterface:
             name="WebSocketServer"
         )
 
+        self.broadcast_thread = threading.Thread(
+            target=self._broadcast_state_loop,
+            daemon=True,
+            name="StateBroadcaster"
+        )
+
         self.server_thread.start()
+        self.broadcast_thread.start()
         print(f"WebSocket server running on ws://{host}:{port}")
 
     def _create_server(self, host: str, port: int) -> WebSocketServer:
@@ -56,13 +64,18 @@ class WebSocketLaunchInterface:
 
         return WebSocketServer(host, port, RobotWebSocketHandler)
 
+    def _broadcast_state_loop(self) -> None:
+        """Continuously broadcast state to connected clients every second."""
+        while self._running:
+            if self.websocket:
+                self._send_state()
+            time.sleep(1.0)
+
     def _handle_message(self, msg: dict[str, Any]) -> None:
         """Handle incoming WebSocket messages."""
         msg_type = msg.get("type")
 
-        if msg_type == "request_state":
-            self._send_state()
-        elif msg_type == "enable_motors":
+        if msg_type == "enable_motors":
             self.allow_motors = True
         elif msg_type == "start_policy":
             self.allow_policy = True
@@ -135,6 +148,7 @@ class WebSocketLaunchInterface:
     def stop(self) -> None:
         """Shutdown the WebSocket server and close connections."""
         print("Shutting down WebSocket interface")
+        self._running = False
         if self.websocket:
             self.websocket.close()
         if self.server:
