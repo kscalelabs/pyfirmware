@@ -13,11 +13,12 @@ from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
 from firmware.launchInterface import KeyboardLaunchInterface
 from firmware.logger import Logger
+from firmware.logger import ParquetLogger
 from firmware.shutdown import get_shutdown_manager
 from firmware.utils import get_imu_reader, get_onnx_sessions
 
 
-def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger) -> None:
+def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger, parquet_logger: ParquetLogger) -> None:
     shutdown_mgr = get_shutdown_manager()
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -110,6 +111,16 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
                 "joint_order": joint_order,
             },
         )
+        parquet_logger.log(
+            tt, 
+            {
+                "joint_pos": joint_angles,
+                "joint_vel": joint_vels,
+                "joint_torque": torques,
+                "action": action.tolist(),
+                "joint_order": joint_order,
+            }
+        )
         print(
             f"dt={dt * 1000:.2f} ms: "
             f"get joints={(t1 - t) * 1000:.2f} ms, "
@@ -136,4 +147,5 @@ if __name__ == "__main__":
 
     print(f"Selected policy: {policy_name}")
     logger = Logger(log_dir)
-    runner(kinfer_path, launch_interface, logger)
+    parquet_logger = ParquetLogger(log_dir)
+    runner(kinfer_path, launch_interface, logger, parquet_logger)
