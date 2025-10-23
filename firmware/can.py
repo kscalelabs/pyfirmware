@@ -95,7 +95,7 @@ class CANInterface:
 
     def _check_for_faults(self, faults: list[FaultCode], fault_flags: int, actuator_can_id: int) -> None:
         for fault_code in faults:
-            if fault_flags == fault_code.code:
+            if fault_flags & fault_code.code:  # Bitwise AND to check if this bit is set
                 msg = f"Actuator {actuator_can_id}: {fault_code.description}"
                 if fault_code.critical:
                     raise CriticalFaultError(f"\033[1;31mCRITICAL FAULT: {msg}\033[0m")
