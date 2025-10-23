@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import time
 from typing import Optional
 
 import gi  # type: ignore[import-not-found]
@@ -49,6 +50,7 @@ class WebRTCServer:
         self.added_data_channel = False
         self.added_streams = 0
         self.flip_video = flip_video
+        self.first_frame_timestamp: Optional[float] = None
 
     def connect_audio(self, webrtc: GstWebRTC.WebRTCBin) -> None:
         if self.pipe is None:
@@ -182,6 +184,14 @@ class WebRTCServer:
             print("Received a LATENCY message. Recalculating latency.")
             if self.pipe is not None:
                 self.pipe.recalculate_latency()
+        elif t == Gst.MessageType.STATE_CHANGED:
+            # Capture timestamp when pipeline starts playing (first frame flows)
+            if message.src == self.pipe and self.first_frame_timestamp is None:
+                old_state, new_state, pending = message.parse_state_changed()
+                if new_state == Gst.State.PLAYING:
+                    self.first_frame_timestamp = time.time()
+                    print(f"First frame timestamp: {self.first_frame_timestamp} (wall clock time)")
+                    print(f"First frame time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.first_frame_timestamp))}")
 
         return GLib.SOURCE_CONTINUE
 
@@ -191,6 +201,7 @@ class WebRTCServer:
             self.pipe = None
             self.webrtc = None
             self.added_data_channel = False
+            self.first_frame_timestamp = None  # Reset for next pipeline
 
     def on_message_string(self, channel: GstWebRTC.WebRTCDataChannel, message: str) -> None:
         print("Received:", message)
