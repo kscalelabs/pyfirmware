@@ -1,219 +1,157 @@
-"""WebSocket interface for remote robot control using blocking I/O."""
+"""Simplified WebSocket interface for robot control."""
 
 import json
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from simple_websocket_server import WebSocket, WebSocketServer
 
 from firmware.launchInterface.launch_interface import LaunchInterface
 
 
-class RobotWebSocket(WebSocket):
-    """WebSocket handler that stores connection reference."""
-
-    def handle(self) -> None:
-        """Handle incoming messages - put them in the queue."""
-        message = json.loads(self.data)
-        if hasattr(self.server, 'interface'):
-            self.server.interface.message_queue.append(message)
-
-    def connected(self) -> None:
-        """Called when client connects."""
-        if hasattr(self.server, 'interface'):
-            self.server.interface._on_connect(self)
-
-    def close(self) -> None:
-        """Called when client disconnects."""
-        if hasattr(self.server, 'interface'):
-            self.server.interface._on_disconnect(self)
-        super().close()
-
-
 class WebSocketLaunchInterface(LaunchInterface):
     def __init__(self, host: str = "0.0.0.0", port: int = 8760) -> None:
-        """Initialize and wait for a client connection."""
         self.host = host
         self.port = port
         self.websocket: Optional[WebSocket] = None
-        self.server: Optional[WebSocketServer] = None
-        self.message_queue: list[dict[str, Any]] = []
-        self._server_thread: Optional[threading.Thread] = None
-        self._connected_event = threading.Event()
 
-        # State persistence for reconnection
-        self.devices_data: dict[str, Any] = {}
+        self.allow_motors = False
+        self.allow_policy = False
+        self.selected_kinfer: Optional[str] = None
+        self.abort = False
+        self.current_step = "started"
         self.kinfer_files: list[dict[str, Any]] = []
-        self.active_step = -1
-        self.steps = [
-            ["select_kinfer"],
-            ["enable_motors"],
-            ["start_policy"]
-        ]
+        self.devices_data: dict[str, Any] = {}
+        self.policy_name: Optional[str] = None
+        self._running = True
+        self.server = self._create_server(host, port)
 
-        # Start server and wait for connection
-        self._start_server()
-        self._wait_for_connection()
+        self.server_thread = threading.Thread(
+            target=self.server.serve_forever,
+            daemon=True,
+            name="WebSocketServer"
+        )
 
-    def _start_server(self) -> None:
-        """Start the WebSocket server in a background thread."""
-        print(f"🚀 Starting WebSocket server on {self.host}:{self.port}")
+        self.broadcast_thread = threading.Thread(
+            target=self._broadcast_state_loop,
+            daemon=True,
+            name="StateBroadcaster"
+        )
 
-        self.server = WebSocketServer(self.host, self.port, RobotWebSocket)
-        self.server.interface = self  
-  
+        self.server_thread.start()
+        self.broadcast_thread.start()
+        print(f"WebSocket server running on ws://{host}:{port}")
 
-        self._server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self._server_thread.start()
+    def _create_server(self, host: str, port: int) -> WebSocketServer:
+        """Create a WebSocketServer with a handler that references this interface."""
+        interface = self
 
-        print(f"WebSocket server running on ws://{self.host}:{self.port}")
+        class RobotWebSocketHandler(WebSocket):
+            def handle(self) -> None:
+                try:
+                    msg = json.loads(self.data)
+                    interface._handle_message(msg)
+                except Exception as e:
+                    print(f"Bad message: {e}")
 
-    def process_step(self, timeout: int = 300) -> Optional[dict]:
-        """Process a step of the policy. Returns message dict if received, None on timeout."""
-        expected_types = self.steps[self.active_step]
-        expected_types.append('abort')
-        start_time = time.time()
+            def connected(self) -> None:
+                print(f"Client connected from {self.address}")
+                interface.websocket = self
 
-        while time.time() - start_time < timeout:
-            if self.message_queue:
-                message = self.message_queue.pop(0)
+            def handle_close(self) -> None:
+                print(f"Client disconnected from {self.address}")
+                interface.websocket = None
 
-                if message.get("type") == "refresh_kinfer_files":
-                    self.send_message("refresh", self.kinfer_files)
+        return WebSocketServer(host, port, RobotWebSocketHandler)
 
-                if message.get("type") in expected_types:
-                    self.active_step = -1
-                    return message
-                else:
-                    self.send_message("error", {
-                        "message": f"Expected one of {expected_types}, got {message.get('type')}"
-                    })
-                    continue
+    def _broadcast_state_loop(self) -> None:
+        """Continuously broadcast state to connected clients every second."""
+        while self._running:
+            if self.websocket:
+                self._send_state()
+            time.sleep(1.0)
 
-            time.sleep(0.01)
+    def _handle_message(self, msg: dict[str, Any]) -> None:
+        """Handle incoming WebSocket messages."""
+        msg_type = msg.get("type")
 
-        self.send_message("timeout", {
-            "message": f"Waiting for one of: {expected_types}"
-        })
-        return None
+        if msg_type == "enable_motors":
+            self.allow_motors = True
+        elif msg_type == "start_policy":
+            self.allow_policy = True
+        elif msg_type == "select_kinfer":
+            data = msg.get("data", {})
+            self.selected_kinfer = data.get("path")
+        elif msg_type == "abort":
+            self.abort = True
 
-    def _on_connect(self, websocket: WebSocket) -> None:
-        """Called when a client connects. Seamlessly override any existing connection."""
-        # Close existing connection if present
-        if self.websocket is not None:
-            print(f"🔄 New connection from {websocket.address}, closing old connection")
+    def _send_message(self, msg_type: str, data: dict[str, Any] | None = None) -> None:
+        """Send a message to the connected WebSocket client."""
+        if self.websocket:
             try:
-                self.websocket.close()
+                payload = json.dumps({"type": msg_type, "data": data or {}})
+                self.websocket.send_message(payload)
             except Exception as e:
-                print(f"Error closing old connection: {e}")
+                print(f"Error sending message: {e}")
 
-        self.websocket = websocket
-        print(f"Client connected to launch interface from {websocket.address}")
-        if self.kinfer_files:
-            self.send_message("refresh_kinfer_files", {
-                "kinfer_files": self.kinfer_files
-            })
-        self._connected_event.set()
+    def _send_state(self) -> None:
+        """Send current state to client."""
+        state = {
+            "policy_name": self.policy_name,
+            "current_step": self.current_step,
+            "kinfer_files": self.kinfer_files,
+            "devices_data": self.devices_data,
+        }
+        self._send_message("state", state)
 
-    def _on_disconnect(self, websocket: WebSocket) -> None:
-        print(f"Client disconnected to launch interface from {websocket.address}")
-        self.websocket = None
-
-    def _wait_for_connection(self, timeout: int = 300) -> None:
-        """Block until a client connects."""
-        if not self._connected_event.wait(timeout=timeout):
-            raise TimeoutError("No client connected within timeout period")
-
-    def send_message(self, message_type: str, data: Optional[dict[str, Any]] = None) -> None:
-        """Send a JSON message to the client (blocking)."""
-        if not self.websocket:
-            return
-
-        message = {"type": message_type, "data": data or {}}
-        try:
-            self.websocket.send_message(json.dumps(message))
-        except Exception as e:
-            print(f"Error sending message: {e}")
-
-    def get_command_source(self) -> str:
-        """Return command source type."""
-        return "UDP"
-
-    def ask_motor_permission(self, robot_devices: dict = {}) -> bool:
-        """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        print("Asking permission to enable motors")
-        self.send_message("request_motor_enable", robot_devices)
-        self.active_step = 1
-        self.devices_data = robot_devices
-        message = self.process_step()
-        if message and message.get("type") == "enable_motors":
-            self.send_message("enabling_motors")
-            return True
-        return False
+    def ask_motor_permission(self, devices: dict[str, Any]) -> bool:
+        self.devices_data = devices
+        return self._wait_for_flag(lambda: self.allow_motors, "enable_motors")
 
     def launch_policy_permission(self, policy_name: str) -> bool:
-        """Ask permission to start policy. Returns True if should start, False to abort."""
-        self.send_message("request_policy_start", {
-            "message": f"Ready to start {policy_name}?"
-        })
-        self.active_step = 2
-        message = self.process_step()
-        if message and message.get("type") == "start_policy":
-            self.send_message("policy_started")
-            return True
-        return False
+        self.policy_name = policy_name
+        launch_permission = self._wait_for_flag(lambda: self.allow_policy, "start_policy")
+        if launch_permission:
+            self.current_step = "launched"
+        return launch_permission
+
+    def get_command_source(self) -> str:
+        return "udp"
 
     def get_kinfer_path(self, policy_dir: str) -> Optional[str]:
-        """Send list of available kinfer files and wait for user selection."""
-        print("Getting kinfer path")
-        self.active_step = 0
-        search_dir = Path(policy_dir)
-        self.kinfer_files = []
-
-        if search_dir.exists():
-            # Get all .kinfer files with metadata
-            for filepath in search_dir.glob("*.kinfer"):
-                self.kinfer_files.append({
-                    "name": filepath.name,
-                    "path": str(filepath),
-                    "size": filepath.stat().st_size,
-                    "modified": filepath.stat().st_mtime
-                })
-
+        path = Path(policy_dir)
+        self.kinfer_files = [
+            {"name": f.name, "path": str(f), "size": f.stat().st_size, "modified": f.stat().st_mtime}
+            for f in path.glob("*.kinfer")
+        ]
         if not self.kinfer_files:
+            print("No kinfer files found.")
             return None
-
-        self.send_message("kinfer_list", {
-            "files": self.kinfer_files
-        })
-
-        
-
-        message = self.process_step()
-        if message and message.get("type") == "abort":
-            return None
-        if message and message.get("type") == "select_kinfer":
-            selected_path = message.get("data", {}).get("path", None)
-            return selected_path
+        if self._wait_for_flag(lambda: self.selected_kinfer is not None, "select_kinfer"):
+            return self.selected_kinfer
         return None
 
+    def _wait_for_flag(self, condition: Callable[[], bool], step_name: str, timeout: int = 300) -> bool:
+        """Block until condition() is True."""
+        start_time = time.time()
+        self.current_step = step_name
+        while time.time() - start_time < timeout:
+            if condition():
+                self.current_step = "done"
+                return True
+            if self.abort:
+                self.current_step = "aborted"
+                return False
+            time.sleep(0.1)
+        return False
+
     def stop(self) -> None:
-        """Close the WebSocket connection and server."""
-        try:
-            if self.websocket:
-                self.websocket.close()
-
-        except Exception as e:
-            print(f"Error closing websocket: {e}")
-
+        """Shutdown the WebSocket server and close connections."""
+        print("Shutting down WebSocket interface")
+        self._running = False
+        if self.websocket:
+            self.websocket.close()
         if self.server:
-            try:
-                self.server.close()
-                # Wait for server thread to finish cleanly
-                if self._server_thread and self._server_thread.is_alive():
-                    self._server_thread.join(timeout=2.0)
-                print("WebSocket server stopped")
-            except Exception as e:
-                print(f"Error stopping server: {e}")
+            self.server.close()
