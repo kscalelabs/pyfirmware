@@ -118,6 +118,8 @@ class Keyboard(CommandInterface):
                     self.set_motion("boxing_right_punch")
                 elif ch == "i":
                     self.set_motion("cone")
+                elif ch == "o":
+                    self.set_motion("walking_and_standing_unittest")
 
             except (IOError, EOFError):
                 continue
