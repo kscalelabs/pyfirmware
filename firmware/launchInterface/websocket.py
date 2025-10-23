@@ -31,7 +31,6 @@ class RobotWebSocket(WebSocket):
             self.server.interface._on_disconnect(self)
         super().close()
 
-
 class WebSocketLaunchInterface(LaunchInterface):
     def __init__(self, host: str = "0.0.0.0", port: int = 8760) -> None:
         """Initialize and wait for a client connection."""
@@ -131,7 +130,7 @@ class WebSocketLaunchInterface(LaunchInterface):
                 print(f"Error sending message: {e}")
 
     def get_command_source(self) -> str:
-        return "UDP"
+        return "udp"
 
     def ask_motor_permission(self, robot_devices: dict = {}) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
@@ -187,11 +186,9 @@ class WebSocketLaunchInterface(LaunchInterface):
 
     def stop(self) -> None:
         """Close the WebSocket connection and server."""
-        print("Shutting down WebSocket Launch Interface")
-      
+        print("Shutting down WebSocket launch interface")
         if self.websocket:
-            self.websocket.close()
-             
+            self.websocket.close() 
         if self.server:
             self.server.close()
   
