@@ -121,7 +121,7 @@ class WebSocketLaunchInterface:
     def get_kinfer_path(self, policy_dir: str) -> Optional[str]:
         path = Path(policy_dir)
         self.kinfer_files = [
-            {"name": f.name, "path": str(f), "size": f.stat().st_size}
+            {"name": f.name, "path": str(f), "size": f.stat().st_size, "modified": f.stat().st_mtime}
             for f in path.glob("*.kinfer")
         ]
         if not self.kinfer_files:
