@@ -9,21 +9,17 @@ import websockets
 from websockets.server import WebSocketServerProtocol
 
 from firmware.policy_manager import SimplePolicyManager
-from firmware.peripherals.screen import ScreenDisplay
-from firmware.peripherals.cameras import CameraStreamer
 
 
 class MasterServer:
-    """Master WebSocket server managing policy execution, screen display, and camera streaming."""
+    """Master WebSocket server managing policy execution."""
     
-    def __init__(self, host: str = "0.0.0.0", port: int = 8770, camera_port: int = 8765):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8770):
         self.host = host
         self.port = port
         self.clients: set[WebSocketServerProtocol] = set()
         self.running = False
         self.status_task: Optional[asyncio.Task] = None
-        # self.screen = ScreenDisplay()
-        self.camera_streamer = CameraStreamer(host="0.0.0.0", port=camera_port, flip_video=False)
         self.policy_manager = SimplePolicyManager()
     
     async def cleanup(self):
@@ -34,20 +30,6 @@ class MasterServer:
         if self.policy_manager.get_status()["running"]:
             print("Stopping policy...")
             self.policy_manager.stop()
-        
-        # Stop camera streamer if running
-        if self.camera_streamer.is_running():
-            try:
-                await self.camera_streamer.stop()
-            except Exception as e:
-                print(f"Error stopping camera streamer: {e}")
-        
-        # Stop screen if running
-        if self.screen.is_running():
-            try:
-                self.screen.stop()
-            except Exception as e:
-                print(f"Error stopping screen: {e}")
         
         print("Cleanup completed")
     
@@ -170,23 +152,6 @@ class MasterServer:
     async def start_server(self):
         """Start the WebSocket server."""
         print(f"Starting master server on {self.host}:{self.port}")
-        
-        # Start screen with face display
-        # try:
-        #     # screen_success = self.screen.start()
-        #     if not screen_success:
-        #         print("Failed to display face")
-        # except Exception as e:
-        #     print(f"Error displaying face: {e}")
-        
-        # Start camera streaming server
-        try:
-            camera_success = await self.camera_streamer.start()
-            if not camera_success:
-                print("Failed to start camera streamer")
-        except Exception as e:
-            print(f"Error starting camera streamer: {e}")
-        
         # Start WebSocket server
         self.running = True
         
