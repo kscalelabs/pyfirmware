@@ -137,6 +137,7 @@ class CANInterface:
         return self._receive_can_frame(sock, Mux.PING)
 
     def clear_faults(self) -> None:
+        print("Clearing faults...")
         for canbus in self.sockets.keys():
             for actuator_id in self.actuators[canbus]:
                 frame = self._build_can_frame(actuator_id, Mux.CLEAR_FAULTS)
