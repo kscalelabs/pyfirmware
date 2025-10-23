@@ -153,11 +153,10 @@ class WebSocketLaunchInterface(LaunchInterface):
             return True
         return False
 
-    def launch_policy_permission(self) -> bool:
-        print("Asking permission to start policy")
+    def launch_policy_permission(self, policy_name: str) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
         self.send_message("request_policy_start", {
-            "message": "Ready to start policy?"
+            "message": f"Ready to start {policy_name}?"
         })
         self.active_step = 2
         message = self.process_step()

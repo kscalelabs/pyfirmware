@@ -3,4 +3,5 @@ onnxruntime
 python-periphery
 pyserial
 kmotions>=0.3.6
+simple-websocket-server
 

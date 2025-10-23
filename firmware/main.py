@@ -45,7 +45,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
 
     motor_driver.enable_and_home_motors()
 
-    launch_policy = launch_interface.launch_policy_permission()
+    launch_policy = launch_interface.launch_policy_permission(policy_name)
     if not launch_policy:
         print("Policy launch permission denied, aborting execution")
         return

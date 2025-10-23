@@ -8,6 +8,7 @@ import time
 from typing import Any, Dict, Optional
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
+from firmware.launchInterface import KeyboardLaunchInterface
 from firmware.shutdown import get_shutdown_manager
 
 
@@ -23,7 +24,7 @@ class CANInterface:
     FRAME_SIZE = struct.calcsize(FRAME_FMT)
     EFF = 0x8000_0000
     HOST_ID = 0xFD
-    CAN_TIMEOUT = 0.002
+    CAN_TIMEOUT = 0.001
     CANBUS_RANGE = range(0, 7)
     ACTUATOR_RANGE = range(10, 50)
 
@@ -393,11 +394,17 @@ class MotorDriver:
 def main() -> None:
     """Run sine wave test on all actuators."""
     driver = MotorDriver(dict(), max_scaling=0.1)
+    launch_interface = KeyboardLaunchInterface()
 
-    input("Press Enter to enable motors...")
+    device_data = {"actuators": driver.startup_sequence()}
+
+    if not launch_interface.ask_motor_permission(device_data):
+        sys.exit(1)
     driver.enable_and_home_motors()
 
-    input("Press Enter to run sine wave on all actuators...")
+    if not launch_interface.launch_policy_permission("sine_wave"):
+        sys.exit(1)
+
     driver.sine_wave()
 
 

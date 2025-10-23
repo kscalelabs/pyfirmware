@@ -127,7 +127,7 @@ class KeyboardLaunchInterface(LaunchInterface):
 
     def ask_motor_permission(self, robot_devices: dict) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        actuators = robot_devices["actuators"]
+        actuators = robot_devices.get("actuators", {})
         print("\nActuator states:")
         print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
         print("----|--------------------------|-------|----------|--------|-------|-------")
@@ -140,7 +140,7 @@ class KeyboardLaunchInterface(LaunchInterface):
             )
             if data["fault_flags"] > 0:
                 print("\033[1;33mWARNING: Actuator faults detected\033[0m")
-        print("IMU:" + robot_devices["imu"])
+        print("IMU:" + robot_devices.get("imu", "Not available"))
 
         while True:
             print("=================")
@@ -153,11 +153,10 @@ class KeyboardLaunchInterface(LaunchInterface):
                 return True
             print("Invalid input. Please enter 'y' or 'n'")
 
-    def launch_policy_permission(self) -> bool:
+    def launch_policy_permission(self, policy_name: str) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
         print("=================")
-        print("🚀 Ready to start policy")
-        print("Start policy? (y/n): ")
+        print(f"Start {policy_name}? (y/n): ")
         while True:
             response = input("Enter choice: ").lower()
             if response == "y":

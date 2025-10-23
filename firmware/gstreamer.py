@@ -183,7 +183,6 @@ class WebRTCServer:
         try:
             msg = {"commands": json.loads(message)}
             self.udp_sock.sendto(json.dumps(msg).encode("utf-8"), self.udp_target)
-            print(f"Forwarded command to UDP {self.udp_target}: {msg}")
         except Exception as e:
             print(f"Error forwarding command: {e}")
 
