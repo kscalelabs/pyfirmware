@@ -59,16 +59,6 @@ class MotorDriver:
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
     def async_can(self, func_name: str, *args: Any, timeout: float = 0.1) -> Dict[int, Any]:
-        """Generic function to execute a method on all CAN buses in parallel.
-
-        Args:
-            func_name: Name of the method to call on each CAN bus
-            *args: Arguments to pass to the method
-            timeout: Maximum time to wait for each bus
-
-        Returns:
-            Dictionary mapping CAN bus index to results
-        """
         futures = []
         for i, can in enumerate(self.cans):
             method = getattr(can, func_name)

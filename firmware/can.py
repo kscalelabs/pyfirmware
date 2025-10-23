@@ -203,6 +203,7 @@ class CANInterface:
             try:
                 frame = self._build_can_frame(actuator.can_id, Mux.FEEDBACK)
                 self.sock.send(frame)
+                time.sleep(0.005)
             except Exception as e:
                 print(f"\033[1;33mWARNING: Failed to send feedback request to {actuator.can_id}: {e}\033[0m")
 
