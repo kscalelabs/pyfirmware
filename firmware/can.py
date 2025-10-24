@@ -73,9 +73,24 @@ class CANInterface:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
         
         # Log the sent message
-        self.logger.log_sent_message(self.can_index, can_id, mux, payload[:8])
+        sender = "host"
+        mux_name = self._get_mux_name(mux)
+        payload_str = " ".join(f"{b:02X}" for b in payload[:8])
+        self.logger.log(sender, f"TX: {mux_name} | ACT_ID=0x{actuator_can_id:08X} ")
         
         self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
+
+    def _get_mux_name(self, mux: int) -> str:
+        """Convert MUX ID to human-readable name."""
+        mux_names = {
+            Mux.PING: "PING",
+            Mux.CONTROL: "CONTROL", 
+            Mux.FEEDBACK: "FEEDBACK",
+            Mux.MOTOR_ENABLE: "MOTOR_ENABLE",
+            Mux.MOTOR_DISABLE: "MOTOR_DISABLE",
+            Mux.FAULT_RESPONSE: "FAULT_RESPONSE"
+        }
+        return mux_names.get(mux, f"UNKNOWN_MUX_{mux:02X}")
 
     def _update_cycle_age(self) -> None:
         for actuator_id in self.actuators:
@@ -106,7 +121,11 @@ class CANInterface:
                 parsed_frame = self._parse_can_frame(frame)
                 
                 # Log the received message
-                self.logger.log_received_message(self.can_index, parsed_frame)
+                sender = f"act_{parsed_frame['actuator_can_id']:02d}" if parsed_frame['actuator_can_id'] != 0 else "host"
+                mux_name = self._get_mux_name(parsed_frame["mux"])
+                payload_str = " ".join(f"{b:02X}" for b in parsed_frame["payload"])
+                can_id = parsed_frame["host_id"] | (parsed_frame["actuator_can_id"] << 8) | (parsed_frame["fault_flags"] << 16) | (parsed_frame["mode_status"] << 22) | (parsed_frame["mux"] << 24)
+                self.logger.log(sender, f"RX: {mux_name} | PAYLOAD={payload_str} | faults=0x{parsed_frame['fault_flags']:02X}")
 
                 self._check_for_faults(
                     self.CAN_ID_FAULT_CODES,
@@ -176,8 +195,6 @@ class CANInterface:
 
     def enable_motors(self) -> None:
         for actuator_id in self.pings_actuators:
-            if self.sock is None:
-                return
             self._build_and_send_can_frame(actuator_id, Mux.MOTOR_ENABLE)
 
         for _ in range(len(self.pings_actuators)):
@@ -227,8 +244,10 @@ class CANInterface:
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
         
         # Log control command details
-        self.logger.log_control_command(self.can_index, actuator_can_id, angle, scaling, 
-                                      raw_angle, raw_ang_vel, raw_kp, raw_kd)
+        sender = "host"
+        mux_name = self._get_mux_name(Mux.CONTROL)
+        self.logger.log(sender, f"CONTROL_COMMAND MUX={mux_name} | ACT_ID=0x{actuator_can_id:08X} | PAYLOAD={payload_str}")
+        
         # Also log the actual CAN frame being sent
         self.logger.log_sent_message(self.can_index, can_id, Mux.CONTROL, payload[:8])
         
