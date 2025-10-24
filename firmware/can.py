@@ -71,6 +71,10 @@ class CANInterface:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
         self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
 
+    def _update_cycle_age(self) -> None:
+        for actuator_id in self.actuators:
+            self.actuators[actuator_id]["cycle_age"] += 1
+
     def _parse_can_frame(self, frame: bytes) -> Dict[str, Any]:
         if len(frame) != 16:
             raise ValueError("frame must be exactly 16 bytes")
@@ -120,7 +124,7 @@ class CANInterface:
                         "velocity": angular_velocity_physical,
                         "torque": torque_physical,
                         "temperature": temperature_physical,
-                        "last_updated": time.perf_counter(),
+                        "cycle_age": 0
                     }
 
                     self.actuators[can_id] = actuator_state
@@ -168,6 +172,7 @@ class CANInterface:
             time.sleep(0.01)
 
     def get_actuator_feedback(self, timeout: float = 0.1) -> Dict[int, Dict[str, int]]:
+        self._update_cycle_age()
         for actuator_id in self.pings_actuators:
             try:
                 self._build_and_send_can_frame(actuator_id, Mux.FEEDBACK)
@@ -217,4 +222,5 @@ class CANInterface:
                 print(f"Error closing CAN{self.can_index} socket: {e}")
             finally:
                 self.sock = None
+
 
