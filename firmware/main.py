@@ -67,7 +67,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
     step_id = 0
     while True:
         t, tt = time.perf_counter(), time.time()
-        joint_angles, joint_vels, torques, temps = motor_driver.get_ordered_joint_data(joint_order)
+        joint_angles, joint_vels, torques, temps, cycle_ages = motor_driver.get_ordered_joint_data(joint_order)
         t1 = time.perf_counter()
         projected_gravity, gyroscope, timestamp = imu_reader.get_projected_gravity_and_gyroscope()
         t2 = time.perf_counter()
@@ -82,13 +82,14 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
                 "command": np.array([v for v in policy_cmd.values()], dtype=np.float32),
+                "cycle_ages": np.array(cycle_ages, dtype=np.int32),
                 "carry": carry,
             },
         )
         t4 = time.perf_counter()
 
-        # named_action = {joint_name: action for joint_name, action in zip(joint_order, action)} | joint_cmd
-        # motor_driver.take_action(named_action)
+        named_action = {joint_name: action for joint_name, action in zip(joint_order, action)} | joint_cmd
+        motor_driver.take_action(named_action)
         t5 = time.perf_counter()
         motor_driver.flush_can_busses()
         t6 = time.perf_counter()

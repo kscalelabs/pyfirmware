@@ -181,11 +181,11 @@ class MotorDriver:
 
     def get_ordered_joint_data(
         self, joint_order: list[str]
-    ) -> tuple[list[float], list[float], list[float], list[float]]:
+    ) -> tuple[list[float], list[float], list[float], list[float], list[int]]:
         joint_data_dict = self.get_joint_angles_and_velocities()
 
         joint_angles_order, joint_vels_order, torques_order, temps_order = [], [], [], []
-
+        cycle_ages_order = []
         for name in joint_order:
             id = self.robot.full_name_to_actuator_id[name]
             joint_data = joint_data_dict[id]
@@ -193,8 +193,9 @@ class MotorDriver:
             joint_vels_order.append(joint_data["velocity"])
             torques_order.append(joint_data["torque"])
             temps_order.append(joint_data["temperature"])
+            cycle_ages_order.append(joint_data["cycle_age"])
 
-        return joint_angles_order, joint_vels_order, torques_order, temps_order  # type: ignore[return-value]
+        return joint_angles_order, joint_vels_order, torques_order, temps_order, cycle_ages_order  # type: ignore[return-value]
 
     def take_action(self, actions: dict[str, float]) -> None:
         action = {self.robot.full_name_to_actuator_id[name]: action for name, action in actions.items()}
