@@ -126,6 +126,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger, 
                 "joint_pos": joint_angles,
                 "joint_vel": joint_vels,
                 "joint_torque": torques,
+                "command": policy_cmd | joint_cmd,
                 "action": action.tolist(),
                 "joint_order": joint_order,
             }

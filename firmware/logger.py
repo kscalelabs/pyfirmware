@@ -59,11 +59,13 @@ class Logger:
 class ParquetLogger:
     def __init__(self, logdir: str) -> None:
         self.logpath = os.path.join(logdir, "lerobot_log.parquet")
+        self.infologpath = os.path.join(logdir, "info.json")
         self.schema = pa.schema([
             ("timestamp", pa.float64()),
             ("joint_pos", pa.list_(pa.float64())),
             ("joint_vel", pa.list_(pa.float64())),
             ("joint_torque", pa.list_(pa.float64())),
+            ("command", pa.list_(pa.float64()))
             ("action", pa.list_(pa.float64())),
             # ("joint_order", pa.list_(pa.string())), #define in metadata
         ])
@@ -78,6 +80,7 @@ class ParquetLogger:
 
         shutdown_mgr = get_shutdown_manager()
         shutdown_mgr.register_cleanup("ParquetLogger", self._shutdown)
+
 
     def _log_worker(self, q: queue.Queue, filepath: str, schema: pa.Schema) -> None:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -111,13 +114,26 @@ class ParquetLogger:
         finally:
             writer.close()
 
+    def log_info():
+        '''REQUIRED INFO
+        checks first frame of data and assumes following frames are consistant
+        robot_type: kbot
+        features| observation.state: {"dtype": "float32", "shape": [7], "names": ["joint1", ...]}
+        commands: dict[string:float]
+        actions 
+        camera stuff?
+        '''
+
     def _write_batch(self, writer: pq.ParquetWriter, batch: list, schema: pa.Schema) -> None:
-        if not batch:  # ✅ Add this
+        if not batch: 
             return
         #Change from list of dicts to dict of lists
         batch_dict = {}
         for key in schema.names:
-            batch_dict[key] = [entry[key] for entry in batch]
+            if key == "command":
+                batch_dict[key] = [list(entry[key].values()) for entry in batch] #commands is a dict not list
+            else:
+                batch_dict[key] = [entry[key] for entry in batch]
         
         table = pa.Table.from_pydict(batch_dict, schema=schema)
         writer.write_table(table)
@@ -132,6 +148,7 @@ class ParquetLogger:
 
     def log(self, timestamp: float, data: Dict[str, Any]) -> None:
         self.queue.put({"timestamp": timestamp, **data})    
+
 
 if __name__ == "__main__":
     import time
