@@ -12,11 +12,11 @@ from typing import Optional
 
 import gi  # type: ignore[import-not-found]
 import websockets  # type: ignore[import-not-found]
-from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-not-found]
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstWebRTC", "1.0")
 gi.require_version("GstSdp", "1.0")
+from gi.repository import GLib, Gst, GstSdp, GstWebRTC  # type: ignore[import-not-found]
 Gst.init(None)
 
 TURN_URL = f"turn://{os.getenv('TURN_USERNAME')}:{os.getenv('TURN_PASSWORD')}@{os.getenv('TURN_SERVER')}"
@@ -211,7 +211,11 @@ class WebRTCServer:
             pay = Gst.ElementFactory.make("rtpvp8pay", f"pay{i}")
             pay.set_property("pt", 96 + i)
 
-            elements_to_add.extend([vp8enc, pay])
+            # Add VP8 encoder and RTP payloader to pipeline
+            self.pipe.add(vp8enc)
+            self.pipe.add(pay)
+            vp8enc.sync_state_with_parent()
+            pay.sync_state_with_parent()
 
             upstream_element.link(vp8enc)
             vp8enc.link(pay)
@@ -221,12 +225,11 @@ class WebRTCServer:
             else:
                 print(f"Camera {i} encoding: libcamerasrc -> VP8 -> WebRTC")
 
-            src_pad = src.get_static_pad("src")
+            src_pad = pay.get_static_pad("src")
             sink_pad = webrtc.get_request_pad(f"sink_{i * 2}")
             if not sink_pad:
                 print(f"Failed to get sink pad for stream {i}")
             else:
-                src_pad = pay.get_static_pad("src")
                 ret = src_pad.link(sink_pad)
                 print("Pad link result", ret)
 
@@ -239,7 +242,9 @@ class WebRTCServer:
         print("Pipeline started")
 
     def on_bus_message(self, bus: Gst.Bus, message: Gst.Message) -> int:
-        if message.type == Gst.MessageType.LATENCY:
+
+        t = message.type
+        if t == Gst.MessageType.LATENCY:
             if self.pipe is not None:
                 self.pipe.recalculate_latency()
         elif t == Gst.MessageType.STATE_CHANGED:
