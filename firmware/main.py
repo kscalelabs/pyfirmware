@@ -124,7 +124,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
             f"get imu={(t2 - t1) * 1000:.2f} ms, "
             f".step()={(t4 - t3) * 1000:.2f} ms, "
             f"take action={(t5 - t4) * 1000:.2f} ms, "
-            f"flush can={(t6 - t5) * 1000:.2f} ms"
+            f"flush can={(t5 - t5) * 1000:.2f} ms"
         )
         step_id += 1
         time.sleep(max(0.020 - (time.perf_counter() - t), 0))  # wait for 50 hz

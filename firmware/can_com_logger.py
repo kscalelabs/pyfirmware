@@ -11,7 +11,7 @@ from firmware.actuators import Mux
 class CanComLogger:
     """Logger for CAN communication messages with separate files per CAN bus."""
     
-    def __init__(self, base_log_dir: str = "pyfirmware/logs") -> None:
+    def __init__(self, base_log_dir: str = "logs") -> None:
         """Initialize the CAN communication logger.
         
         Args:
