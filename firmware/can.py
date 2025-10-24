@@ -2,6 +2,7 @@
 
 import math
 import socket
+import select
 import struct
 import sys
 import time
@@ -153,34 +154,88 @@ class CANInterface:
                 self.sockets[canbus].send(frame)
                 time.sleep(0.01)
 
-    def get_actuator_feedback(self) -> dict[int, dict[str, int]]:
-        """Send one message per bus; wait for all of them concurrently."""
+    def get_actuator_feedback(self, tranche_deadline_ms: int = 20, inter_send_us: int = 150) -> dict[int, dict[str, int]]:
         results: dict[int, dict[str, int]] = {}
-        max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
-        for tranche in range(max_tranches):
-            # Send requests
-            for can, sock in self.sockets.items():
-                if tranche < len(self.actuators[can]):
-                    actuator_id = self.actuators[can][tranche]
-                    frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
-                    sock.send(frame)
+        if not self.sockets:
+            return results
 
-            # Receive responses
+        # compute max number of positions across buses
+        max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
+
+        # use a Poll object to manage multiple can sockets asynchronously
+        poller = select.poll()
+        for sock in self.sockets.values():
+            sock.settimeout(0)
+            poller.register(sock, select.POLLIN)
+
+        # for every tranche
+        for tranche in range(max_tranches):
+            expected: Dict[socket.socket, set[int]] = {}
+            # 1) Send one request per bus for this tranche position
             for can, sock in self.sockets.items():
                 if tranche < len(self.actuators[can]):
-                    actuator_id = self.actuators[can][tranche]
-                    parsed_frame = self._receive_can_frame(sock, Mux.FEEDBACK)
-                    if parsed_frame is None:  # timeout
-                        print(f"\033[1;33mWARNING: [gaf] recv timeout actuator {actuator_id}\033[0m")
+                    aid = self.actuators[can][tranche]
+                    sock.send(self._build_can_frame(aid, Mux.FEEDBACK))
+                    expected.setdefault(sock, set()).add(aid)
+                    if inter_send_us > 0:
+                        time.sleep(inter_send_us / 1e6)
+
+            if not expected:
+                continue
+
+            # 2) Collect responses until satisfied or deadline
+            t_end = time.perf_counter() + (tranche_deadline_ms / 1000.0)
+            while any(expected.values()) and time.perf_counter() < t_end:
+                # wait up to ~1 ms for any socket to have data
+                events = poller.poll(1)
+                for (fd, _ev) in events:
+                    # find the socket by fd
+                    sock = next(s for s in self.sockets.values() if s.fileno() == fd)
+                    try:
+                        frame = sock.recv(self.FRAME_SIZE)
+                    except BlockingIOError:
                         continue
-                    result = self._parse_feedback_response(parsed_frame)
-                    if actuator_id != result["actuator_can_id"]:
-                        print(
-                            f"\033[1;33mWARNING: [gaf] expected {actuator_id}, got {result['actuator_can_id']}\033[0m"
+                    parsed = self._parse_can_frame(frame)
+                    self._check_for_faults(
+                        self.CAN_ID_FAULT_CODES,
+                        parsed["fault_flags"],
+                        parsed["actuator_can_id"],
+                    )
+
+                    if parsed["mux"] == Mux.FAULT_RESPONSE:
+                        self._process_fault_response(
+                            parsed["payload"], parsed["actuator_can_id"]
                         )
-                        actuator_id = result["actuator_can_id"]
-                    results[actuator_id] = result
+                        continue
+
+                    if parsed["mux"] != Mux.FEEDBACK:
+                        # unrelated; ignore but keep draining
+                        print(
+                            f"\033[90m(ignoring mux=0x{parsed['mux']:02X})\033[0m"
+                        )
+                        continue
+
+                    aid = parsed["actuator_can_id"]
+                    if aid in expected.get(sock, set()):
+                        results[aid] = self._parse_feedback_response(parsed)
+                        expected[sock].discard(aid)
+                    else:
+                        # a feedback we didn't ask for (late/stale); accept but warn
+                        print(f"\033[90m(stale feedback from {aid})\033[0m")
+                        results[aid] = self._parse_feedback_response(parsed)
+
+            # 3) Handle any missing acks
+            missing = {aid for s, ids in expected.items() for aid in ids}
+            for aid in sorted(missing):
+                print(
+                    "\033[1;33mWARNING: missing feedback from actuator "
+                    f"{aid} in tranche {tranche}\033[0m"
+                )
+
         return results
+    # moo goes mo
+
+    # farza is honestly an inspiration to me
 
     def _parse_feedback_response(self, response: Dict[str, Any]) -> Dict[str, int]:
         angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", response["payload"])
