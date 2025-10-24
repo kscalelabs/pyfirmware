@@ -48,7 +48,6 @@ class MotorDriver:
         for actuator in self.robot.actuators.values():
             self.home_positions[actuator.can_id] = home_positions.get(actuator.full_name, actuator.default_home)
 
-        self.last_known_feedback: dict[int, dict[str, float | str | int]] = {}
         self._motors_enabled = False
         self._last_scaling = 0.0
 
@@ -56,7 +55,9 @@ class MotorDriver:
         shutdown_mgr.register_cleanup("CAN sockets", self._cleanup_cans)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
-    def async_can(self, func_name: str, *args: Any, timeout: float = 0.1, wait_for_response: bool = True) -> Dict[int, Any]:
+    def async_can(
+        self, func_name: str, *args: object, timeout: float = 0.1, wait_for_response: bool = True
+    ) -> Dict[int, Any]:
         futures = []
         for i, can in enumerate(self.cans):
             method = getattr(can, func_name)
@@ -78,13 +79,9 @@ class MotorDriver:
         return results
 
     def _cleanup_cans(self) -> None:
-        """Cleanup all CAN interfaces."""
         print("\033[1;36m🛑 Shutting down motor driver...\033[0m")
 
-        # Shutdown coordinator thread pool
         self.coordinator_executor.shutdown(wait=True, cancel_futures=True)
-
-        # Close all CAN buses
         for can in self.cans:
             try:
                 can.close()
@@ -104,7 +101,6 @@ class MotorDriver:
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
 
-        # Disable motors on all buses (blocking - we need to ensure they're disabled)
         self.async_can("disable_motors", timeout=1.0, wait_for_response=True)
 
     def _ramp_down_motors(self) -> None:
@@ -188,14 +184,7 @@ class MotorDriver:
         self.async_can("set_pd_targets", actions, scaling, timeout=0.05, wait_for_response=False)
 
     def flush_can_busses(self) -> None:
-        results = self.async_can("flush_can_bus_completely", timeout=0.1, wait_for_response=True)
-
-        total_flushed = 0
-        for can_index, count in results.items():
-            if count is not None:
-                total_flushed += count
-
-        print(f"Flushed {total_flushed} messages")
+        self.async_can("flush_can_bus_completely", timeout=0.1, wait_for_response=True)
 
     def get_joint_angles_and_velocities(self, zeros_fallback: bool = True) -> dict[int, dict[str, float | str | int]]:
         return self.async_can("get_actuator_feedback", timeout=0.1, wait_for_response=True)

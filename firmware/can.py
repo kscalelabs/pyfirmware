@@ -7,14 +7,6 @@ from typing import Any, Dict, Optional
 
 from firmware.actuators import ActuatorConfig, FaultCode, Mux, RobotConfig
 
-type ActuatorStats = {
-    "angle_raw": float,
-    "torque_raw": float,
-    "angular_velocity_raw": float,
-    "temperature_raw": float,
-    "fault_flags": int,
-    "enabled": bool,
-}
 
 class CriticalFaultError(Exception):
     pass
@@ -64,7 +56,7 @@ class CANInterface:
         self.can_index = can_index
         self.sock: Optional[socket.socket] = None
         self.pings_actuators = list[int]()
-        self.actuators: dict[int, ActuatorStats] = {}
+        self.actuators: dict[int, dict[str, Any]] = {}
 
         # Initialize socket and find actuators
         self._init_socket()
@@ -124,23 +116,24 @@ class CANInterface:
 
             if parsed_frame["mux"] == Mux.FEEDBACK:
                 angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", parsed_frame["payload"])
-                canID = parsed_frame["actuator_can_id"]
-                angle_physical = self.robotcfg.actuators[canID].can_to_physical_angle(angle_be)
-                angular_velocity_physical = self.robotcfg.actuators[canID].can_to_physical_velocity(ang_vel_be)
-                torque_physical = self.robotcfg.actuators[canID].can_to_physical_torque(torque_be)
-                temperature_physical = self.robotcfg.actuators[canID].can_to_physical_temperature(temp_be)
-                actuator_state: ActuatorStats =  {
+                can_id = parsed_frame["actuator_can_id"]
+                angle_physical = self.robotcfg.actuators[can_id].can_to_physical_angle(angle_be)
+                angular_velocity_physical = self.robotcfg.actuators[can_id].can_to_physical_velocity(ang_vel_be)
+                torque_physical = self.robotcfg.actuators[can_id].can_to_physical_torque(torque_be)
+                temperature_physical = self.robotcfg.actuators[can_id].can_to_physical_temperature(temp_be)
+                actuator_state =  {
                     "actuator_can_id": parsed_frame["actuator_can_id"],
                     "fault_flags": parsed_frame["fault_flags"],
                     "angle": angle_physical,
                     "angular_velocity": angular_velocity_physical,
                     "torque": torque_physical,
                     "temperature": temperature_physical,
+                    "last_updated": time.perf_counter(),
                 }
 
-                self.actuators[canID] = actuator_state
+                self.actuators[can_id] = actuator_state
 
-            if parsed_frame["mux"] == mux:
+            if parsed_frame["mux"] == mux or mux is None:
                 return parsed_frame
 
     def _check_for_faults(self, faults: list[FaultCode], fault_flags: int, actuator_can_id: int) -> None:
@@ -169,7 +162,7 @@ class CANInterface:
                 if found_id in self.robotcfg.actuators:
                     self.pings_actuators.append(found_id)
 
-        print(f"\033[1;32m✓ CAN{can_index}: Found {len(self.active_actuators)} actuators\033[0m")        
+        print(f"\033[1;32m✓ CAN{can_index}: Found {len(self.active_actuators)} actuators\033[0m")
 
     def enable_motors(self) -> None:
         """Enable all motors on this bus."""
@@ -178,7 +171,7 @@ class CANInterface:
                 return
             frame = self._build_can_frame(actuator_id, Mux.MOTOR_ENABLE)
             self.sock.send(frame)
-            _ = self._receive_can_frame(Mux.FEEDBACK)        
+            _ = self._receive_can_frame(Mux.FEEDBACK)
 
     def disable_motors(self) -> None:
         """Disable all motors on this bus."""
@@ -188,13 +181,13 @@ class CANInterface:
             time.sleep(0.01)
 
     def get_actuator_feedback(self, timeout: float = 0.1) -> Dict[int, Dict[str, int]]:
-        for actuatorId in self.actuators.keys():
+        for actuator_id in self.actuators.keys():
             try:
-                frame = self._build_can_frame(actuatorId, Mux.FEEDBACK)
+                frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
                 self.sock.send(frame)
                 time.sleep(0.00002)
             except Exception as e:
-                print(f"\033[1;33mWARNING: Failed to send feedback request to {actuatorId}: {e}\033[0m")
+                print(f"\033[1;33mWARNING: Failed to send feedback request to {actuator_id}: {e}\033[0m")
 
         # Receive all responses
         for _ in range(len(self.actuators.keys())):
@@ -234,17 +227,10 @@ class CANInterface:
         Returns:
             Number of messages flushed
         """
-        count = 0
         while True:
-            result = self._receive_can_frame(Mux.FEEDBACK)
+            result = self._receive_can_frame(None)
             if result is None:  # Timeout means bus is empty
                 break
-            count += 1
-
-        if count > 0:
-            print(f"\033[1;32mFlushed {count} messages from CAN{self.can_index}\033[0m")
-
-        return count
 
     def close(self) -> None:
         """Close socket and cleanup resources."""
