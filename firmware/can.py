@@ -210,9 +210,9 @@ class CANInterface:
 
                     if parsed["mux"] != Mux.FEEDBACK:
                         # unrelated; ignore but keep draining
-                        print(
-                            f"\033[90m(ignoring mux=0x{parsed['mux']:02X})\033[0m"
-                        )
+                        # print(
+                        #     f"\033[90m(ignoring mux=0x{parsed['mux']:02X})\033[0m"
+                        # )
                         continue
 
                     aid = parsed["actuator_can_id"]
@@ -221,7 +221,7 @@ class CANInterface:
                         expected[sock].discard(aid)
                     else:
                         # a feedback we didn't ask for (late/stale); accept but warn
-                        print(f"\033[90m(stale feedback from {aid})\033[0m")
+                        # print(f"\033[90m(stale feedback from {aid})\033[0m")
                         results[aid] = self._parse_feedback_response(parsed)
 
             # 3) Handle any missing acks
