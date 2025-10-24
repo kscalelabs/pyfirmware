@@ -25,7 +25,7 @@ class MotorDriver:
         for canbus in CANBUS_RANGE:
             try:
                 can_interface = CANInterface(self.robot, canbus)
-                if len(can_interface.active_actuators) > 0:
+                if len(can_interface.pings_actuators) > 0:
                     self.cans.append(can_interface)
                 else:
                     can_interface.close()
@@ -41,7 +41,7 @@ class MotorDriver:
             thread_name_prefix="coordinator"
         )
 
-        total_actuators = sum(len(can.active_actuators) for can in self.cans)
+        total_actuators = sum(len(can.pings_actuators) for can in self.cans)
         print(f"\033[1;32m✓ Initialized {len(self.cans)} buses with {total_actuators} total actuators\033[0m")
 
         self.home_positions: dict[int, float] = {}
@@ -133,7 +133,7 @@ class MotorDriver:
             sys.exit(1)
 
         joint_data_dict = self.get_joint_angles_and_velocities(zeros_fallback=False)
-
+        print(joint_data_dict) 
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):  # type: ignore[arg-type]
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
@@ -187,7 +187,20 @@ class MotorDriver:
         self.async_can("flush_can_bus_completely", timeout=0.1, wait_for_response=True)
 
     def get_joint_angles_and_velocities(self, zeros_fallback: bool = True) -> dict[int, dict[str, float | str | int]]:
-        return self.async_can("get_actuator_feedback", timeout=0.1, wait_for_response=True)
+        bus_data = self.async_can("get_actuator_feedback", timeout=0.1, wait_for_response=True)
+        
+        # Flatten the nested structure: combine all actuator data from all buses
+        flattened_data = {}
+        for bus_id, bus_actuators in bus_data.items():
+            if bus_actuators is not None:
+                for actuator_id, actuator_data in bus_actuators.items():
+                    # Remove the actuator_can_id from the data since it's redundant with the key
+                    if isinstance(actuator_data, dict):
+                        data_copy = actuator_data.copy()
+                        data_copy.pop("actuator_can_id", None)
+                        flattened_data[actuator_id] = data_copy
+        
+        return flattened_data
 
     def get_ordered_joint_data(
         self, joint_order: list[str]
