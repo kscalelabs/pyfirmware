@@ -169,12 +169,11 @@ class MotorDriver:
             t2 = time.perf_counter()
             self.set_pd_targets(action, scaling=self.max_scaling)
             t3 = time.perf_counter()
-            flushed = self.flush_can_busses()
+            self.flush_can_busses()
             t4 = time.perf_counter()
             print(
                 f"get feedback={(t1 - t) * 1e6:.0f}us, "
                 f"set targets={(t3 - t2) * 1e6:.0f}us, "
-                f"flush={flushed} msgs in {(t4 - t3) * 1e6:.0f}us"
             )
             time.sleep(max(0.02 - (time.perf_counter() - t), 0))
 

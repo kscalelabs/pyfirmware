@@ -245,6 +245,7 @@ class CANInterface:
 
         can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((Mux.CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
+        payload_str = " ".join(f"{b:02X}" for b in payload[:8])
         
         # Log control command details
         sender = "host"
@@ -252,9 +253,6 @@ class CANInterface:
         self.logger.log(sender, f"CONTROL_COMMAND MUX={mux_name} | ACT_ID=0x{actuator_can_id:08X} | PAYLOAD={payload_str}", self.can_index)
         
         # Also log the actual CAN frame being sent
-        sender = "host"
-        mux_name = self._get_mux_name(Mux.CONTROL)
-        payload_str = " ".join(f"{b:02X}" for b in payload[:8])
         self.logger.log(sender, f"TX: {mux_name} | CAN_ID=0x{can_id:08X} | PAYLOAD={payload_str}", self.can_index)
         
         self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
