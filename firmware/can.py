@@ -6,6 +6,7 @@ import time
 from typing import Any, Dict, Optional
 
 from firmware.actuators import ActuatorConfig, FaultCode, Mux, RobotConfig
+from firmware.can_com_logger import CanComLogger
 
 
 class CriticalFaultError(Exception):
@@ -43,9 +44,10 @@ class CANInterface:
         FaultCode(0x01, False, "Undervoltage"),
     ]
 
-    def __init__(self, robotcfg: RobotConfig, can_index: int) -> None:
+    def __init__(self, robotcfg: RobotConfig, can_index: int, logger: Optional[CanComLogger] = None) -> None:
         self.robotcfg = robotcfg
         self.can_index = can_index
+        self.logger = logger
         self.sock: Optional[socket.socket] = None
         self.pings_actuators = list[int]()
         self.actuators: dict[int, dict[str, Any]] = {}
@@ -69,6 +71,11 @@ class CANInterface:
 
     def _build_and_send_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> None:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
+        
+        # Log the sent message
+        if self.logger:
+            self.logger.log_sent_message(self.can_index, can_id, mux, payload[:8])
+        
         self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
 
     def _update_cycle_age(self) -> None:
@@ -98,6 +105,10 @@ class CANInterface:
             while True:
                 frame = self.sock.recv(self.FRAME_SIZE)
                 parsed_frame = self._parse_can_frame(frame)
+                
+                # Log the received message
+                if self.logger:
+                    self.logger.log_received_message(self.can_index, parsed_frame)
 
                 self._check_for_faults(
                     self.CAN_ID_FAULT_CODES,
@@ -127,6 +138,10 @@ class CANInterface:
                         "cycle_age": 0
                     }
 
+                    # Log detailed feedback data
+                    if self.logger:
+                        self.logger.log_feedback_data(self.can_index, can_id, actuator_state)
+
                     self.actuators[can_id] = actuator_state
 
                 if parsed_frame["mux"] == mux or mux is None:
@@ -138,6 +153,11 @@ class CANInterface:
         for fault_code in faults:
             if fault_flags == fault_code.code:
                 msg = f"Actuator {actuator_can_id}: {fault_code.description}"
+                
+                # Log fault information
+                if self.logger:
+                    self.logger.log_fault(self.can_index, actuator_can_id, fault_code.description, fault_code.critical)
+                
                 if fault_code.critical:
                     raise CriticalFaultError(f"\033[1;31mCRITICAL FAULT: {msg}\033[0m")
                 print(f"\033[1;33mWARNING: {msg}\033[0m")
@@ -206,6 +226,12 @@ class CANInterface:
 
         can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((Mux.CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
+        
+        # Log control command details
+        if self.logger:
+            self.logger.log_control_command(self.can_index, actuator_can_id, angle, scaling, 
+                                          raw_angle, raw_ang_vel, raw_kp, raw_kd)
+        
         self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
 
     def flush_can_bus_completely(self) -> int:

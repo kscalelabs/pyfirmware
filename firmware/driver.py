@@ -8,21 +8,25 @@ from typing import Any, Dict
 
 from firmware.actuators import RobotConfig
 from firmware.can import CANInterface
+from firmware.can_com_logger import CanComLogger
 from firmware.launchInterface import KeyboardLaunchInterface
 from firmware.shutdown import get_shutdown_manager
 
 CANBUS_RANGE = range(0, 7)
 
 class MotorDriver:
-    def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0) -> None:
+    def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0, enable_logging: bool = True) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
         self.cans: list[CANInterface] = []
+        
+        # Initialize CAN communication logger
+        self.can_logger = CanComLogger() if enable_logging else None
 
         print("\033[1;36m Initializing CAN buses...\033[0m")
         for canbus in CANBUS_RANGE:
             try:
-                can_interface = CANInterface(self.robot, canbus)
+                can_interface = CANInterface(self.robot, canbus, self.can_logger)
                 if len(can_interface.pings_actuators) > 0:
                     self.cans.append(can_interface)
                 else:
@@ -52,6 +56,8 @@ class MotorDriver:
         shutdown_mgr = get_shutdown_manager()
         shutdown_mgr.register_cleanup("CAN sockets", self._cleanup_cans)
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)
+        if self.can_logger:
+            shutdown_mgr.register_cleanup("CAN logger", self.can_logger.close)
 
     def async_can(
         self, func_name: str, *args: object, timeout: float = 0.1, wait_for_response: bool = True
