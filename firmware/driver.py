@@ -14,8 +14,6 @@ from firmware.shutdown import get_shutdown_manager
 CANBUS_RANGE = range(0, 7)
 
 class MotorDriver:
-    """Driver logic."""
-
     def __init__(self, home_positions: dict[str, float], max_scaling: float = 1.0) -> None:
         self.max_scaling = max_scaling
         self.robot = RobotConfig()
@@ -52,8 +50,8 @@ class MotorDriver:
         self._last_scaling = 0.0
 
         shutdown_mgr = get_shutdown_manager()
-        shutdown_mgr.register_cleanup("CAN sockets", self._cleanup_cans)  # Register first, closes last
-        shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
+        shutdown_mgr.register_cleanup("CAN sockets", self._cleanup_cans)
+        shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)
 
     def async_can(
         self, func_name: str, *args: object, timeout: float = 0.1, wait_for_response: bool = True
@@ -79,8 +77,7 @@ class MotorDriver:
         return results
 
     def _cleanup_cans(self) -> None:
-        print("\033[1;36m🛑 Shutting down motor driver...\033[0m")
-
+        print("\033[1;36m Shutting down can threads...\033[0m")
         self.coordinator_executor.shutdown(wait=True, cancel_futures=True)
         for can in self.cans:
             try:
@@ -92,7 +89,6 @@ class MotorDriver:
         print("\033[1;32m✓ Motor driver shutdown complete\033[0m")
 
     def _safe_ramp_down(self) -> None:
-        """Safely ramp down motors (for cleanup callback)."""
         if not self._motors_enabled:
             return
         try:
@@ -104,7 +100,6 @@ class MotorDriver:
         self.async_can("disable_motors", timeout=1.0, wait_for_response=True)
 
     def _ramp_down_motors(self) -> None:
-        """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
         print("Ramping down motors...")
         joint_data = self.get_joint_angles_and_velocities()
         joint_angles: dict[int, float] = {id: data["angle"] for id, data in joint_data.items()}  # type: ignore[misc]
@@ -122,10 +117,8 @@ class MotorDriver:
             self.set_pd_targets(joint_angles, scaling=scale)
             time.sleep(0.1)
 
-        # Final zero torque command
         self.set_pd_targets(joint_angles, scaling=0.0)
         self._motors_enabled = False
-        print("Motors ramped down to zero")
 
     def startup_sequence(self) -> dict[int, dict[str, float | str | int]]:
         if len(self.cans) == 0:
@@ -141,10 +134,6 @@ class MotorDriver:
         return joint_data_dict
 
     def enable_and_home_motors(self) -> None:
-        """Enable motors on all buses in parallel."""
-        print("Enabling motors on all buses...")
-
-        # Use generic async_can function
         self.async_can("enable_motors", timeout=2.0, wait_for_response=True)
 
         self._motors_enabled = True
@@ -159,7 +148,6 @@ class MotorDriver:
         print("✅ Homing complete")
 
     def sine_wave(self) -> None:
-        """Run a sine wave motion on all actuators."""
         t0 = time.perf_counter()
         while True:
             t = time.perf_counter()
@@ -188,13 +176,10 @@ class MotorDriver:
 
     def get_joint_angles_and_velocities(self, zeros_fallback: bool = True) -> dict[int, dict[str, float | str | int]]:
         bus_data = self.async_can("get_actuator_feedback", timeout=0.1, wait_for_response=True)
-        
-        # Flatten the nested structure: combine all actuator data from all buses
         flattened_data = {}
-        for bus_id, bus_actuators in bus_data.items():
+        for _, bus_actuators in bus_data.items():
             if bus_actuators is not None:
                 for actuator_id, actuator_data in bus_actuators.items():
-                    # Remove the actuator_can_id from the data since it's redundant with the key
                     if isinstance(actuator_data, dict):
                         data_copy = actuator_data.copy()
                         data_copy.pop("actuator_can_id", None)
@@ -232,6 +217,7 @@ def main() -> None:
 
     if not launch_interface.ask_motor_permission(device_data):
         sys.exit(1)
+        
     driver.enable_and_home_motors()
 
     if not launch_interface.launch_policy_permission("sine_wave"):

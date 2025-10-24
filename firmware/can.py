@@ -13,8 +13,6 @@ class CriticalFaultError(Exception):
 
 
 class CANInterface:
-    """Communication only."""
-
     # Constants
     FRAME_FMT = "<IBBBB8s"
     FRAME_SIZE = struct.calcsize(FRAME_FMT)
@@ -46,12 +44,6 @@ class CANInterface:
     ]
 
     def __init__(self, robotcfg: RobotConfig, can_index: int) -> None:
-        """Initialize CAN interface for a specific bus.
-
-        Args:
-            robotcfg: Robot configuration containing actuator specs
-            can_index: CAN bus index (e.g., 0 for can0)
-        """
         self.robotcfg = robotcfg
         self.can_index = can_index
         self.sock: Optional[socket.socket] = None
@@ -98,45 +90,45 @@ class CANInterface:
         }
 
     def _receive_can_frame(self, mux: int) -> Optional[Dict[str, Any]]:
-        while True:
-            try:
+        try:
+            while True:
                 frame = self.sock.recv(self.FRAME_SIZE)
                 parsed_frame = self._parse_can_frame(frame)
-            except Exception:
-                return None
 
-            self._check_for_faults(
-                self.CAN_ID_FAULT_CODES,
-                parsed_frame["fault_flags"],
-                parsed_frame["actuator_can_id"]
-            )
+                self._check_for_faults(
+                    self.CAN_ID_FAULT_CODES,
+                    parsed_frame["fault_flags"],
+                    parsed_frame["actuator_can_id"]
+                )
 
-            if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
-                self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
+                if parsed_frame["mux"] == Mux.FAULT_RESPONSE:
+                    self._process_fault_response(parsed_frame["payload"], parsed_frame["actuator_can_id"])
 
-            if parsed_frame["mux"] == Mux.FEEDBACK:
-                angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", parsed_frame["payload"])
-                can_id = parsed_frame["actuator_can_id"]
-                angle_physical = self.robotcfg.actuators[can_id].can_to_physical_angle(angle_be)
-                angular_velocity_physical = self.robotcfg.actuators[can_id].can_to_physical_velocity(ang_vel_be)
-                torque_physical = self.robotcfg.actuators[can_id].can_to_physical_torque(torque_be)
-                temperature_physical = self.robotcfg.actuators[can_id].can_to_physical_temperature(temp_be)
-                name = self.robotcfg.actuators[can_id].name
-                actuator_state =  {
-                    "name": name,
-                    "actuator_can_id": parsed_frame["actuator_can_id"],
-                    "fault_flags": parsed_frame["fault_flags"],
-                    "angle": angle_physical,
-                    "velocity": angular_velocity_physical,
-                    "torque": torque_physical,
-                    "temperature": temperature_physical,
-                    "last_updated": time.perf_counter(),
-                }
+                if parsed_frame["mux"] == Mux.FEEDBACK:
+                    angle_be, ang_vel_be, torque_be, temp_be = struct.unpack(">HHHH", parsed_frame["payload"])
+                    can_id = parsed_frame["actuator_can_id"]
+                    angle_physical = self.robotcfg.actuators[can_id].can_to_physical_angle(angle_be)
+                    angular_velocity_physical = self.robotcfg.actuators[can_id].can_to_physical_velocity(ang_vel_be)
+                    torque_physical = self.robotcfg.actuators[can_id].can_to_physical_torque(torque_be)
+                    temperature_physical = self.robotcfg.actuators[can_id].can_to_physical_temperature(temp_be)
+                    name = self.robotcfg.actuators[can_id].name
+                    actuator_state =  {
+                        "name": name,
+                        "actuator_can_id": parsed_frame["actuator_can_id"],
+                        "fault_flags": parsed_frame["fault_flags"],
+                        "angle": angle_physical,
+                        "velocity": angular_velocity_physical,
+                        "torque": torque_physical,
+                        "temperature": temperature_physical,
+                        "last_updated": time.perf_counter(),
+                    }
 
-                self.actuators[can_id] = actuator_state
+                    self.actuators[can_id] = actuator_state
 
-            if parsed_frame["mux"] == mux or mux is None:
-                return parsed_frame
+                if parsed_frame["mux"] == mux or mux is None:
+                    return parsed_frame
+        except Exception:
+            return None
 
     def _check_for_faults(self, faults: list[FaultCode], fault_flags: int, actuator_can_id: int) -> None:
         for fault_code in faults:
@@ -152,7 +144,6 @@ class CANInterface:
         self._check_for_faults(self.MUX_0x15_WARNING_CODES, warning_value, actuator_can_id)
 
     def find_actuators(self, can_index: int) -> list[ActuatorConfig]:
-        """Scan this CAN bus for actuators."""
         print(f"\033[1;36m🔍 Scanning CAN{can_index} for actuators...\033[0m")
         self.sock.send(self._build_can_frame(0, Mux.PING))
         for actuator_id in self.ACTUATOR_RANGE:
@@ -164,22 +155,19 @@ class CANInterface:
                 if found_id in self.robotcfg.actuators:
                     self.pings_actuators.append(found_id)
 
-        print(f"\033[1;32m✓ CAN{can_index}: Found {len(self.pings_actuators)} actuators\033[0m")
-
     def enable_motors(self) -> None:
-        """Enable all motors on this bus."""
         for actuator_id in self.pings_actuators:
             if self.sock is None:
                 return
             frame = self._build_can_frame(actuator_id, Mux.MOTOR_ENABLE)
             self.sock.send(frame)
-            _ = self._receive_can_frame(Mux.FEEDBACK)
+            self._receive_can_frame(Mux.FEEDBACK)
 
     def disable_motors(self) -> None:
-        """Disable all motors on this bus."""
         for actuator_id in self.pings_actuators:
             frame = self._build_can_frame(actuator_id, Mux.MOTOR_DISABLE)
             self.sock.send(frame)
+            self._receive_can_frame(Mux.FEEDBACK)
             time.sleep(0.01)
 
     def get_actuator_feedback(self, timeout: float = 0.1) -> Dict[int, Dict[str, int]]:
@@ -191,12 +179,8 @@ class CANInterface:
             except Exception as e:
                 print(f"\033[1;33mWARNING: Failed to send feedback request to {actuator_id}: {e}\033[0m")
 
-        # Receive all responses
         for _ in range(len(self.pings_actuators)):
-            parsed_frame = self._receive_can_frame(Mux.FEEDBACK)
-            if parsed_frame is None:
-                # Timeout - continue to try receiving from other actuators
-                continue
+            self._receive_can_frame(Mux.FEEDBACK)
 
         return self.actuators
 
@@ -213,30 +197,24 @@ class CANInterface:
         self, actuator_can_id: int, angle: float, scaling: float
     ) -> bytes:
         assert 0.0 <= scaling <= 1.0
-        raw_torque = int(self.robotcfg.actuators[actuator_can_id].physical_to_can_torque(0))
-        raw_angle = int(self.robotcfg.actuators[actuator_can_id].physical_to_can_angle(angle))
-        raw_ang_vel = int(self.robotcfg.actuators[actuator_can_id].physical_to_can_velocity(0))
-        raw_kp = int(self.robotcfg.actuators[actuator_can_id].raw_kp * scaling)
-        raw_kd = int(self.robotcfg.actuators[actuator_can_id].raw_kd * scaling)
+        config = self.robotcfg.actuators[actuator_can_id]
+        raw_torque = int(config.physical_to_can_torque(0))
+        raw_angle = int(config.physical_to_can_angle(angle))
+        raw_ang_vel = int(config.physical_to_can_velocity(0))
+        raw_kp = int(config.raw_kp * scaling)
+        raw_kd = int(config.raw_kd * scaling)
 
         can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((Mux.CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
         return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
 
     def flush_can_bus_completely(self) -> int:
-        """Drain all pending messages from the CAN bus.
-
-        Returns:
-            Number of messages flushed
-        """
         while True:
             result = self._receive_can_frame(None)
-            if result is None:  # Timeout means bus is empty
+            if result is None:
                 break
 
     def close(self) -> None:
-        """Close socket and cleanup resources."""
-        # Close socket
         if self.sock is not None:
             try:
                 self.sock.close()
