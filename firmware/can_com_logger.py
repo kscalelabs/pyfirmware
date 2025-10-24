@@ -28,6 +28,7 @@ class CanComLogger:
         self.can_files: Dict[int, Any] = {}
         
         print(f"✓ CAN communication logger initialized: {self.run_dir}")
+        print(f"✓ Logger will save CAN logs to: {os.path.abspath(self.run_dir)}")
     
     def _get_can_file(self, can_index: int) -> Any:
         """Get or create file handle for a specific CAN bus."""
@@ -85,6 +86,7 @@ class CanComLogger:
         log_file = self._get_can_file(can_index)
         log_file.write(f"[{timestamp}] {sender} TX: {mux_name} ({mux:02X}) | {can_id_str} | {payload_str}\n")
         log_file.flush()
+        print(f"DEBUG: Logged TX message for CAN{can_index} from {sender}")
     
     def log_received_message(self, can_index: int, parsed_frame: Dict[str, Any]) -> None:
         """Log a CAN message being received."""
@@ -102,6 +104,7 @@ class CanComLogger:
         log_file = self._get_can_file(can_index)
         log_file.write(f"[{timestamp}] {sender} RX: {mux_name} ({mux:02X}) | {can_id_str} | {payload_str}\n")
         log_file.flush()
+        print(f"DEBUG: Logged RX message for CAN{can_index} from {sender}")
     
     def log_feedback_data(self, can_index: int, actuator_can_id: int, feedback_data: Dict[str, Any]) -> None:
         """Log parsed feedback data in human-readable format."""
@@ -162,6 +165,32 @@ class CanComLogger:
         
         self.can_files.clear()
         print(f"✓ CAN communication logger closed: {self.run_dir}")
+
+
+class DummyCanComLogger:
+    """Dummy logger that does nothing when logging is disabled."""
+    
+    def log_sent_message(self, can_index: int, can_id: int, mux: int, payload: bytes) -> None:
+        pass
+    
+    def log_received_message(self, can_index: int, parsed_frame: Dict[str, Any]) -> None:
+        pass
+    
+    def log_feedback_data(self, can_index: int, actuator_can_id: int, feedback_data: Dict[str, Any]) -> None:
+        pass
+    
+    def log_control_command(self, can_index: int, actuator_can_id: int, angle: float, scaling: float, 
+                          raw_angle: int, raw_ang_vel: int, raw_kp: int, raw_kd: int) -> None:
+        pass
+    
+    def log_fault(self, can_index: int, actuator_can_id: int, fault_description: str, critical: bool) -> None:
+        pass
+    
+    def log_actuator_discovery(self, can_index: int, actuator_can_id: int) -> None:
+        pass
+    
+    def close(self) -> None:
+        pass
 
 
 if __name__ == "__main__":
