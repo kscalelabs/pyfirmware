@@ -5,4 +5,4 @@ pyserial
 kmotions>=0.3.6
 pandas
 pyarrow
-
+simple-websocket-server

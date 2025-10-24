@@ -4,23 +4,7 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Optional
 
-# Example policy command names:
-#     "xvel",
-#     "yvel",
-#     "yawrate",
-#     "baseheight",
-#     "baseroll",
-#     "basepitch",
-#     "rshoulderpitch",  # 21
-#     "rshoulderroll",  # 22
-#     "rshoulderyaw",  # 23
-#     "relbowpitch",  # 24
-#     "rwristroll",  # 25
-#     "lshoulderpitch",  # 11
-#     "lshoulderroll",  # 12
-#     "lshoulderyaw",  # 13
-#     "lelbowpitch",  # 14
-#     "lwristroll",  # 15
+from firmware.actuators import RobotConfig
 
 
 class CommandInterface(ABC):
@@ -28,8 +12,13 @@ class CommandInterface(ABC):
 
     def __init__(self, policy_command_names: list[str]) -> None:
         self.policy_command_names = policy_command_names
-        self.policy_cmd = {cmd: 0.0 for cmd in policy_command_names}
-        self.joint_cmd: dict[str, float] = {}
+        self.cmd = {cmd: 0.0 for cmd in policy_command_names}
+        self.last_cmd = self.cmd.copy()
+        self.max_delta = 0.05
+        self.joint_limits = {
+            actuator.full_name: (actuator.joint_limit_min, actuator.joint_limit_max)
+            for actuator in RobotConfig().actuators.values()
+        }
 
         print("\nPolicy Command Names Supported")
         print("-" * 30)
@@ -61,9 +50,29 @@ class CommandInterface(ABC):
 
     def reset_cmd(self) -> None:
         """Reset all commands to zero."""
-        self.policy_cmd = {cmd_name: 0.0 for cmd_name in self.policy_cmd.keys()}
-        self.joint_cmd = {}
+        self.cmd = {cmd_name: 0.0 for cmd_name in self.policy_command_names}
+        self.last_cmd = self.cmd.copy()
 
     def get_cmd(self) -> tuple[dict[str, float], dict[str, float]]:
-        """Get current command vector per policy specification."""
-        return self.policy_cmd, self.joint_cmd
+        """Get new commands that are clamped for safety.
+
+        - all commands clamped to max_delta from last command.
+        - joint commands clamped to joint limits
+        """
+        clamped_cmd = {}
+        for name, value in self.cmd.items():
+            # clamp to max_delta from last command
+            last_value = self.last_cmd.get(name, 0)
+            clamped_value = max(last_value - self.max_delta, min(last_value + self.max_delta, value))
+
+            # clamp to joint limits
+            if name in self.joint_limits:
+                clamped_value = max(self.joint_limits[name][0], min(self.joint_limits[name][1], clamped_value))
+
+            clamped_cmd[name] = clamped_value
+        self.last_cmd = clamped_cmd.copy()
+
+        policy_cmd = {name: clamped_cmd[name] for name in self.policy_command_names}
+        joint_cmd = {name: clamped_cmd[name] for name in clamped_cmd if name not in self.policy_command_names}
+
+        return policy_cmd, joint_cmd

@@ -24,6 +24,7 @@ class BNO055:
     def __init__(self, i2c_bus: str = "/dev/i2c-1", address: int = 0x28) -> None:
         self.i2c = I2C(i2c_bus)
         self.address = address
+        self.imu_name = "BNO055"
         self._write_register(self.MODE_REGISTER, bytes([self.NDOF_MODE]))
         time.sleep(0.01)
 

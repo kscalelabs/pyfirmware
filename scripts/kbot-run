@@ -2,6 +2,24 @@
 
 set -euo pipefail
 
+# Defaults
+websocket=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --websocket)
+            websocket=true
+            shift
+            ;;
+        *)
+            echo "Unknown option $1"
+            echo "Usage: kbot-run [--websocket]"
+            exit 1
+            ;;
+    esac
+done
+
 # ---------------------------
 # Policy directory handling
 # ---------------------------
@@ -24,4 +42,8 @@ echo "=============================================="
 echo "               Running firmware               "
 echo "=============================================="
 PY="$(command -v python)"
-sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+if [ "$websocket" = "true" ]; then
+    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir" --websocket
+else
+    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+fi

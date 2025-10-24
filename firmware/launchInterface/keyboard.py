@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from firmware.launchInterface.launch_interface import LaunchInterface
+
 
 def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Optional[Path]:
     curses.curs_set(1)
@@ -103,8 +105,7 @@ def _curses_select_with_filter(stdscr: curses.window, items: List[Path]) -> Opti
 
         clamp_sel()
 
-
-class KeyboardLaunchInterface:
+class KeyboardLaunchInterface(LaunchInterface):
     """Simple launch interface for keyboard control without network connection."""
 
     def __init__(self) -> None:
@@ -113,33 +114,49 @@ class KeyboardLaunchInterface:
 
     def get_command_source(self) -> str:
         """Return the command source type."""
-        print("=================")
-        print("Select command source: (k) Keyboard, (u) UDP")
         while True:
+            print("=================")
+            print("Select command source: (k) Keyboard, (u) UDP")
             response = input("Enter choice: ").lower()
+            print("=================")
             if response == "k":
                 return "keyboard"
             elif response == "u":
                 return "udp"
             print("Invalid choice. Please enter K or U")
 
-    def ask_motor_permission(self) -> bool:
+    def ask_motor_permission(self, robot_devices: dict) -> bool:
         """Ask permission to enable motors. Returns True if should enable, False to abort."""
-        print("=================")
-        print("Enable motors (y/n):")
+        actuators = robot_devices.get("actuators", {})
+        print("\nActuator states:")
+        print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
+        print("----|--------------------------|-------|----------|--------|-------|-------")
+
+        for act_id, data in actuators.items():
+            fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"
+            print(
+                f"{act_id:3d} | {data['name']:24s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
+                f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
+            )
+            if data["fault_flags"] > 0:
+                print("\033[1;33mWARNING: Actuator faults detected\033[0m")
+        print("IMU:" + robot_devices.get("imu", "Not available"))
+
         while True:
+            print("=================")
+            print("Enable motors (y/n):")
             response = input("Enter choice: ").lower()
+            print("=================")
             if response == "n":
                 return False
             elif response == "y":
                 return True
             print("Invalid input. Please enter 'y' or 'n'")
 
-    def launch_policy_permission(self) -> bool:
+    def launch_policy_permission(self, policy_name: str) -> bool:
         """Ask permission to start policy. Returns True if should start, False to abort."""
         print("=================")
-        print("🚀 Ready to start policy")
-        print("Start policy? (y/n): ")
+        print(f"Start {policy_name}? (y/n): ")
         while True:
             response = input("Enter choice: ").lower()
             if response == "y":

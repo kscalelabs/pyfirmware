@@ -8,6 +8,7 @@ import time
 from typing import Any, Dict, Optional
 
 from firmware.actuators import FaultCode, Mux, RobotConfig
+from firmware.launchInterface import KeyboardLaunchInterface
 from firmware.shutdown import get_shutdown_manager
 
 
@@ -23,7 +24,7 @@ class CANInterface:
     FRAME_SIZE = struct.calcsize(FRAME_FMT)
     EFF = 0x8000_0000
     HOST_ID = 0xFD
-    CAN_TIMEOUT = 0.002
+    CAN_TIMEOUT = 0.001
     CANBUS_RANGE = range(0, 7)
     ACTUATOR_RANGE = range(10, 50)
 
@@ -145,7 +146,14 @@ class CANInterface:
         self.sockets[canbus].send(frame)
         _ = self._receive_can_frame(self.sockets[canbus], Mux.FEEDBACK)
 
-    def get_actuator_feedback(self) -> Dict[int, Dict[str, int]]:
+    def disable_motors(self) -> None:
+        for canbus in self.sockets.keys():
+            for actuator_id in self.actuators[canbus]:
+                frame = self._build_can_frame(actuator_id, Mux.MOTOR_DISABLE)
+                self.sockets[canbus].send(frame)
+                time.sleep(0.01)
+
+    def get_actuator_feedback(self) -> dict[int, dict[str, int]]:
         """Send one message per bus; wait for all of them concurrently."""
         results: dict[int, dict[str, int]] = {}
         max_tranches = max(len(self.actuators[can]) for can in self.actuators.keys())
@@ -257,7 +265,6 @@ class MotorDriver:
         shutdown_mgr.register_cleanup("CAN sockets", self.can.close)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
-        self.startup_sequence()
 
     def _safe_ramp_down(self) -> None:
         """Safely ramp down motors (for cleanup callback)."""
@@ -268,6 +275,8 @@ class MotorDriver:
             self._ramp_down_motors()
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
+
+        self.can.disable_motors()
 
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
@@ -293,28 +302,18 @@ class MotorDriver:
         self._motors_enabled = False
         print("Motors ramped down to zero")
 
-    def startup_sequence(self) -> None:
+    def startup_sequence(self) -> dict[int, dict[str, float | str | int]]:
         if not self.can.actuators:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
         joint_data_dict = self.get_joint_angles_and_velocities(zeros_fallback=False)
 
-        print("\nActuator states:")
-        print("ID  | Name                     | Angle | Velocity | Torque | Temp  | Faults")
-        print("----|--------------------------|-------|----------|--------|-------|-------")
-        for act_id, data in joint_data_dict.items():
-            fault_color = "\033[1;31m" if data["fault_flags"] > 0 else "\033[1;32m"  # type: ignore[operator]
-            print(
-                f"{act_id:3d} | {data['name']:24s} | {data['angle']:5.2f} | {data['velocity']:8.2f} | "
-                f"{data['torque']:6.2f} | {data['temperature']:5.1f} | {fault_color}{data['fault_flags']:3d}\033[0m"
-            )
-            if data["fault_flags"] > 0:  # type: ignore[operator]
-                print("\033[1;33mWARNING: Actuator faults detected\033[0m")
-
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):  # type: ignore[arg-type]
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
+
+        return joint_data_dict
 
     def enable_and_home_motors(self) -> None:
         self.can.enable_motors()
@@ -395,11 +394,17 @@ class MotorDriver:
 def main() -> None:
     """Run sine wave test on all actuators."""
     driver = MotorDriver(dict(), max_scaling=0.1)
+    launch_interface = KeyboardLaunchInterface()
 
-    input("Press Enter to enable motors...")
+    device_data = {"actuators": driver.startup_sequence()}
+
+    if not launch_interface.ask_motor_permission(device_data):
+        sys.exit(1)
     driver.enable_and_home_motors()
 
-    input("Press Enter to run sine wave on all actuators...")
+    if not launch_interface.launch_policy_permission("sine_wave"):
+        sys.exit(1)
+
     driver.sine_wave()
 
 

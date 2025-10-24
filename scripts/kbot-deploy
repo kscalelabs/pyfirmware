@@ -4,6 +4,7 @@ set -euo pipefail
 
 # Defaults
 gstreamer=false
+websocket=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -12,9 +13,13 @@ while [[ $# -gt 0 ]]; do
             gstreamer=true
             shift
             ;;
+        --websocket)
+            websocket=true
+            shift
+            ;;
         *)
             echo "Unknown option $1"
-            echo "Usage: kbot-deploy [--gstreamer]"
+            echo "Usage: kbot-deploy [--gstreamer] [--websocket]"
             exit 1
             ;;
     esac
@@ -41,7 +46,11 @@ if [ "$gstreamer" = "true" ]; then
     echo "=============================================="
     echo "               Running firmware               "
     echo "=============================================="
-    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+    if [ "$websocket" = "true" ]; then
+        sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir" --websocket
+    else
+        sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+    fi
 
     echo "Stopping GStreamer (PID: $gstreamer_pid)"
     kill "$gstreamer_pid" 2>/dev/null || true
@@ -49,7 +58,11 @@ else
     echo "=============================================="
     echo "               Running firmware               "
     echo "=============================================="
-    sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+    if [ "$websocket" = "true" ]; then
+        sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir" --websocket
+    else
+        sudo -E chrt 30 "$PY" -m firmware.main "$policy_dir"
+    fi
 fi
 
 

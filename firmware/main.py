@@ -3,6 +3,7 @@
 import argparse
 import datetime
 import os
+import sys
 import time
 
 import numpy as np
@@ -11,14 +12,14 @@ from firmware.can import MotorDriver
 from firmware.commands.command_interface import CommandInterface
 from firmware.commands.keyboard import Keyboard
 from firmware.commands.udp_listener import UDPListener
-from firmware.launchInterface import KeyboardLaunchInterface
+from firmware.launchInterface import KeyboardLaunchInterface, LaunchInterface, WebSocketLaunchInterface
 from firmware.logger import Logger
 from firmware.logger import ParquetLogger
 from firmware.shutdown import get_shutdown_manager
 from firmware.utils import get_imu_reader, get_onnx_sessions
 
 
-def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: Logger, parquet_logger: ParquetLogger) -> None:
+def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger, parquet_logger: ParquetLogger) -> None:
     shutdown_mgr = get_shutdown_manager()
 
     init_session, step_session, metadata = get_onnx_sessions(kinfer_path)
@@ -34,13 +35,18 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
     motor_driver = MotorDriver(home_positions=home_positions)
     imu_reader = get_imu_reader()
 
-    if not launch_interface.ask_motor_permission():
+    device_data = {
+        "actuators": motor_driver.startup_sequence(),
+        "imu": imu_reader.imu_name,
+    }
+
+    if not launch_interface.ask_motor_permission(device_data):
         print("Motor permission denied, aborting execution")
         return
 
     motor_driver.enable_and_home_motors()
 
-    launch_policy = launch_interface.launch_policy_permission()
+    launch_policy = launch_interface.launch_policy_permission(policy_name)
     if not launch_policy:
         print("Policy launch permission denied, aborting execution")
         return
@@ -51,6 +57,9 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         command_interface = Keyboard(command_names)
     else:
         command_interface = UDPListener(command_names, joint_names=joint_order)
+
+    launch_interface.stop()
+    del launch_interface
     shutdown_mgr.register_cleanup("Command interface", command_interface.stop)
 
     print("Starting policy...")
@@ -79,7 +88,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
         )
         t4 = time.perf_counter()
 
-        named_action = joint_cmd | {joint_name: action for joint_name, action in zip(joint_order, action)}
+        named_action = {joint_name: action for joint_name, action in zip(joint_order, action)} | joint_cmd
         motor_driver.take_action(named_action)
         t5 = time.perf_counter()
         motor_driver.flush_can_busses()
@@ -106,7 +115,7 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
                 "joint_temps": temps,
                 "projected_gravity": projected_gravity,
                 "gyroscope": gyroscope,
-                "command": policy_cmd,  # TODO log joint cmd
+                "command": policy_cmd | joint_cmd,
                 "action": action.tolist(),
                 "joint_order": joint_order,
             },
@@ -136,10 +145,17 @@ def runner(kinfer_path: str, launch_interface: KeyboardLaunchInterface, logger: 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run policy inference and control motors")
     parser.add_argument("policy_dir", help="Policy directory path (required)")
+    parser.add_argument("--websocket", action="store_true", help="Use WebSocket interface instead of keyboard")
     args = parser.parse_args()
 
-    launch_interface = KeyboardLaunchInterface()
+
+    launch_interface = WebSocketLaunchInterface() if args.websocket else KeyboardLaunchInterface()
+
     kinfer_path = launch_interface.get_kinfer_path(args.policy_dir)
+
+    if kinfer_path is None:
+        print("No policy selected. Exiting.")
+        sys.exit(1)
 
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
