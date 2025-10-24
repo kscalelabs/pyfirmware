@@ -128,7 +128,7 @@ class MotorDriver:
             print("\033[1;31mERROR: No actuators detected\033[0m")
             sys.exit(1)
 
-        joint_data_dict = self.get_joint_angles_and_velocities(zeros_fallback=False)
+        joint_data_dict = self.get_joint_angles_and_velocities()
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):  # type: ignore[arg-type]
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
