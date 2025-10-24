@@ -58,12 +58,27 @@ class MotorDriver:
         shutdown_mgr.register_cleanup("CAN sockets", self._cleanup_cans)  # Register first, closes last
         shutdown_mgr.register_cleanup("Motor ramp down", self._safe_ramp_down)  # Register last, executes first
 
-    def async_can(self, func_name: str, *args: Any, timeout: float = 0.1) -> Dict[int, Any]:
+    def async_can(self, func_name: str, *args: Any, timeout: float = 0.1, wait_for_response: bool = True) -> Dict[int, Any]:
+        """Generic function to execute a method on all CAN buses in parallel.
+        
+        Args:
+            func_name: Name of the method to call on each CAN bus
+            *args: Arguments to pass to the method
+            timeout: Maximum time to wait for each bus
+            wait_for_response: If True, wait for results; if False, return immediately
+            
+        Returns:
+            Dictionary mapping CAN bus index to results (empty if wait_for_response=False)
+        """
         futures = []
         for i, can in enumerate(self.cans):
             method = getattr(can, func_name)
             future = self.coordinator_executor.submit(method, *args)
             futures.append((i, future))
+
+        if not wait_for_response:
+            # Return immediately, threads continue in background
+            return {}
 
         results = {}
         for i, future in futures:
@@ -103,8 +118,8 @@ class MotorDriver:
         except Exception as e:
             print(f"Error during safe ramp down: {e}")
 
-        # Disable motors on all buses
-        self.async_can("disable_motors", timeout=1.0)
+        # Disable motors on all buses (blocking - we need to ensure they're disabled)
+        self.async_can("disable_motors", timeout=1.0, wait_for_response=True)
 
     def _ramp_down_motors(self) -> None:
         """Gradually ramp down motor torques before disabling (inverse of enable_and_home)."""
@@ -148,7 +163,7 @@ class MotorDriver:
         print("Enabling motors on all buses...")
 
         # Use generic async_can function
-        self.async_can("enable_motors", timeout=2.0)
+        self.async_can("enable_motors", timeout=2.0, wait_for_response=True)
 
         self._motors_enabled = True
         print("\033[1;32m✓ All motors enabled\033[0m")
@@ -191,17 +206,11 @@ class MotorDriver:
         """
         self._last_scaling = scaling
 
-        # Use generic async_can function
-        self.async_can("set_pd_targets", actions, scaling, timeout=0.05)
+        # Use generic async_can function (non-blocking - we don't need response)
+        self.async_can("set_pd_targets", actions, scaling, timeout=0.05, wait_for_response=False)
 
     def flush_can_busses(self) -> None:
-        """Flush all CAN buses in parallel.
-
-        Returns:
-            Total number of messages flushed across all buses
-        """
-        # Use generic async_can function to collect results
-        results = self.async_can("flush_can_bus_completely", timeout=0.1)
+        results = self.async_can("flush_can_bus_completely", timeout=0.1, wait_for_response=True)
 
         total_flushed = 0
         for can_index, count in results.items():
@@ -211,18 +220,10 @@ class MotorDriver:
         print(f"Flushed {total_flushed} messages")
 
     def get_joint_angles_and_velocities(self, zeros_fallback: bool = True) -> dict[int, dict[str, float | str | int]]:
-        """Get feedback from ALL actuators on ALL buses in parallel.
-
-        This method:
-        1. Submits feedback requests to all CAN buses simultaneously
-        2. Each bus uses its own thread to send/receive
-        3. Waits for all buses to complete or timeout
-        4. Aggregates results from all buses
-        """
         t_start = time.perf_counter()
 
-        # Use generic async_can function to collect results
-        results = self.async_can("get_actuator_feedback", timeout=0.1)
+        # Use generic async_can function to collect results (blocking - we need the feedback)
+        results = self.async_can("get_actuator_feedback", timeout=0.1, wait_for_response=True)
 
         # Aggregate results from all buses
         all_feedback: dict[int, dict[str, int]] = {}

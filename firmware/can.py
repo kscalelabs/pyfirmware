@@ -184,14 +184,6 @@ class CANInterface:
             time.sleep(0.01)
 
     def get_actuator_feedback(self, timeout: float = 0.1) -> Dict[int, Dict[str, int]]:
-        """Get feedback from all actuators on this bus.
-
-        Args:
-            timeout: Maximum time to wait for all responses in seconds
-
-        Returns:
-            Dictionary mapping actuator_id to feedback data
-        """
         t_start = time.perf_counter()
         results: Dict[int, Dict[str, int]] = {}
 
@@ -203,7 +195,7 @@ class CANInterface:
             try:
                 frame = self._build_can_frame(actuator.can_id, Mux.FEEDBACK)
                 self.sock.send(frame)
-                time.sleep(0.00001)
+                time.sleep(0.00002)
             except Exception as e:
                 print(f"\033[1;33mWARNING: Failed to send feedback request to {actuator.can_id}: {e}\033[0m")
 
@@ -260,7 +252,6 @@ class CANInterface:
                     self.sock.send(frame)
                 except Exception as e:
                     print(f"\033[1;33mWARNING: Failed to send PD command to {actuator_id}: {e}\033[0m")
-
 
     def _build_pd_command_frame(
         self, actuator_can_id: int, angle: float, scaling: float
