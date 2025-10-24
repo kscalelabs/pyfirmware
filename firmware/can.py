@@ -76,7 +76,7 @@ class CANInterface:
         sender = "host"
         mux_name = self._get_mux_name(mux)
         payload_str = " ".join(f"{b:02X}" for b in payload[:8])
-        self.logger.log(sender, f"TX: {mux_name} | ACT_ID=0x{actuator_can_id:08X} ")
+        self.logger.log(sender, f"TX: {mux_name} | ACT_ID=0x{actuator_can_id:08X} ", self.can_index)
         
         self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
 
@@ -125,7 +125,7 @@ class CANInterface:
                 mux_name = self._get_mux_name(parsed_frame["mux"])
                 payload_str = " ".join(f"{b:02X}" for b in parsed_frame["payload"])
                 can_id = parsed_frame["host_id"] | (parsed_frame["actuator_can_id"] << 8) | (parsed_frame["fault_flags"] << 16) | (parsed_frame["mode_status"] << 22) | (parsed_frame["mux"] << 24)
-                self.logger.log(sender, f"RX: {mux_name} | PAYLOAD={payload_str} | faults=0x{parsed_frame['fault_flags']:02X}")
+                self.logger.log(sender, f"RX: {mux_name} | PAYLOAD={payload_str} | faults=0x{parsed_frame['fault_flags']:02X}", self.can_index)
 
                 self._check_for_faults(
                     self.CAN_ID_FAULT_CODES,
@@ -156,7 +156,8 @@ class CANInterface:
                     }
 
                     # Log detailed feedback data
-                    self.logger.log_feedback_data(self.can_index, can_id, actuator_state)
+                    sender = f"act_{can_id:02d}"
+                    self.logger.log(sender, f"FEEDBACK_DATA: {name} - angle={angle_physical:.3f} rad, velocity={angular_velocity_physical:.3f} rad/s, torque={torque_physical:.3f} Nm, temp={temperature_physical:.1f}°C, faults=0x{parsed_frame['fault_flags']:02X}", self.can_index)
 
                     self.actuators[can_id] = actuator_state
 
@@ -171,7 +172,9 @@ class CANInterface:
                 msg = f"Actuator {actuator_can_id}: {fault_code.description}"
                 
                 # Log fault information
-                self.logger.log_fault(self.can_index, actuator_can_id, fault_code.description, fault_code.critical)
+                sender = f"act_{actuator_can_id:02d}"
+                severity = "CRITICAL" if fault_code.critical else "WARNING"
+                self.logger.log(sender, f"FAULT: {severity} - {fault_code.description}", self.can_index)
                 
                 if fault_code.critical:
                     raise CriticalFaultError(f"\033[1;31mCRITICAL FAULT: {msg}\033[0m")
@@ -246,10 +249,13 @@ class CANInterface:
         # Log control command details
         sender = "host"
         mux_name = self._get_mux_name(Mux.CONTROL)
-        self.logger.log(sender, f"CONTROL_COMMAND MUX={mux_name} | ACT_ID=0x{actuator_can_id:08X} | PAYLOAD={payload_str}")
+        self.logger.log(sender, f"CONTROL_COMMAND MUX={mux_name} | ACT_ID=0x{actuator_can_id:08X} | PAYLOAD={payload_str}", self.can_index)
         
         # Also log the actual CAN frame being sent
-        self.logger.log_sent_message(self.can_index, can_id, Mux.CONTROL, payload[:8])
+        sender = "host"
+        mux_name = self._get_mux_name(Mux.CONTROL)
+        payload_str = " ".join(f"{b:02X}" for b in payload[:8])
+        self.logger.log(sender, f"TX: {mux_name} | CAN_ID=0x{can_id:08X} | PAYLOAD={payload_str}", self.can_index)
         
         self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
 
