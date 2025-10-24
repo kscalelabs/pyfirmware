@@ -67,9 +67,9 @@ class CANInterface:
             print(f"✗ Failed to initialize CAN{self.can_index}: {e}")
             raise
 
-    def _build_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> bytes:
+    def _build_and_send_can_frame(self, actuator_can_id: int, mux: int, payload: bytes = b"\x00" * 8) -> None:
         can_id = ((actuator_can_id & 0xFF) | (self.HOST_ID << 8) | ((mux & 0x1F) << 24)) | self.EFF
-        return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
+        self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
 
     def _parse_can_frame(self, frame: bytes) -> Dict[str, Any]:
         if len(frame) != 16:
@@ -145,10 +145,9 @@ class CANInterface:
 
     def find_actuators(self, can_index: int) -> list[ActuatorConfig]:
         print(f"\033[1;36m🔍 Scanning CAN{can_index} for actuators...\033[0m")
-        self.sock.send(self._build_can_frame(0, Mux.PING))
+        self._build_and_send_can_frame(0, Mux.PING)
         for actuator_id in self.ACTUATOR_RANGE:
-            frame = self._build_can_frame(actuator_id, Mux.PING)
-            self.sock.send(frame)
+            self._build_and_send_can_frame(actuator_id, Mux.PING)
             response = self._receive_can_frame(Mux.PING)
             if response is not None:
                 found_id = response["actuator_can_id"]
@@ -159,22 +158,19 @@ class CANInterface:
         for actuator_id in self.pings_actuators:
             if self.sock is None:
                 return
-            frame = self._build_can_frame(actuator_id, Mux.MOTOR_ENABLE)
-            self.sock.send(frame)
+            self._build_and_send_can_frame(actuator_id, Mux.MOTOR_ENABLE)
             self._receive_can_frame(Mux.FEEDBACK)
 
     def disable_motors(self) -> None:
         for actuator_id in self.pings_actuators:
-            frame = self._build_can_frame(actuator_id, Mux.MOTOR_DISABLE)
-            self.sock.send(frame)
+            self._build_and_send_can_frame(actuator_id, Mux.MOTOR_DISABLE)
             self._receive_can_frame(Mux.FEEDBACK)
             time.sleep(0.01)
 
     def get_actuator_feedback(self, timeout: float = 0.1) -> Dict[int, Dict[str, int]]:
         for actuator_id in self.pings_actuators:
             try:
-                frame = self._build_can_frame(actuator_id, Mux.FEEDBACK)
-                self.sock.send(frame)
+                self._build_and_send_can_frame(actuator_id, Mux.FEEDBACK)
                 time.sleep(0.00002)
             except Exception as e:
                 print(f"\033[1;33mWARNING: Failed to send feedback request to {actuator_id}: {e}\033[0m")
@@ -188,14 +184,13 @@ class CANInterface:
         for actuator_id in self.pings_actuators:
             if actuator_id in actions:
                 try:
-                    frame = self._build_pd_command_frame(actuator_id, actions[actuator_id], scaling)
-                    self.sock.send(frame)
+                    self._build_and_send_pd_command_frame(actuator_id, actions[actuator_id], scaling)
                 except Exception as e:
                     print(f"\033[1;33mWARNING: Failed to send PD command to {actuator_id}: {e}\033[0m")
 
-    def _build_pd_command_frame(
+    def _build_and_send_pd_command_frame(
         self, actuator_can_id: int, angle: float, scaling: float
-    ) -> bytes:
+    ) -> None:
         assert 0.0 <= scaling <= 1.0
         config = self.robotcfg.actuators[actuator_can_id]
         raw_torque = int(config.physical_to_can_torque(0))
@@ -206,7 +201,7 @@ class CANInterface:
 
         can_id = ((actuator_can_id & 0xFF) | (raw_torque << 8) | ((Mux.CONTROL & 0x1F) << 24)) | self.EFF
         payload = struct.pack(">HHHH", raw_angle, raw_ang_vel, raw_kp, raw_kd)
-        return struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8])
+        self.sock.send(struct.pack(self.FRAME_FMT, can_id, 8 & 0xFF, 0, 0, 0, payload[:8]))
 
     def flush_can_bus_completely(self) -> int:
         while True:

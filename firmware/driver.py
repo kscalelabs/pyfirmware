@@ -55,7 +55,7 @@ class MotorDriver:
 
     def async_can(
         self, func_name: str, *args: object, timeout: float = 0.1, wait_for_response: bool = True
-    ) -> Dict[int, Any]:
+    ) -> Dict[str, Any]:
         futures = []
         for i, can in enumerate(self.cans):
             method = getattr(can, func_name)
@@ -65,16 +65,19 @@ class MotorDriver:
         if not wait_for_response:
             return {}
 
-        results = {}
+        combined_results = {}
         for i, future in futures:
             try:
                 result = future.result(timeout=timeout)
-                results[i] = result
+                if result is not None:
+                    if isinstance(result, dict):
+                        combined_results.update(result)
+                    else:
+                        combined_results[f"can{i}"] = result
             except Exception as e:
                 print(f"\033[1;33mWARNING: Error on CAN{i} calling {func_name}: {e}\033[0m")
-                results[i] = None
 
-        return results
+        return combined_results
 
     def _cleanup_cans(self) -> None:
         print("\033[1;36m Shutting down can threads...\033[0m")
@@ -126,7 +129,6 @@ class MotorDriver:
             sys.exit(1)
 
         joint_data_dict = self.get_joint_angles_and_velocities(zeros_fallback=False)
-        print(joint_data_dict) 
         if any(abs(data["angle"]) > 2.0 for data in joint_data_dict.values()):  # type: ignore[arg-type]
             print("\033[1;31mERROR: Actuator angles too far from zero - move joints closer to home position\033[0m")
             sys.exit(1)
@@ -174,18 +176,8 @@ class MotorDriver:
     def flush_can_busses(self) -> None:
         self.async_can("flush_can_bus_completely", timeout=0.1, wait_for_response=True)
 
-    def get_joint_angles_and_velocities(self, zeros_fallback: bool = True) -> dict[int, dict[str, float | str | int]]:
-        bus_data = self.async_can("get_actuator_feedback", timeout=0.1, wait_for_response=True)
-        flattened_data = {}
-        for _, bus_actuators in bus_data.items():
-            if bus_actuators is not None:
-                for actuator_id, actuator_data in bus_actuators.items():
-                    if isinstance(actuator_data, dict):
-                        data_copy = actuator_data.copy()
-                        data_copy.pop("actuator_can_id", None)
-                        flattened_data[actuator_id] = data_copy
-        
-        return flattened_data
+    def get_joint_angles_and_velocities(self) -> dict[int, dict[str, float | str | int]]:
+        return self.async_can("get_actuator_feedback", timeout=0.1, wait_for_response=True)
 
     def get_ordered_joint_data(
         self, joint_order: list[str]
@@ -217,7 +209,7 @@ def main() -> None:
 
     if not launch_interface.ask_motor_permission(device_data):
         sys.exit(1)
-        
+
     driver.enable_and_home_motors()
 
     if not launch_interface.launch_policy_permission("sine_wave"):
