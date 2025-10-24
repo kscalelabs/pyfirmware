@@ -82,7 +82,6 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
                 "projected_gravity": np.array(projected_gravity, dtype=np.float32),
                 "gyroscope": np.array(gyroscope, dtype=np.float32),
                 "command": np.array([v for v in policy_cmd.values()], dtype=np.float32),
-                "cycle_ages": np.array(cycle_ages, dtype=np.int32),
                 "carry": carry,
             },
         )
@@ -118,6 +117,7 @@ def runner(kinfer_path: str, launch_interface: LaunchInterface, logger: Logger) 
                 "command": policy_cmd | joint_cmd,
                 "action": action.tolist(),
                 "joint_order": joint_order,
+                "cycle_ages": cycle_ages
             },
         )
         print(
