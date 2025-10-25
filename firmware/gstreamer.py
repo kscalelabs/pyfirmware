@@ -164,6 +164,7 @@ class WebRTCServer:
 
             # Add tee element to split stream if recording
             if self.record_video:
+                
                 tee = Gst.ElementFactory.make("tee", f"tee{i}")
                 self.pipe.add(tee)
                 upstream_element.link(tee)
@@ -260,6 +261,33 @@ class WebRTCServer:
 
     def close_pipeline(self) -> None:
         if self.pipe:
+            # For recording, we need to properly flush the pipeline before closing
+            if self.record_video and self.temp_video_files:
+                print("Finalizing video recording...")
+                # Send EOS (End of Stream) to properly finalize the MP4 files
+                self.pipe.send_event(Gst.Event.new_eos())
+                
+                # Wait for EOS to be processed (with timeout)
+                bus = self.pipe.get_bus()
+                eos_received = False
+                timeout_count = 0
+                max_timeout = 50  # 5 seconds max wait
+                
+                while not eos_received and timeout_count < max_timeout:
+                    message = bus.timed_pop_filtered(100 * Gst.MSECOND, Gst.MessageType.EOS | Gst.MessageType.ERROR)
+                    if message:
+                        if message.type == Gst.MessageType.EOS:
+                            eos_received = True
+                            print("EOS received, finalizing MP4 files...")
+                        elif message.type == Gst.MessageType.ERROR:
+                            print(f"Pipeline error during finalization: {message.parse_error()}")
+                            break
+                    timeout_count += 1
+                
+                if not eos_received:
+                    print("Warning: EOS timeout, files may be incomplete")
+            
+            # Now safely set pipeline to NULL
             self.pipe.set_state(Gst.State.NULL)
             
             # Rename video files using first_frame_timestamp
