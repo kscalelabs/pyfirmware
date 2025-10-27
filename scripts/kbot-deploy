@@ -5,6 +5,7 @@ set -euo pipefail
 # Defaults
 gstreamer=false
 websocket=false
+record=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -15,6 +16,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --websocket)
             websocket=true
+            shift
+            ;;
+        --record)
+            record=true
             shift
             ;;
         *)
@@ -40,7 +45,10 @@ PY="$(command -v python)"
 
 if [ "$gstreamer" = "true" ]; then
     echo "Starting GStreamer with --flip"
-    sudo -E chrt 29 "$PY" "$(dirname "$(realpath "$0")")/../firmware/gstreamer.py" --flip > /dev/null 2>&1 &
+
+    gst_args="--flip"
+    [ "$record" = "true" ] && gst_args="$gst_args --record"
+    sudo -E chrt 29 "$PY" "$(dirname "$(realpath "$0")")/../firmware/gstreamer.py" $gst_args > /dev/null 2>&1 &
     gstreamer_pid=$!
 
     echo "=============================================="
