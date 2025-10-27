@@ -59,7 +59,7 @@ class WebRTCServer:
         self.flip_video = flip_video
         self.first_frame_timestamp: Optional[float] = None
         self.record_video = record_video
-        self.video_output_dir = os.path.expanduser("~/videos")
+        self.video_output_dir = os.path.expanduser("~/lerobot-logs/videos")
         self.temp_video_files = {}  # Maps camera index to temp filename
         
         # Create video output directory if recording is enabled

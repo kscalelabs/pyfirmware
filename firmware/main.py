@@ -161,8 +161,9 @@ if __name__ == "__main__":
     policy_name = os.path.splitext(os.path.basename(kinfer_path))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = os.path.expanduser(f"~/kinfer-logs/{policy_name}_{timestamp}")
+    parquet_log_dir = os.path.expanduser(f"~/lerobot-logs/{policy_name}_{timestamp}")
 
     print(f"Selected policy: {policy_name}")
     logger = Logger(log_dir)
-    parquet_logger = ParquetLogger(log_dir)
+    parquet_logger = ParquetLogger(parquet_log_dir)
     runner(kinfer_path, launch_interface, logger, parquet_logger)
