@@ -58,7 +58,8 @@ class Logger:
 '''LOG TO PARQUET FORMAT FOR LEROBOTDATASET'''
 class ParquetLogger:
     def __init__(self, logdir: str) -> None:
-        self.logpath = os.path.join(logdir, "lerobot_log.parquet")
+        tt=time.time()
+        self.logpath = os.path.join(logdir, f"lerobot_{time.time():.6f}.parquet")
         self.infologpath = os.path.join(logdir, "info.json")
         self.schema = pa.schema([
             ("timestamp", pa.float64()),
