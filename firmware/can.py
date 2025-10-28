@@ -76,10 +76,22 @@ class CANInterface:
             "payload": payload,
         }
 
+    def _recv(self, sock: socket.socket) -> bytes:
+        start_time = time.perf_counter()
+        while True:
+            try:
+                return sock.recv(self.FRAME_SIZE)
+            except Exception as e:
+                print(f"Error receiving data from socket: {e}")
+                if time.perf_counter() - start_time > self.CAN_TIMEOUT:
+                    raise TimeoutError(f"Timeout waiting for data from socket after {self.CAN_TIMEOUT} seconds") from e
+                time.sleep(self.CAN_TIMEOUT/4)
+
     def _receive_can_frame(self, sock: socket.socket, mux: int) -> Optional[Dict[str, int]]:
         """Recursively receive can frames until the mux is the expected value."""
         try:
-            frame = sock.recv(self.FRAME_SIZE)
+            # frame = sock.recv(self.FRAME_SIZE)
+            frame = self._recv(sock)
             parsed_frame = self._parse_can_frame(frame)
         except Exception:
             return None
@@ -112,7 +124,7 @@ class CANInterface:
             sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
             try:
                 sock.bind((f"can{canbus}",))
-                sock.settimeout(self.CAN_TIMEOUT)
+                sock.settimeout(0.0)
                 sock.send(self._build_can_frame(0, Mux.PING))  # test message
             except Exception:
                 continue
